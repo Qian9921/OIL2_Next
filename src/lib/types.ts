@@ -1,0 +1,162 @@
+import { Timestamp } from "firebase/firestore";
+
+export type UserRole = 'student' | 'teacher' | 'ngo';
+
+export interface User {
+  id: string;
+  email: string;
+  name: string;
+  role: UserRole;
+  avatar?: string;
+  createdAt: Timestamp;
+  updatedAt: Timestamp;
+  profile?: {
+    bio?: string;
+    school?: string;
+    grade?: string;
+    interests?: string[];
+    website?: string;
+    location?: string;
+    focusAreas?: string[];
+    institution?: string;
+    subject?: string;
+    experience?: number;
+  };
+}
+
+export interface Project {
+  id: string;
+  title: string;
+  description: string;
+  shortDescription?: string;
+  ngoId: string;
+  ngoName: string;
+  status: 'draft' | 'published' | 'completed' | 'archived';
+  createdAt: Timestamp;
+  updatedAt: Timestamp;
+  maxParticipants?: number;
+  currentParticipants: number;
+  tags?: string[];
+  difficulty: 'beginner' | 'intermediate' | 'advanced';
+  estimatedHours?: number;
+  subtasks: Subtask[];
+  requirements?: string[];
+  learningGoals?: string[];
+  image?: string;
+}
+
+export interface Subtask {
+  id: string;
+  title: string;
+  description: string;
+  order: number;
+  estimatedHours?: number;
+  resources?: string[];
+  completionCriteria?: string[];
+}
+
+export interface Participation {
+  id: string;
+  projectId: string;
+  studentId: string;
+  studentName: string;
+  status: 'active' | 'completed' | 'dropped' | 'pending_approval';
+  joinedAt: Timestamp;
+  completedAt?: Timestamp;
+  completedSubtasks: string[];
+  currentSubtaskId?: string;
+  progress: number; // 0-100
+  chatHistory: ChatMessage[];
+  submissions: Submission[];
+}
+
+export interface ChatMessage {
+  id: string;
+  role: 'user' | 'assistant';
+  content: string;
+  timestamp: Timestamp;
+  subtaskId?: string;
+}
+
+export interface Submission {
+  id: string;
+  participationId: string;
+  projectId: string;
+  studentId: string;
+  studentName?: string;
+  teacherId?: string;
+  content: string;
+  attachments?: string[];
+  submittedAt: Timestamp;
+  reviewedAt?: Timestamp;
+  reviewedBy?: string;
+  status: 'pending' | 'approved' | 'rejected' | 'needs_revision';
+  teacherFeedback?: string;
+  reviewComment?: string;
+  grade?: number;
+  rating?: number;
+}
+
+export interface Certificate {
+  id: string;
+  studentId: string;
+  studentName: string;
+  projectId: string;
+  projectTitle: string;
+  ngoId: string;
+  ngoName: string;
+  participationId: string;
+  issuedAt: Timestamp;
+  certificateNumber: string;
+  completionDate: Timestamp;
+  rating?: number;
+}
+
+// Dashboard data types
+export interface StudentDashboard {
+  activeProjects: number;
+  completedProjects: number;
+  totalHours: number;
+  certificates: number;
+  recentActivity: Activity[];
+  upcomingDeadlines: Deadline[];
+}
+
+export interface NGODashboard {
+  publishedProjects: number;
+  totalParticipants: number;
+  completedProjects: number;
+  pendingReviews: number;
+  projectStats: ProjectStats[];
+}
+
+export interface TeacherDashboard {
+  studentsSupervised: number;
+  projectsSupervised: number;
+  pendingReviews: number;
+  recentSubmissions: Submission[];
+}
+
+export interface ProjectStats {
+  projectId: string;
+  projectTitle: string;
+  participants: number;
+  completionRate: number;
+  averageProgress: number;
+}
+
+export interface Activity {
+  id: string;
+  type: 'project_joined' | 'subtask_completed' | 'submission_made' | 'certificate_earned';
+  title: string;
+  description: string;
+  timestamp: Timestamp;
+}
+
+export interface Deadline {
+  id: string;
+  title: string;
+  projectTitle: string;
+  dueDate: Timestamp;
+  priority: 'low' | 'medium' | 'high';
+} 
