@@ -25,6 +25,9 @@ import { ChatMessage as ChatMessageComponent } from '@/components/chat/chat-mess
 import { LoadingState } from '@/components/ui/loading-state';
 import { GitHubInfoButton, TaskNavigation, saveTaskChatHistory, saveGitHubRepoURL } from '@/lib/task-utils';
 import { Timestamp } from 'firebase/firestore';
+import { ScoreDisplay, ScoreProgressBar, ScoreBadge, MetricScoreCard, StreakBadge } from '@/components/task/score-components';
+import { SafeAlertDialogDescription, EvaluationLoadingState, ConfirmationDialog, RequirementCheckpoint } from '@/components/task/dialog-components';
+import { EvaluationHistoryItem, PromptHistoryItem, EmptyPromptHistory, EmptyEvaluationHistory } from '@/components/task/history-components';
 
 export default function ProjectTaskPage() {
   const params = useParams();
@@ -931,19 +934,6 @@ export default function ProjectTaskPage() {
     );
   };
 
-  // Custom component for AlertDialogDescription to avoid hydration errors
-  const SafeAlertDialogDescription = ({ children }: { children: React.ReactNode }) => {
-    if (typeof children === 'string') {
-      return <AlertDialogDescription>{children}</AlertDialogDescription>;
-    }
-    
-    return (
-      <AlertDialogDescription>
-        <span className="inline-block">{children}</span>
-      </AlertDialogDescription>
-    );
-  };
-
   if (isLoading && !project) {
     return (
       <MainLayout>
@@ -1266,17 +1256,11 @@ export default function ProjectTaskPage() {
                   
                   {/* Display streak badge when streak exists */}
                   {promptStreak && promptStreak.currentStreak > 0 && (
-                    <div 
-                      className={`flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
-                        promptStreak.currentStreak >= 5 ? 'bg-purple-100 text-purple-800 border border-purple-300' :
-                        promptStreak.currentStreak >= 3 ? 'bg-green-100 text-green-800 border border-green-300' :
-                        'bg-blue-100 text-blue-800 border border-blue-300'
-                      } mr-1 ${isStreakAnimating ? 'animate-bounce-short' : ''}`}
-                      title={`You have a streak of ${promptStreak.currentStreak} good prompts! Your best streak is ${promptStreak.bestStreak}.`}
-                    >
-                      <span className="mr-1">🔥</span>
-                      <span className={isStreakAnimating ? 'animate-pulse' : ''}>{promptStreak.currentStreak}</span>
-                    </div>
+                    <StreakBadge 
+                      currentStreak={promptStreak.currentStreak}
+                      bestStreak={promptStreak.bestStreak}
+                      isAnimating={isStreakAnimating}
+                    />
                   )}
                   
                   <Input 
@@ -1312,43 +1296,20 @@ export default function ProjectTaskPage() {
         </div>
 
         {/* Dialog for confirming task completion */}
-        <AlertDialog open={showCompleteDialog} onOpenChange={setShowCompleteDialog}>
-          <AlertDialogContent>
-            <AlertDialogHeader>
-              <AlertDialogTitle>Mark Task as Complete</AlertDialogTitle>
-              <AlertDialogDescription>
-                {!isEvaluating && "Are you sure you want to mark this task as complete? Your work will be evaluated against the task criteria."}
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            
-            {isEvaluating && (
-              <div className="py-4">
-                <LoadingState 
-                  size="md" 
-                  text="Evaluating your work... This might take a few moments." 
-                  fullHeight={false} 
-                  className="py-2"
-                />
-              </div>
-            )}
-            
-            <AlertDialogFooter>
-              <AlertDialogCancel disabled={isEvaluating}>Cancel</AlertDialogCancel>
-              <AlertDialogAction 
-                onClick={handleCompleteTask} 
-                className="bg-green-600 hover:bg-green-700 text-white"
-                disabled={isEvaluating}
-              >
-                {isEvaluating ? (
-                  <>
-                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                    Evaluating...
-                  </>
-                ) : 'Evaluate & Complete'}
-              </AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
+        <ConfirmationDialog
+          open={showCompleteDialog}
+          onOpenChange={setShowCompleteDialog}
+          title="Mark Task as Complete"
+          description={!isEvaluating ? "Are you sure you want to mark this task as complete? Your work will be evaluated against the task criteria." : ""}
+          confirmText="Evaluate & Complete"
+          confirmVariant="default"
+          onConfirm={handleCompleteTask}
+          isLoading={isEvaluating}
+          loadingText="Evaluating..."
+          confirmDisabled={isEvaluating}
+          cancelDisabled={isEvaluating}
+          confirmIcon={<CheckCircle className="w-4 h-4" />}
+        />
 
         {/* Dialog for displaying evaluation feedback */}
         <AlertDialog 
@@ -1368,16 +1329,9 @@ export default function ProjectTaskPage() {
                 {/* Score */}
                 <div className="flex items-center justify-between">
                   <span className="font-medium">Evaluation Score:</span>
-                  <span className={`font-bold ${evaluationFeedback.score >= 80 ? 'text-green-600' : 'text-red-600'}`}>
-                    {evaluationFeedback.score}%
-                  </span>
+                  <ScoreDisplay score={evaluationFeedback.score} />
                 </div>
-                <div className="w-full bg-gray-200 rounded-full h-2.5 mb-2">
-                  <div
-                    className={`h-2.5 rounded-full ${evaluationFeedback.score >= 80 ? 'bg-green-600' : 'bg-red-600'}`}
-                    style={{ width: `${evaluationFeedback.score}%` }}
-                  ></div>
-                </div>
+                <ScoreProgressBar score={evaluationFeedback.score} className="mb-2" />
                 
                 {/* Summary */}
                 {evaluationFeedback.result?.rawContent?.summary && (
@@ -1393,19 +1347,12 @@ export default function ProjectTaskPage() {
                     <h4 className="font-semibold mb-2">Requirements Status:</h4>
                     <div className="space-y-3">
                       {evaluationFeedback.result.rawContent.checkpoints.map((checkpoint, index) => (
-                        <div key={index} className="border rounded-md overflow-hidden">
-                          <div className={`p-3 font-medium text-sm ${
-                            checkpoint.status.toLowerCase().includes('completed') ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'
-                          }`}>
-                            {checkpoint.status}
-                          </div>
-                          <div className="p-3 border-t border-gray-200">
-                            <p className="text-sm font-medium mb-1">Requirement:</p>
-                            <p className="text-sm text-gray-700 mb-3">{checkpoint.requirement}</p>
-                            <p className="text-sm font-medium mb-1">Feedback:</p>
-                            <p className="text-sm text-gray-700">{checkpoint.details}</p>
-                          </div>
-                        </div>
+                        <RequirementCheckpoint
+                          key={index}
+                          status={checkpoint.status}
+                          requirement={checkpoint.requirement}
+                          details={checkpoint.details}
+                        />
                       ))}
                     </div>
                   </div>
@@ -1458,22 +1405,15 @@ export default function ProjectTaskPage() {
           </AlertDialogContent>
         </AlertDialog>
 
-        <AlertDialog open={showClearChatDialog} onOpenChange={setShowClearChatDialog}>
-          <AlertDialogContent>
-            <AlertDialogHeader>
-              <AlertDialogTitle>Clear Chat History</AlertDialogTitle>
-              <SafeAlertDialogDescription>
-                Are you sure you want to clear the chat history? This action cannot be undone.
-              </SafeAlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogCancel>Cancel</AlertDialogCancel>
-              <AlertDialogAction onClick={handleClearChat} className="bg-red-600 hover:bg-red-700 text-white">
-                Clear Chat
-              </AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
+        <ConfirmationDialog
+          open={showClearChatDialog}
+          onOpenChange={setShowClearChatDialog}
+          title="Clear Chat History"
+          description="Are you sure you want to clear the chat history? This action cannot be undone."
+          confirmText="Clear Chat"
+          confirmVariant="destructive"
+          onConfirm={handleClearChat}
+        />
 
         {/* Evaluation History Dialog */}
         <AlertDialog open={showHistoryDialog} onOpenChange={setShowHistoryDialog}>
@@ -1488,83 +1428,17 @@ export default function ProjectTaskPage() {
             <div className="py-4 space-y-6">
               {evaluationHistory?.length ? (
                 <div className="space-y-6">
-                  {evaluationHistory.map((evaluation, index) => {
-                    const date = evaluation.timestamp?.toDate();
-                    const formattedDate = date ? new Intl.DateTimeFormat('en-US', {
-                      dateStyle: 'medium',
-                      timeStyle: 'short'
-                    }).format(date) : 'Unknown Date';
-                    
-                    return (
-                      <div key={index} className="border rounded-lg overflow-hidden">
-                        <div className="bg-gray-50 p-3 flex justify-between items-center border-b">
-                          <div className="flex items-center">
-                            <span className="font-medium">Attempt {evaluationHistory.length - index}</span>
-                            <span className="mx-2">•</span>
-                            <span className="text-sm text-gray-500">{formattedDate}</span>
-                          </div>
-                          <span className={`px-2 py-1 text-xs font-medium rounded-full ${
-                            evaluation.score >= 80 ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
-                          }`}>
-                            Score: {evaluation.score}%
-                          </span>
-                        </div>
-                        
-                        <div className="p-4 space-y-4">
-                          {/* Summary */}
-                          {evaluation.result?.rawContent?.summary && (
-                            <div>
-                              <h4 className="font-semibold text-sm mb-1">Summary:</h4>
-                              <p className="text-sm text-gray-700">{evaluation.result.rawContent.summary}</p>
-                            </div>
-                          )}
-                          
-                          {/* Requirements */}
-                          {evaluation.result?.rawContent?.checkpoints && evaluation.result.rawContent.checkpoints.length > 0 && (
-                            <div>
-                              <h4 className="font-semibold text-sm mb-2">Requirements Status:</h4>
-                              <div className="space-y-2">
-                                {evaluation.result.rawContent.checkpoints.map((checkpoint, checkpointIndex) => (
-                                  <div key={checkpointIndex} className="border rounded text-sm">
-                                    <div className={`p-2 ${
-                                      checkpoint.status.toLowerCase().includes('completed') ? 'bg-green-50' : 'bg-red-50'
-                                    }`}>
-                                      <span className={checkpoint.status.toLowerCase().includes('completed') ? 'text-green-700' : 'text-red-700'}>
-                                        {checkpoint.status}
-                                      </span>
-                                    </div>
-                                    <div className="p-2">
-                                      <p className="font-medium mb-1">Requirement:</p>
-                                      <p className="mb-2 text-gray-700">{checkpoint.requirement}</p>
-                                      <p className="font-medium mb-1">Feedback:</p>
-                                      <p className="text-gray-700">{checkpoint.details}</p>
-                                    </div>
-                                  </div>
-                                ))}
-                              </div>
-                            </div>
-                          )}
-                          
-                          {/* Improvements */}
-                          {evaluation.result?.rawContent?.improvements && evaluation.result.rawContent.improvements.length > 0 && (
-                            <div>
-                              <h4 className="font-semibold text-sm mb-1">Suggested Improvements:</h4>
-                              <ul className="list-disc pl-5 space-y-1 text-sm">
-                                {evaluation.result.rawContent.improvements.map((improvement, improvementIndex) => (
-                                  <li key={improvementIndex} className="text-gray-700">{improvement}</li>
-                                ))}
-                              </ul>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })}
+                  {evaluationHistory.map((evaluation, index) => (
+                    <EvaluationHistoryItem 
+                      key={index}
+                      evaluation={evaluation}
+                      index={index}
+                      totalCount={evaluationHistory.length}
+                    />
+                  ))}
                 </div>
               ) : (
-                <div className="text-center py-10">
-                  <p className="text-gray-500">No evaluation history found for this task.</p>
-                </div>
+                <EmptyEvaluationHistory />
               )}
             </div>
             
@@ -1592,139 +1466,12 @@ export default function ProjectTaskPage() {
                   {/* Sort prompts by quality score (highest first) */}
                   {[...promptHistory]
                     .sort((a, b) => b.qualityScore - a.qualityScore)
-                    .map((prompt, index) => {
-                    const date = prompt.timestamp?.toDate();
-                    const formattedDate = date ? new Intl.DateTimeFormat('en-US', {
-                      dateStyle: 'medium',
-                      timeStyle: 'short'
-                    }).format(date) : 'Unknown Date';
-                    
-                    // Calculate color based on quality score
-                    const getScoreColor = (score: number) => {
-                      if (score >= 90) return 'bg-purple-100 text-purple-800';
-                      if (score >= 80) return 'bg-green-100 text-green-800';
-                      if (score >= 60) return 'bg-blue-100 text-blue-800';
-                      if (score >= 40) return 'bg-yellow-100 text-yellow-800';
-                      return 'bg-red-100 text-red-800';
-                    };
-                    
-                    // Format score with emoji
-                    const formatScore = (score: number) => {
-                      if (score >= 90) return `${score}% 🌟`;
-                      if (score >= 80) return `${score}% ✨`;
-                      if (score >= 60) return `${score}% ✅`;
-                      if (score >= 40) return `${score}% ⚠️`;
-                      return `${score}% ❗`;
-                    };
-                    
-                    return (
-                      <div key={index} className="border rounded-lg overflow-hidden">
-                        <div className="bg-gray-50 p-3 flex justify-between items-center border-b">
-                          <div className="flex items-center">
-                            <span className="font-medium">{prompt.isGoodPrompt ? 'Good Prompt' : 'Needs Improvement'}</span>
-                            <span className="mx-2">•</span>
-                            <span className="text-sm text-gray-500">{formattedDate}</span>
-                          </div>
-                          <span className={`px-2 py-1 text-xs font-medium rounded-full ${getScoreColor(prompt.qualityScore)}`}>
-                            {formatScore(prompt.qualityScore)}
-                          </span>
-                        </div>
-                        
-                        <div className="p-4 space-y-4">
-                          {/* Prompt Content */}
-                          <div>
-                            <h4 className="font-semibold text-sm mb-1">Prompt:</h4>
-                            <div className="bg-gray-50 p-3 rounded-md text-sm border">
-                              {prompt.content}
-                            </div>
-                          </div>
-                          
-                          {/* Component Scores */}
-                          <div>
-                            <h4 className="font-semibold text-sm mb-2">Score Breakdown:</h4>
-                            <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
-                              <div className="bg-blue-50 p-2 rounded-md border border-blue-100">
-                                <p className="text-xs text-gray-600">Goal</p>
-                                <div className="flex justify-between items-center">
-                                  <span className="font-medium text-sm">{prompt.goalScore}/100</span>
-                                  <div className="w-16 bg-gray-200 rounded-full h-1.5">
-                                    <div className="bg-blue-600 h-1.5 rounded-full" style={{ width: `${prompt.goalScore}%` }}></div>
-                                  </div>
-                                </div>
-                              </div>
-                              <div className="bg-green-50 p-2 rounded-md border border-green-100">
-                                <p className="text-xs text-gray-600">Context</p>
-                                <div className="flex justify-between items-center">
-                                  <span className="font-medium text-sm">{prompt.contextScore}/100</span>
-                                  <div className="w-16 bg-gray-200 rounded-full h-1.5">
-                                    <div className="bg-green-600 h-1.5 rounded-full" style={{ width: `${prompt.contextScore}%` }}></div>
-                                  </div>
-                                </div>
-                              </div>
-                              <div className="bg-purple-50 p-2 rounded-md border border-purple-100">
-                                <p className="text-xs text-gray-600">Expectations</p>
-                                <div className="flex justify-between items-center">
-                                  <span className="font-medium text-sm">{prompt.expectationsScore}/100</span>
-                                  <div className="w-16 bg-gray-200 rounded-full h-1.5">
-                                    <div className="bg-purple-600 h-1.5 rounded-full" style={{ width: `${prompt.expectationsScore}%` }}></div>
-                                  </div>
-                                </div>
-                              </div>
-                              <div className="bg-amber-50 p-2 rounded-md border border-amber-100">
-                                <p className="text-xs text-gray-600">Source</p>
-                                <div className="flex justify-between items-center">
-                                  <span className="font-medium text-sm">{prompt.sourceScore}/100</span>
-                                  <div className="w-16 bg-gray-200 rounded-full h-1.5">
-                                    <div className="bg-amber-600 h-1.5 rounded-full" style={{ width: `${prompt.sourceScore}%` }}></div>
-                                  </div>
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-                          
-                          {/* Tips based on scores */}
-                          <div>
-                            <h4 className="font-semibold text-sm mb-1">Tips for Improvement:</h4>
-                            <ul className="list-disc pl-5 space-y-1 text-sm">
-                              {(prompt.goalScore !== undefined && prompt.goalScore < 70) && (
-                                <li className="text-gray-700">Be more specific about what you're trying to achieve</li>
-                              )}
-                              {(prompt.contextScore !== undefined && prompt.contextScore < 70) && (
-                                <li className="text-gray-700">Provide more context about your task or problem</li>
-                              )}
-                              {(prompt.expectationsScore !== undefined && prompt.expectationsScore < 70) && (
-                                <li className="text-gray-700">Clarify what kind of response you expect</li>
-                              )}
-                              {(prompt.sourceScore !== undefined && prompt.sourceScore < 70) && (
-                                <li className="text-gray-700">Include references or examples to guide the response</li>
-                              )}
-                              {(prompt.goalScore !== undefined && prompt.contextScore !== undefined && 
-                                prompt.expectationsScore !== undefined && prompt.sourceScore !== undefined &&
-                                prompt.goalScore >= 70 && prompt.contextScore >= 70 && 
-                                prompt.expectationsScore >= 70 && prompt.sourceScore >= 70) && (
-                                <li className="text-green-700">Great prompt! It's clear, specific, and provides good context.</li>
-                              )}
-                            </ul>
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })}
+                    .map((prompt, index) => (
+                      <PromptHistoryItem key={index} prompt={prompt} />
+                    ))}
                 </div>
               ) : (
-                <div className="space-y-4">
-                  <div className="text-center py-6">
-                    <Info className="w-12 h-12 mx-auto text-purple-500 mb-2" />
-                    <p className="text-gray-600 mb-2">No prompt history found for this task yet.</p>
-                    <p className="text-gray-500 text-sm">Try sending a message in the chat to generate prompt feedback.</p>
-                  </div>
-                  
-                  <div className="bg-amber-50 border border-amber-200 p-4 rounded-md mt-4">
-                    <h3 className="font-medium text-amber-800 mb-2">Debugging Information</h3>
-                    <p className="text-sm text-amber-700 mb-2">Current prompt history state: {promptHistory ? `Array with ${promptHistory.length} items` : 'null'}</p>
-                    <p className="text-sm text-amber-700">Check browser console for detailed logs.</p>
-                  </div>
-                </div>
+                <EmptyPromptHistory />
               )}
             </div>
             
