@@ -158,21 +158,22 @@ Provide ONLY the JSON array in your response, without any surrounding text, expl
         // We'll still proceed but log a warning
       }
 
-    } catch (parseError: any) {
+    } catch (parseError: unknown) {
       console.error("Failed to parse Vertex AI subtask response as JSON:", parseError, "Original response:", responseText);
       return NextResponse.json({ message: `Failed to parse AI subtask response. Raw response: ${responseText}` }, { status: 500 });
     }
 
     return NextResponse.json(refinedSubtasksJson, { status: 200 });
 
-  } catch (error: any) {
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     console.error("Error in /api/refine-subtasks:", error);
-    if (error.message?.includes('PERMISSION_DENIED') || error.message?.includes('Unauthenticated')) {
+    if (errorMessage.includes('PERMISSION_DENIED') || errorMessage.includes('Unauthenticated')) {
         return NextResponse.json({ message: 'Vertex AI Authentication Error for subtasks. Check credentials and permissions.' }, { status: 500 });
     }
-    if (error.message?.includes('Could not find location')) {
+    if (errorMessage.includes('Could not find location')) {
         return NextResponse.json({ message: `Vertex AI Location Error for subtasks: The location '${LOCATION}' or model '${MODEL_NAME}' may be invalid.` }, { status: 500 });
     }
-    return NextResponse.json({ message: error.message || 'An unexpected error occurred while calling Vertex AI for subtasks.' }, { status: 500 });
+    return NextResponse.json({ message: errorMessage || 'An unexpected error occurred while calling Vertex AI for subtasks.' }, { status: 500 });
   }
 } 

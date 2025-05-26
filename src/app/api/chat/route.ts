@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { VertexAI, HarmCategory, HarmBlockThreshold, Part } from '@google-cloud/vertexai';
-import { getUser, getProject, getParticipationByProjectAndStudent, savePromptEvaluation } from '@/lib/firestore'; // Assuming these exist
-import { Project, Participation, Subtask } from '@/lib/types';
+import { getProject, getParticipationByProjectAndStudent, savePromptEvaluation } from '@/lib/firestore'; // Assuming these exist
+import { Subtask } from '@/lib/types';
 
 const PROJECT_ID = process.env.GOOGLE_CLOUD_PROJECT || 'openimpactlab-v2';
 const LOCATION = process.env.GOOGLE_CLOUD_LOCATION || 'us-central1';
@@ -115,7 +115,7 @@ export async function POST(req: NextRequest) {
 
     // Evaluate prompt quality if requested
     let promptQualityScore: number | null = null;
-    let promptQualityDetails: any = null;
+    let promptQualityDetails: { goal: number; context: number; expectations: number; source: number } | null = null;
     let streakInfo: { currentStreak: number; bestStreak: number; isGoodPrompt: boolean } | null = null;
     
     if (evaluatePromptQuality && message) {
@@ -180,19 +180,22 @@ export async function POST(req: NextRequest) {
 
     return new Response(stream, { headers });
 
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Error in /api/chat:", error);
     // Add more specific error handling based on potential Vertex AI errors
-    if (error.message?.includes('PERMISSION_DENIED') || error.message?.includes('Unauthenticated')) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    const errorCode = error && typeof error === 'object' && 'code' in error ? (error as { code: number }).code : undefined;
+    
+    if (errorMessage.includes('PERMISSION_DENIED') || errorMessage.includes('Unauthenticated')) {
         return NextResponse.json({ message: 'Vertex AI Authentication Error for chat. Check credentials and permissions.' }, { status: 500 });
     }
-    if (error.message?.includes('Could not find location')) {
+    if (errorMessage.includes('Could not find location')) {
         return NextResponse.json({ message: `Vertex AI Location Error for chat: The location '${LOCATION}' or model '${MODEL_NAME}' may be invalid.` }, { status: 500 });
     }
-    if (error.code === 7 && error.message?.includes('Please ensure that project')) { // Quota error example
+    if (errorCode === 7 && errorMessage.includes('Please ensure that project')) { // Quota error example
         return NextResponse.json({ message: 'Vertex AI quota exceeded. Please check your Google Cloud project quotas.'}, { status: 429 });
     }
-    return NextResponse.json({ message: error.message || 'An unexpected error occurred while calling Vertex AI for chat.' }, { status: 500 });
+    return NextResponse.json({ message: errorMessage || 'An unexpected error occurred while calling Vertex AI for chat.' }, { status: 500 });
   }
 }
 

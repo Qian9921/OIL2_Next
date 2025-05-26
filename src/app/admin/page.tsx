@@ -9,7 +9,6 @@ import {
   Database,
   Users,
   FileText,
-  BookOpen,
   CheckCircle,
   AlertTriangle
 } from "lucide-react";
@@ -136,7 +135,7 @@ export default function AdminPage() {
               <div className="p-4 border rounded-lg">
                 <h4 className="font-medium text-gray-900 mb-2">Step 1: Create Sample Data</h4>
                 <p className="text-gray-600 text-sm">
-                  Click the "Create Sample Submissions" button to generate test submissions for teachers to review.
+                  Click the &quot;Create Sample Submissions&quot; button to generate test submissions for teachers to review.
                 </p>
               </div>
               

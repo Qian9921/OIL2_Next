@@ -1,7 +1,6 @@
 import NextAuth, { NextAuthOptions } from "next-auth";
 import GoogleProvider from "next-auth/providers/google";
-import { getUserByEmail, createUser } from "@/lib/firestore";
-import { generateAvatar } from "@/lib/utils";
+import { getUserByEmail } from "@/lib/firestore";
 
 const authOptions: NextAuthOptions = {
   providers: [
@@ -14,7 +13,7 @@ const authOptions: NextAuthOptions = {
     signIn: "/auth/signin",
   },
   callbacks: {
-    async signIn({ user, account, profile }) {
+    async signIn({ user, account }) {
       console.log("SignIn callback - User:", user?.email, "Provider:", account?.provider);
       if (account?.provider === "google") {
         try {

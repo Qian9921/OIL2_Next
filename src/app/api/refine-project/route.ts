@@ -147,21 +147,23 @@ Please provide only the JSON object in your response, without any surrounding te
     try {
       const cleanedResponseText = responseText.replace(/```json\n|```/g, '').trim();
       refinedJson = JSON.parse(cleanedResponseText);
-    } catch (parseError: any) {
+    } catch (parseError: unknown) {
       console.error("Failed to parse Vertex AI response as JSON:", parseError, "Original response:", responseText);
       return NextResponse.json({ message: `Failed to parse AI response. Raw response: ${responseText}` }, { status: 500 });
     }
 
     return NextResponse.json(refinedJson, { status: 200 });
 
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Error in /api/refine-project:", error);
-    if (error.message?.includes('PERMISSION_DENIED') || error.message?.includes('Unauthenticated')) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    
+    if (errorMessage.includes('PERMISSION_DENIED') || errorMessage.includes('Unauthenticated')) {
         return NextResponse.json({ message: 'Vertex AI Authentication Error. Ensure GOOGLE_APPLICATION_CREDENTIALS is set correctly and the service account has Vertex AI User role.' }, { status: 500 });
     }
-    if (error.message?.includes('Could not find location')) {
+    if (errorMessage.includes('Could not find location')) {
         return NextResponse.json({ message: `Vertex AI Location Error: The location '${LOCATION}' is likely invalid or the model '${MODEL_NAME}' is not available there. Please check your Vertex AI region and model availability.` }, { status: 500 });
     }
-    return NextResponse.json({ message: error.message || 'An unexpected error occurred while calling Vertex AI.' }, { status: 500 });
+    return NextResponse.json({ message: errorMessage || 'An unexpected error occurred while calling Vertex AI.' }, { status: 500 });
   }
 } 
