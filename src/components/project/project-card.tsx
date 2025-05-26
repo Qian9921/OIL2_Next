@@ -9,7 +9,8 @@ import {
   Target,
   Edit,
   Trash2,
-  Settings
+  Settings,
+  Plus
 } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -22,6 +23,7 @@ import {
   calculateEstimatedHours, 
   formatDeadline 
 } from '@/lib/utils';
+import { LoadingState } from '@/components/ui/loading-state';
 
 export interface ProjectCardProps {
   /** Project data */
@@ -44,6 +46,10 @@ export interface ProjectCardProps {
   onDeleteClick?: (project: Project) => void;
   /** Custom action component to render */
   customActions?: React.ReactNode;
+  /** Additional content to render in the card */
+  additionalContent?: React.ReactNode;
+  /** Custom status label to override default status */
+  statusLabel?: string;
 }
 
 /**
@@ -59,7 +65,9 @@ export function ProjectCard({
   onJoinClick,
   onEditClick,
   onDeleteClick,
-  customActions
+  customActions,
+  additionalContent,
+  statusLabel
 }: ProjectCardProps) {
   const handleJoinClick = () => {
     onJoinClick?.(project);
@@ -79,10 +87,11 @@ export function ProjectCard({
               
               {project.status && (
                 <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(project.status)}`}>
-                  {project.status === 'draft' ? 'Draft' :
+                  {statusLabel || 
+                   (project.status === 'draft' ? 'Draft' :
                    project.status === 'published' ? 'Published' :
                    project.status === 'completed' ? 'Completed' :
-                   project.status === 'archived' ? 'Archived' : project.status}
+                   project.status === 'archived' ? 'Archived' : project.status)}
                 </span>
               )}
               
@@ -165,10 +174,13 @@ export function ProjectCard({
           </div>
         )}
 
+        {/* Additional Content */}
+        {additionalContent}
+
         {/* Action Buttons */}
-        <div className="flex space-x-2 pt-2 mt-auto">
+        <div className="flex flex-col space-y-2 pt-2 mt-auto">
           {/* Default view details button */}
-          <Link href={`/projects/${project.id}`} className="flex-1">
+          <Link href={`/projects/${project.id}`} className="w-full">
             <Button variant="outline" className="w-full">
               <BookOpen className="w-4 h-4 mr-2" />
               View Details
@@ -181,22 +193,22 @@ export function ProjectCard({
           {/* Student join/continue button */}
           {showJoinButton && !isJoined && (
             <Button
-              onClick={handleJoinClick}
+              onClick={() => onJoinClick?.(project)}
               disabled={isFull || isJoining}
-              className="flex-1"
+              className="w-full"
             >
               {isJoining ? (
-                <div className="loading-spinner w-4 h-4 mr-2" />
+                <LoadingState size="sm" className="mr-2 w-4 h-4" fullHeight={false} />
               ) : (
-                <CheckCircle className="w-4 h-4 mr-2" />
+                <Plus className="w-4 h-4 mr-2" />
               )}
-              Join
+              {isFull ? 'Project Full' : isJoining ? 'Joining...' : 'Join Project'}
             </Button>
           )}
           
           {/* Student continue button (if already joined) */}
           {showJoinButton && isJoined && (
-            <Link href="/student/my-projects" className="flex-1">
+            <Link href="/student/my-projects" className="w-full">
               <Button className="w-full">
                 <Target className="w-4 h-4 mr-2" />
                 Continue

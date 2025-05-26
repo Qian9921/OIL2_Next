@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, Fragment } from "react";
+import React, { useEffect, useState, Fragment } from "react";
 import { useSession } from "next-auth/react";
 import { MainLayout } from "@/components/layout/main-layout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -22,6 +22,7 @@ import { Project, Participation, Submission, Subtask } from "@/lib/types";
 import { generateAvatar, getStatusColor, getDifficultyColor, calculateEstimatedHours, formatDeadline } from "@/lib/utils";
 import { Timestamp } from "firebase/firestore";
 import { LoadingState } from "@/components/ui/loading-state";
+import { ProjectCard } from "@/components/project/project-card";
 import { 
   BookOpen, 
   Users, 
@@ -58,6 +59,7 @@ interface ProjectWithDetails extends Participation {
   project: Project;
   submission?: Submission;
   nextSubtask?: Subtask;
+  studentGitHubRepo?: string;
 }
 
 type ProjectFilter = "active" | "completed" | "action_required";
@@ -98,7 +100,7 @@ export default function StudentMyProjectsPage() {
           let nextSubtask: Subtask | undefined = undefined;
           if (participation.status === 'active') {
             const sortedSubtasks = [...project.subtasks].sort((a, b) => a.order - b.order);
-            nextSubtask = sortedSubtasks.find(st => !participation.completedSubtasks.includes(st.id));
+            nextSubtask = sortedSubtasks.find(st => !participation.completedSubtasks?.includes(st.id));
           }
           
           loadedProjects.push({
@@ -129,14 +131,68 @@ export default function StudentMyProjectsPage() {
       const currentSubtaskIndex = participation.project.subtasks.findIndex(st => st.id === subtaskId);
       if (currentSubtaskIndex > 0) {
         const previousSubtask = participation.project.subtasks[currentSubtaskIndex - 1];
-        if (!participation.completedSubtasks.includes(previousSubtask.id)) {
+        if (!participation.completedSubtasks?.includes(previousSubtask.id)) {
           toast({ title: "Sequence Error", description: "Please complete previous tasks first.", variant: "destructive" });
           setUpdatingSubtask(null);
           return;
         }
       }
+      
+      // Get the current task details
+      const currentTask = participation.project.subtasks.find(st => st.id === subtaskId);
+      if (!currentTask) {
+        toast({ title: "Error", description: "Task not found.", variant: "destructive" });
+        setUpdatingSubtask(null);
+        return;
+      }
+      
+      // Make API call to evaluate the task completion
+      try {
+        const response = await fetch('https://tutor-new-827682634474.us-central1.run.app/api/evaluate', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            projectDetail: participation.project.title,
+            tasks: participation.project.subtasks.map(st => st.title),
+            currentTask: currentTask.title,
+            githubRepoUrl: participation.studentGitHubRepo || "",
+            evidence: currentTask.description || "Task completion criteria",
+            youtubeLink: null,
+            waitForResult: true
+          })
+        });
+        
+        if (!response.ok) {
+          throw new Error(`API error: ${response.status}`);
+        }
+        
+        const result = await response.json();
+        
+        // Check if the score meets the threshold (80%)
+        if (result.score < 80) {
+          toast({ 
+            title: "Task Incomplete", 
+            description: `Your work does not meet the required criteria (${result.score}%). Please review and try again.`, 
+            variant: "destructive" 
+          });
+          setUpdatingSubtask(null);
+          return;
+        }
+      } catch (apiError) {
+        console.error("Error evaluating task:", apiError);
+        toast({ 
+          title: "Evaluation Error", 
+          description: "We couldn't evaluate your work. Please try again later.", 
+          variant: "destructive" 
+        });
+        setUpdatingSubtask(null);
+        return;
+      }
 
-      const newCompletedSubtasks = [...participation.completedSubtasks, subtaskId];
+      // If evaluation passed, continue with marking the task complete
+      const newCompletedSubtasks = [...(participation.completedSubtasks || []), subtaskId];
       const totalSubtasks = participation.project.subtasks.length;
       const newProgress = Math.round((newCompletedSubtasks.length / totalSubtasks) * 100);
       
@@ -443,194 +499,124 @@ export default function StudentMyProjectsPage() {
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 gap-6">
             {filteredAndSortedProjects.map((projectWithDetails) => {
               const { project, submission } = projectWithDetails;
-              const completedSubtasksCount = projectWithDetails.completedSubtasks.length;
-              const totalSubtasks = project.subtasks.length;
-              const progressPercentage = projectWithDetails.progress;
               const submissionStatus = getSubmissionStatusDisplay(submission);
-              const SubmissionIcon = submissionStatus.icon;
 
-              return (
-                <Card key={projectWithDetails.id} className="overflow-hidden flex flex-col h-full">
-                  <CardHeader>
-                    <div className="flex items-start justify-between">
-                      <div className="flex-1">
-                        <CardTitle className="text-xl mb-2">{project.title}</CardTitle>
-                        <div className="flex items-center flex-wrap gap-2 mb-3">
-                          <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(projectWithDetails.status)}`}>
-                            {projectWithDetails.status === 'active' ? 'In Progress' :
-                             projectWithDetails.status === 'completed' ? (submission?.status === 'approved' ? 'Approved' : 'Submitted') :
-                             projectWithDetails.status === 'dropped' ? 'Dropped' : 'Pending Action'}
-                          </span>
-                          <span className={`px-2 py-1 rounded-full text-xs font-medium ${getDifficultyColor(project.difficulty)}`}>
-                            {project.difficulty === 'beginner' ? 'Beginner' :
-                             project.difficulty === 'intermediate' ? 'Intermediate' : 'Advanced'}
-                          </span>
-                        </div>
-                        <p className="text-gray-600 text-sm">
-                          by {project.ngoName}
-                        </p>
-                      </div>
-                      <Avatar
-                        src={generateAvatar(project.ngoId)}
-                        alt={project.ngoName}
-                        size="md"
+              // Create custom actions for the ProjectCard
+              const customActions = (
+                <div className="space-y-2">
+                  {projectWithDetails.status === 'active' && projectWithDetails.nextSubtask && (
+                    <Button 
+                      variant="default" 
+                      size="sm"
+                      onClick={() => handleContinueLearning(projectWithDetails)}
+                      className="w-full bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white transition-all duration-300 ease-in-out transform hover:scale-105 shadow-md"
+                    >
+                      <Play className="w-4 h-4 mr-2" />
+                      Continue Learning
+                    </Button>
+                  )}
+                  
+                  {projectWithDetails.status === 'active' && (
+                    <Button 
+                      variant="outline"
+                      size="sm"
+                      onClick={() => confirmAndLeaveProject(projectWithDetails.id, project.title)}
+                      className="w-full"
+                    >
+                      <LogOut className="w-4 h-4 mr-1.5" />
+                      Leave Project
+                    </Button>
+                  )}
+
+                  {canSubmitProject(projectWithDetails) && (
+                     <Button 
+                        variant="default" 
+                        size="sm"
+                        onClick={() => handleSubmitProject(projectWithDetails)}
+                        className="w-full"
+                      >
+                        <SendHorizonal className="w-4 h-4 mr-1.5" />
+                        {canResubmit(projectWithDetails) ? 'Resubmit Project' : 'Submit Project for Review'}
+                      </Button>
+                  )}
+                </div>
+              );
+
+              // Additional info component for ProjectCard
+              const additionalInfo = (
+                <>
+                  <div className="mb-3">
+                    <div className="flex justify-between items-center mb-1">
+                      <span className="text-sm font-medium text-gray-700">
+                        Progress: {projectWithDetails.completedSubtasks?.length || 0}/{project.subtasks.length} tasks
+                      </span>
+                      <span className="text-sm font-medium text-gray-700">
+                        {projectWithDetails.progress}%
+                      </span>
+                    </div>
+                    <div className="w-full bg-gray-200 rounded-full h-2">
+                      <div
+                        className="bg-gradient-to-r from-purple-500 to-pink-500 h-2 rounded-full transition-all duration-300"
+                        style={{ width: `${projectWithDetails.progress}%` }}
                       />
                     </div>
-                  </CardHeader>
+                  </div>
 
-                  <CardContent className="space-y-4 flex-grow">
-                    <div>
-                      <div className="flex justify-between items-center mb-2">
-                        <span className="text-sm font-medium text-gray-700">
-                          Progress: {completedSubtasksCount}/{totalSubtasks} tasks
+                  <div className="flex flex-wrap gap-2 items-center mb-3">
+                    {projectWithDetails.studentGitHubRepo && (
+                      <Link href={projectWithDetails.studentGitHubRepo} target="_blank" rel="noopener noreferrer">
+                        <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-slate-700 text-white hover:bg-slate-800 transition-colors">
+                          <Github className="w-3 h-3 mr-1.5" />
+                          GitHub Repo
                         </span>
-                        <span className="text-sm font-medium text-gray-700">
-                          {progressPercentage}%
-                        </span>
-                      </div>
-                      <div className="w-full bg-gray-200 rounded-full h-2">
-                        <div
-                          className="bg-gradient-to-r from-purple-500 to-pink-500 h-2 rounded-full transition-all duration-300"
-                          style={{ width: `${progressPercentage}%` }}
-                        />
-                      </div>
-                    </div>
-
-                    {/* Tag section */}
-                    <div className="flex flex-wrap gap-2">
-                      {submission && (
-                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${submissionStatus.color} flex items-center`}>
-                          <SubmissionIcon className="w-3 h-3 mr-1" />
-                          {submissionStatus.text}
-                        </span>
-                      )}
-                      {projectWithDetails.studentGitHubRepo && (
-                        <Link href={projectWithDetails.studentGitHubRepo} target="_blank" rel="noopener noreferrer" className="flex items-center">
-                          <span className="px-2 py-1 rounded-full text-xs font-medium bg-gray-700 text-white flex items-center hover:bg-gray-800">
-                            <Github className="w-3 h-3 mr-1.5" />
-                            GitHub Repo
-                          </span>
-                        </Link>
-                      )}
-                      {projectWithDetails.status === 'completed' && submission?.status === 'approved' && (
-                        <span className="px-2 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800 flex items-center">
-                          <Award className="w-3 h-3 mr-1" />
-                          Certificate
-                        </span>
-                      )}
-                    </div>
-
-                    {/* Project Info Section */}
-                    <div className="grid grid-cols-2 gap-3 text-xs">
-                      <div className="flex items-center space-x-2 text-gray-600">
-                        <Users className="w-4 h-4" />
-                        <span>{project.currentParticipants} participants</span>
-                      </div>
-                      <div className="flex items-center space-x-2 text-gray-600">
-                        <Clock className="w-4 h-4" />
-                        <span>
-                          {calculateEstimatedHours(project) > 0 
-                            ? `${calculateEstimatedHours(project)} hours (est.)`
-                            : 'TBD hours'
-                          }
-                        </span>
-                      </div>
-                      <div className="flex items-center space-x-2 text-gray-600">
-                        <Target className="w-4 h-4" />
-                        <span>{totalSubtasks} tasks</span>
-                      </div>
-                      <div className="flex items-center space-x-2 text-gray-600">
-                        <Calendar className="w-4 h-4" />
-                        <span>
-                          {project.deadline 
-                            ? `Due ${formatDeadline(project.deadline)}` 
-                            : 'No deadline'
-                          }
-                        </span>
-                      </div>
-                    </div>
-
-                    {/* Action Buttons */}
-                    <div className="flex items-center justify-between mt-2 pt-2 border-t border-gray-100">
-                      {projectWithDetails.status === 'active' && (
-                        <Button 
-                          variant="default" 
-                          size="sm"
-                          onClick={() => handleContinueLearning(projectWithDetails)}
-                          className="flex-1 mr-2"
-                        >
-                          <Play className="w-4 h-4 mr-1.5" />
-                          Continue Learning
-                        </Button>
-                      )}
-                      
-                      {canSubmitProject(projectWithDetails) && (
-                        <Button 
-                          variant="default" 
-                          size="sm"
-                          onClick={() => handleSubmitProject(projectWithDetails)}
-                          className="flex-1 mr-2"
-                        >
-                          <SendHorizonal className="w-4 h-4 mr-1.5" />
-                          Submit Project
-                        </Button>
-                      )}
-                      
-                      {canResubmit(projectWithDetails) && (
-                        <Button 
-                          variant="default" 
-                          size="sm"
-                          onClick={() => handleSubmitProject(projectWithDetails)}
-                          className="flex-1 mr-2"
-                        >
-                          <RefreshCw className="w-4 h-4 mr-1.5" />
-                          Resubmit
-                        </Button>
-                      )}
-                      
-                      {projectWithDetails.status === 'active' && (
-                        <Button 
-                          variant="outline"
-                          size="sm"
-                          onClick={() => confirmAndLeaveProject(projectWithDetails.id, project.title)}
-                          className="flex-1"
-                        >
-                          <LogOut className="w-4 h-4 mr-1.5" />
-                          Leave Project
-                        </Button>
-                      )}
-                    </div>
-
-                    {submission && submission.reviewComment && (
-                      <div className={`p-3 rounded-lg border mt-3 ${
-                        submission.status === 'approved' ? 'bg-green-50 border-green-200' :
-                        submission.status === 'rejected' ? 'bg-red-50 border-red-200' :
-                        submission.status === 'needs_revision' ? 'bg-orange-50 border-orange-200' :
-                        'bg-blue-50 border-blue-200'
-                      }`}>
-                        <h4 className={`font-medium mb-1 flex items-center ${
-                          submission.status === 'approved' ? 'text-green-900' :
-                          submission.status === 'rejected' ? 'text-red-900' :
-                          submission.status === 'needs_revision' ? 'text-orange-900' :
-                          'text-blue-900'
-                        } text-xs`}>
-                          <FileText className="w-3.5 h-3.5 mr-1.5" />
-                          Teacher Feedback
-                        </h4>
-                        <p className={`text-xs ${
-                          submission.status === 'approved' ? 'text-green-800' :
-                          submission.status === 'rejected' ? 'text-red-800' :
-                          submission.status === 'needs_revision' ? 'text-orange-800' :
-                          'text-blue-800'
-                        }`}>
-                          {submission.reviewComment.length > 100 
-                            ? `${submission.reviewComment.substring(0, 100)}...` 
-                            : submission.reviewComment}
-                        </p>
-                      </div>
+                      </Link>
                     )}
-                  </CardContent>
-                </Card>
+                    {submission && (
+                      <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${submissionStatus.color}`}>
+                        {React.createElement(submissionStatus.icon, { className: "w-3 h-3 mr-1" })}
+                        {submissionStatus.text}
+                      </span>
+                    )}
+                    {projectWithDetails.status === 'completed' && submission?.status === 'approved' && (
+                      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
+                        <Award className="w-3 h-3 mr-1" />
+                        Certificate Available
+                      </span>
+                    )}
+                  </div>
+
+                  {submission && submission.reviewComment && (
+                    <div className={`p-3 rounded-lg border mt-1 text-xs ${
+                      submission.status === 'approved' ? 'bg-green-50 border-green-200 text-green-800' :
+                      submission.status === 'rejected' ? 'bg-red-50 border-red-200 text-red-800' :
+                      submission.status === 'needs_revision' ? 'bg-orange-50 border-orange-200 text-orange-800' :
+                      'bg-blue-50 border-blue-200 text-blue-800'
+                    }`}>
+                      <h4 className={`font-semibold mb-1 flex items-center`}>
+                        <FileText className="w-3.5 h-3.5 mr-1.5 flex-shrink-0" />
+                        Teacher Feedback:
+                      </h4>
+                      <p className="pl-5 line-clamp-2">
+                        {submission.reviewComment}
+                      </p>
+                    </div>
+                  )}
+                </>
+              );
+
+              return (
+                <ProjectCard
+                  key={projectWithDetails.id}
+                  project={project}
+                  showJoinButton={false}
+                  customActions={customActions}
+                  additionalContent={additionalInfo}
+                  statusLabel={
+                    projectWithDetails.status === 'active' ? 'In Progress' :
+                    projectWithDetails.status === 'completed' ? (submission?.status === 'approved' ? 'Approved' : 'Submitted') :
+                    projectWithDetails.status === 'dropped' ? 'Dropped' : 'Pending Action'
+                  }
+                />
               );
             })}
           </div>
@@ -639,9 +625,9 @@ export default function StudentMyProjectsPage() {
             <BookmarkX className="w-12 h-12 mx-auto text-gray-400 mb-4" />
             <h3 className="text-lg font-medium text-gray-900 mb-2">No Projects Found</h3>
             <p className="text-gray-600 mb-6">You don't have any {activeFilter.replace('_', ' ')} projects yet.</p>
-            <Link href="/student/projects">
+                 <Link href="/student/projects">
               <Button>Browse Projects</Button>
-            </Link>
+                </Link>
           </div>
         )}
       </div>

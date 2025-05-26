@@ -10,6 +10,7 @@ import { createProject } from "@/lib/firestore";
 import { Subtask } from "@/lib/types";
 import { useToast } from "@/hooks/use-toast";
 import { Timestamp } from "firebase/firestore";
+import { useFormState } from "@/lib/form-utils";
 import { 
   Save, 
   Plus, 
@@ -29,6 +30,7 @@ import Link from "next/link";
 import { GITHUB_SUBMISSION_SUBTASK_ID, GITHUB_SUBMISSION_SUBTASK_PROPS } from "@/lib/constants";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { calculateDeadlineFromDays, estimateDaysFromDifficulty } from "@/lib/utils";
+import { LoadingState } from "@/components/ui/loading-state";
 
 const initialFormData = {
   title: "",
@@ -58,20 +60,43 @@ export default function CreateProjectPage() {
   const router = useRouter();
   const { toast } = useToast();
   
-  const [isLoading, setIsLoading] = useState(false);
   const [isRefining, setIsRefining] = useState(false);
   const [isRefiningSubtasks, setIsRefiningSubtasks] = useState(false);
-  const [formData, setFormData] = useState({...initialFormData});
+  const [showClearFormDialog, setShowClearFormDialog] = useState(false);
+  
+  // Use the useFormState hook for form state management
+  const {
+    formData,
+    setFormData,
+    handleChange,
+    isSubmitting: isLoading,
+    resetForm
+  } = useFormState(
+    { ...initialFormData },
+    async (data) => {
+      try {
+        // This will be called when handleSubmit is invoked
+        // For now, we'll keep the existing submit logic separate
+        return { success: true };
+      } catch (error) {
+        console.error("Error in form submission:", error);
+        return { success: false, message: "Form submission failed" };
+      }
+    },
+    {
+      resetOnSuccess: false
+    }
+  );
   
   const [subtasks, setSubtasks] = useState<Omit<Subtask, 'id'>[]>([...initialSubtasks.map(st => ({...st}))]);
   
   const [newTag, setNewTag] = useState("");
   const [newRequirement, setNewRequirement] = useState("");
   const [newLearningGoal, setNewLearningGoal] = useState("");
-  const [showClearFormDialog, setShowClearFormDialog] = useState(false);
 
+  // Instead of handleInputChange, we'll use the setFieldValue from useFormState
   const handleInputChange = (field: string, value: any) => {
-    setFormData(prev => ({ ...prev, [field]: value }));
+    setFormData((prev) => ({ ...prev, [field]: value }));
   };
 
   const handleSubtaskChange = (index: number, field: string, value: any) => {
@@ -352,8 +377,6 @@ export default function CreateProjectPage() {
       return;
     }
 
-    setIsLoading(true);
-    
     try {
       // Generate subtask IDs
       const userDefinedSubtasksWithIds: Subtask[] = validSubtasks.map((subtask, index) => ({
@@ -414,8 +437,6 @@ export default function CreateProjectPage() {
     } catch (error) {
       console.error("Error creating project:", error);
       toast({ title: "Project Creation Failed", description: "Failed to create project, please try again.", variant: "destructive" });
-    } finally {
-      setIsLoading(false);
     }
   };
 
@@ -457,7 +478,7 @@ export default function CreateProjectPage() {
                     className="ml-auto"
                   >
                     {isRefining ? (
-                      <div className="loading-spinner w-4 h-4 mr-2" />
+                      <LoadingState size="sm" className="w-4 h-4 mr-2" fullHeight={false} />
                     ) : (
                       <Sparkles className="w-4 h-4 mr-2" />
                     )}
@@ -618,7 +639,7 @@ export default function CreateProjectPage() {
                            : "Refine subtasks with AI"}
                   >
                     {isRefiningSubtasks ? (
-                      <div className="loading-spinner w-4 h-4 mr-2" />
+                      <LoadingState size="sm" className="w-4 h-4 mr-2" fullHeight={false} />
                     ) : (
                       <Sparkles className="w-4 h-4 mr-2" />
                     )}
@@ -768,7 +789,7 @@ export default function CreateProjectPage() {
                   className="w-full"
                 >
                   {isLoading && !isRefining && !isRefiningSubtasks ? (
-                    <div className="loading-spinner mr-2" />
+                    <LoadingState size="sm" className="mr-2" fullHeight={false} />
                   ) : (
                     <Save className="w-4 h-4 mr-2" />
                   )}

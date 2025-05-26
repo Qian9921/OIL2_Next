@@ -412,11 +412,11 @@ export default function ProjectDetailPage() {
                       size="lg"
                     >
                       {isJoining ? (
-                        <div className="loading-spinner mr-2" />
+                        <LoadingState size="sm" className="mr-2" fullHeight={false} />
                       ) : (
                         <Plus className="w-4 h-4 mr-2" />
                       )}
-                      Join Project
+                      {isJoining ? 'Joining...' : 'Join Project'}
                     </Button>
                     <p className="text-xs text-gray-500 mt-2">
                       Free to join, you can exit anytime

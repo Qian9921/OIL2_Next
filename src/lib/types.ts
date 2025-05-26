@@ -71,6 +71,7 @@ export interface Participation {
   currentSubtaskId?: string;
   completedSubtasks?: string[];
   chatHistory?: { [subtaskId: string]: ChatMessage[] };
+  studentGitHubRepo?: string;
   promptEvaluations?: {
     [subtaskId: string]: Array<{
       goalScore: number;
@@ -84,6 +85,29 @@ export interface Participation {
       bestStreak: number;
     }>;
   };
+  evaluationHistory?: {
+    [subtaskId: string]: Array<{
+      timestamp: Timestamp;
+      score: number;
+      feedback: string;
+      success?: boolean;
+      message?: string;
+      evaluationId?: string;
+      status?: string;
+      result?: {
+        rawContent?: {
+          summary?: string;
+          assessment?: number;
+          checkpoints?: Array<{
+            status: string;
+            details: string;
+            requirement: string;
+          }>;
+          improvements?: string[];
+        }
+      }
+    }>;
+  };
 }
 
 export interface ChatMessagePart {
@@ -95,11 +119,13 @@ export interface ChatMessagePart {
 }
 
 export interface ChatMessage {
-  // id: string; // ID can be optional if messages are not individually stored or identified
-  role: 'user' | 'model' | 'system'; // 'user' for student, 'model' for AI, 'system' for UI messages
-  parts: ChatMessagePart[]; // Use the new ChatMessagePart type
-  timestamp: Date; // Using JavaScript Date object for easier frontend handling
-  // subtaskId?: string; // Optional: if needed to associate messages to specific subtasks in DB
+  role: 'user' | 'model' | 'system';
+  content: string;
+  id?: string;
+  userId?: string;
+  userName?: string;
+  createdAt?: string;
+  imageData?: string;
 }
 
 export interface Submission {

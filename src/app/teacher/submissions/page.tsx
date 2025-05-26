@@ -11,6 +11,7 @@ import { Avatar } from "@/components/ui/avatar";
 import { getSubmissions, updateSubmission, updateParticipation } from "@/lib/firestore";
 import { Submission } from "@/lib/types";
 import { generateAvatar, getStatusColor } from "@/lib/utils";
+import { showSuccessToast, showErrorToast } from "@/lib/toast-utils";
 import { 
   FileText, 
   Clock, 
@@ -91,17 +92,13 @@ export default function TeacherSubmissionsPage() {
       
       // Reload submissions
       await loadSubmissions();
-      toast({
-        title: "Review Success",
-        description: "Submission reviewed successfully!",
-        variant: "default"
+      showSuccessToast(toast, "Review Success", {
+        description: "Submission reviewed successfully!"
       });
     } catch (error) {
       console.error("Error reviewing submission:", error);
-      toast({
-        title: "Review Failed",
-        description: "Error reviewing submission. Please try again.",
-        variant: "destructive"
+      showErrorToast(toast, "Review Failed", {
+        description: "Error reviewing submission. Please try again."
       });
     } finally {
       setProcessingSubmission(null);
@@ -152,17 +149,13 @@ export default function TeacherSubmissionsPage() {
           : sub
       ));
       
-      toast({
-        title: "Approval Success",
-        description: "Submission approved successfully!",
-        variant: "default"
+      showSuccessToast(toast, "Approval Success", {
+        description: "Submission approved successfully!"
       });
     } catch (error) {
       console.error("Error approving submission:", error);
-      toast({
-        title: "Approval Failed",
-        description: "Failed to approve submission. Please try again.",
-        variant: "destructive"
+      showErrorToast(toast, "Approval Failed", {
+        description: "Failed to approve submission. Please try again."
       });
     } finally {
       setProcessingSubmission(null);
@@ -192,17 +185,13 @@ export default function TeacherSubmissionsPage() {
           : sub
       ));
       
-      toast({
-        title: "Rejection Complete",
-        description: "Submission rejected successfully!",
-        variant: "default"
+      showSuccessToast(toast, "Rejection Complete", {
+        description: "Submission rejected successfully!"
       });
     } catch (error) {
       console.error("Error rejecting submission:", error);
-      toast({
-        title: "Rejection Failed",
-        description: "Failed to reject submission. Please try again.",
-        variant: "destructive"
+      showErrorToast(toast, "Rejection Failed", {
+        description: "Failed to reject submission. Please try again."
       });
     } finally {
       setProcessingSubmission(null);
@@ -232,17 +221,13 @@ export default function TeacherSubmissionsPage() {
           : sub
       ));
       
-      toast({
-        title: "Revision Requested",
-        description: "Revision requested successfully!",
-        variant: "default"
+      showSuccessToast(toast, "Revision Requested", {
+        description: "Revision requested successfully!"
       });
     } catch (error) {
       console.error("Error requesting revision:", error);
-      toast({
-        title: "Request Failed",
-        description: "Failed to request revision. Please try again.",
-        variant: "destructive"
+      showErrorToast(toast, "Request Failed", {
+        description: "Failed to request revision. Please try again."
       });
     } finally {
       setProcessingSubmission(null);
@@ -531,7 +516,7 @@ export default function TeacherSubmissionsPage() {
                         disabled={processingSubmission === submission.id}
                       >
                         {processingSubmission === submission.id ? (
-                          <div className="w-3 h-3 mr-1 loading-spinner" />
+                          <LoadingState size="sm" className="w-3 h-3 mr-1" fullHeight={false} />
                         ) : (
                           <CheckCircle className="w-3 h-3 mr-1" />
                         )}
@@ -587,7 +572,7 @@ export default function TeacherSubmissionsPage() {
                           disabled={processingSubmission === submission.id}
                         >
                           {processingSubmission === submission.id ? (
-                            <div className="w-4 h-4 mr-2 loading-spinner" />
+                            <LoadingState size="sm" className="w-4 h-4 mr-2" fullHeight={false} />
                           ) : (
                             <CheckCircle className="w-4 h-4 mr-2" />
                           )}

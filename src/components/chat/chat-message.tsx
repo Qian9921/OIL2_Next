@@ -40,77 +40,78 @@ export function ChatMessage({
           'bg-amber-100 text-amber-800 border border-amber-200'
         }`}
       >
-        {message.parts.map((part, i) => {
-          if (part.inlineData) {
-            return (
-              <div key={`img-${i}`} className="my-2">
-                <img 
-                  src={part.inlineData.data} 
-                  alt="User upload" 
-                  className="max-w-full h-auto rounded-md border border-slate-300" 
-                  style={{ maxHeight: '200px' }} 
-                />
-              </div>
-            );
-          }
-          return (
-            <div key={`txt-${i}`} className="prose prose-sm max-w-none text-sm leading-relaxed whitespace-pre-wrap break-words">
-              <ReactMarkdown 
-                remarkPlugins={[remarkGfm]}
-                components={{
-                  pre: ({node, ...props}) => {
-                    let codeString = '';
-                    if (node && node.children) {
-                      node.children.forEach(child => {
-                        if (child.type === 'element' && child.tagName === 'code') {
-                          child.children.forEach(codeChild => {
-                            if (codeChild.type === 'text') {
-                              codeString += codeChild.value;
-                            }
-                          });
+        {/* Display image if available */}
+        {message.imageData && (
+          <div className="my-2">
+            <img 
+              src={message.imageData} 
+              alt="User upload" 
+              className="max-w-full h-auto rounded-md border border-slate-300" 
+              style={{ maxHeight: '200px' }} 
+            />
+          </div>
+        )}
+        
+        {/* Display message content with markdown */}
+        <div className="prose prose-sm max-w-none text-sm leading-relaxed whitespace-pre-wrap break-words">
+          <ReactMarkdown 
+            remarkPlugins={[remarkGfm]}
+            components={{
+              pre: ({node, ...props}) => {
+                let codeString = '';
+                if (node && node.children) {
+                  node.children.forEach(child => {
+                    if (child.type === 'element' && child.tagName === 'code') {
+                      child.children.forEach(codeChild => {
+                        if (codeChild.type === 'text') {
+                          codeString += codeChild.value;
                         }
                       });
                     }
-                    codeString = codeString.replace(/\n$/, '');
-                    
-                    const blockKey = `code-${i}-${props.key || 'fallback'}`;
-                    return (
-                      <div className="relative group/codeblock my-2 bg-slate-800 text-white p-3 rounded-md overflow-x-auto">
-                        <pre {...props} className="!bg-transparent !p-0 !text-sm" />
-                        {onCopyCode && (
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="absolute top-1 right-1 h-7 w-7 opacity-0 group-hover/codeblock:opacity-100 transition-opacity duration-200 bg-slate-700 hover:bg-slate-600"
-                            onClick={() => onCopyCode(codeString, blockKey)}
-                            title="Copy code"
-                          >
-                            {copiedCodeBlockKey === blockKey ? (
-                              <CheckIcon className="h-4 w-4 text-green-400" />
-                            ) : (
-                              <CopyIcon className="h-4 w-4 text-slate-300 hover:text-slate-100" />
-                            )}
-                          </Button>
+                  });
+                }
+                codeString = codeString.replace(/\n$/, '');
+                
+                const blockKey = `code-${message.id || Date.now()}-${props.key || 'fallback'}`;
+                return (
+                  <div className="relative group/codeblock my-2 bg-slate-800 text-white p-3 rounded-md overflow-x-auto">
+                    <pre {...props} className="!bg-transparent !p-0 !text-sm" />
+                    {onCopyCode && (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="absolute top-1 right-1 h-7 w-7 opacity-0 group-hover/codeblock:opacity-100 transition-opacity duration-200 bg-slate-700 hover:bg-slate-600"
+                        onClick={() => onCopyCode(codeString, blockKey)}
+                        title="Copy code"
+                      >
+                        {copiedCodeBlockKey === blockKey ? (
+                          <CheckIcon className="h-4 w-4 text-green-400" />
+                        ) : (
+                          <CopyIcon className="h-4 w-4 text-slate-300 hover:text-slate-100" />
                         )}
-                      </div>
-                    );
-                  },
-                  p: (props) => <p className="mb-2 last:mb-0" {...props} />,
-                  ul: (props) => <ul className="list-disc pl-5 mb-2" {...props} />,
-                  ol: (props) => <ol className="list-decimal pl-5 mb-2" {...props} />,
-                }}
-              >
-                {part.text || ''}
-              </ReactMarkdown>
-            </div>
-          );
-        })}
-        <p className="text-xs mt-1.5 opacity-60 text-right">{formatRelativeTime(message.timestamp)}</p>
+                      </Button>
+                    )}
+                  </div>
+                );
+              },
+              p: (props) => <p className="mb-2 last:mb-0" {...props} />,
+              ul: (props) => <ul className="list-disc pl-5 mb-2" {...props} />,
+              ol: (props) => <ol className="list-decimal pl-5 mb-2" {...props} />,
+            }}
+          >
+            {message.content || ''}
+          </ReactMarkdown>
+        </div>
+        
+        {/* Display timestamp */}
+        <p className="text-xs mt-1.5 opacity-60 text-right">
+          {message.createdAt ? formatRelativeTime(new Date(message.createdAt)) : ''}
+        </p>
       </div>
       {message.role === 'user' && (
         <Avatar 
-          src={generateAvatar(sessionUserName || sessionUserId || 'user')} 
-          alt={sessionUserName || 'User'} 
+          src={generateAvatar(message.userName || sessionUserName || message.userId || sessionUserId || 'user')} 
+          alt={message.userName || sessionUserName || 'User'} 
           size="sm" 
           className="mt-1" 
         />
