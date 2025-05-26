@@ -16,7 +16,7 @@ import {
   runTransaction
 } from "firebase/firestore";
 import { db, storage } from "./firebase";
-import { ref, uploadBytesResumable, getDownloadURL, deleteObject } from "firebase/storage";
+import { ref, uploadBytesResumable, getDownloadURL } from "firebase/storage";
 import {
   User,
   Project,
@@ -29,7 +29,6 @@ import {
   TeacherDashboard,
   Certificate
 } from "./types";
-import { calculateEstimatedHours } from './utils';
 
 // User operations
 export async function createUser(userData: Omit<User, 'id' | 'createdAt' | 'updatedAt'>) {
@@ -957,7 +956,7 @@ export async function updateProjectStatuses() {
     const thirtyDaysAgoTimestamp = Timestamp.fromDate(thirtyDaysAgo);
     
     const batch = writeBatch(db);
-    let statusChanges = {
+    const statusChanges = {
       completed: 0,
       archived: 0,
       errors: 0

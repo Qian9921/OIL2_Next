@@ -4,6 +4,7 @@ import React, { useEffect, useState, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import Link from 'next/link';
+import Image from 'next/image';
 import { Timestamp } from 'firebase/firestore';
 
 // UI Components
@@ -47,13 +48,17 @@ import { getProject, getParticipationByProjectAndStudent, updateParticipation } 
 import { Project, Subtask, Participation, ChatMessage } from '@/lib/types';
 import { showSuccessToast, showErrorToast, showStreakToast, showInfoToast, showFeedbackToast } from '@/lib/toast-utils';
 import { GITHUB_SUBMISSION_SUBTASK_ID } from '@/lib/constants';
-import { GitHubInfoButton, TaskNavigation, saveTaskChatHistory, saveGitHubRepoURL } from '@/lib/task-utils';
+import { saveTaskChatHistory, saveGitHubRepoURL } from '@/lib/task-utils';
 import { generateAvatar, formatRelativeTime, getRawBase64 } from '@/lib/utils';
 import { fetchData } from '@/lib/fetch-utils';
 
 // Markdown
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+
+// Navigation
+import { TaskNavigation } from '@/components/task/task-navigation';
+import { GitHubInfoButton } from '@/components/task/github-info-button';
 
 /**
  * Page component for individual project tasks.
@@ -1569,7 +1574,13 @@ export default function ProjectTaskPage() {
                 {selectedFilePreview && (
                   <div className="mb-2 p-2 border border-slate-300 rounded-md bg-slate-50 flex items-center justify-between">
                     <div className="flex items-center space-x-2">
-                      <img src={selectedFilePreview} alt="Preview" className="h-10 w-10 object-cover rounded" />
+                      <Image 
+                        src={selectedFilePreview} 
+                        alt="Preview" 
+                        width={40}
+                        height={40}
+                        className="object-cover rounded"
+                      />
                       <span className="text-xs text-slate-600 truncate max-w-[150px]">{selectedFile?.name}</span>
                     </div>
                     <Button variant="ghost" size="icon" onClick={removeSelectedFile} className="h-7 w-7 text-slate-500 hover:text-red-500">

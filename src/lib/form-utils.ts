@@ -1,5 +1,4 @@
 import { useState, FormEvent, ChangeEvent } from 'react';
-import { showErrorToast, showSuccessToast } from './toast-utils';
 import { toast } from '@/hooks/use-toast';
 
 /**
@@ -9,7 +8,7 @@ import { toast } from '@/hooks/use-toast';
  * @param options - Additional options for form handling
  * @returns Form state and handlers
  */
-export function useFormState<T extends Record<string, any>>(
+export function useFormState<T extends Record<string, unknown>>(
   initialState: T,
   onSubmit: (data: T) => Promise<{ success: boolean; message?: string }>,
   options?: {
@@ -116,7 +115,7 @@ export function useFormState<T extends Record<string, any>>(
     setErrors({});
   };
 
-  const setFieldValue = (name: keyof T, value: any) => {
+  const setFieldValue = (name: keyof T, value: unknown) => {
     setFormData(prev => ({
       ...prev,
       [name]: value
@@ -151,14 +150,14 @@ export function useFormState<T extends Record<string, any>>(
  * @param validationRules - Validation rules for each field
  * @returns Validation result with errors if any
  */
-export function validateForm<T extends Record<string, any>>(
+export function validateForm<T extends Record<string, unknown>>(
   data: T,
   validationRules: Record<keyof T, {
     required?: boolean;
     minLength?: number;
     maxLength?: number;
     pattern?: RegExp;
-    custom?: (value: any) => boolean;
+    custom?: (value: unknown) => boolean;
     message?: string;
   }>
 ) {

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Circle, CheckCircle, Clock, XCircle, AlertCircle, Award, Github, LucideIcon } from 'lucide-react';
+import { CheckCircle, Clock, XCircle, AlertCircle, Award, Github, LucideIcon } from 'lucide-react';
 import { Submission } from '@/lib/types';
 
 export type StatusType = 

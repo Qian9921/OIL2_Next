@@ -119,7 +119,7 @@ export function showStreakToast(
  * @param bestStreak - Best streak (for streak toasts)
  */
 export const showFeedbackToast = (
-  toast: any,
+  toast: ToastFunction,
   type: 'success' | 'error' | 'info' | 'streak', 
   title: string, 
   message: string, 

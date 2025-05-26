@@ -1,4 +1,4 @@
-import { Participation, Project, Subtask } from '@/lib/types';
+import { Participation, Project, Subtask, ChatMessage } from '@/lib/types';
 import { updateParticipation } from '@/lib/firestore';
 
 // Save GitHub repository URL
@@ -33,8 +33,8 @@ export const saveGitHubRepoURL = async (
 export const saveTaskChatHistory = async (
   participationId: string,
   subtaskId: string,
-  currentChatHistory: any,
-  newMessages: any[]
+  currentChatHistory: Record<string, ChatMessage[]> | undefined,
+  newMessages: ChatMessage[]
 ) => {
   try {
     const updatedChatHistory = {
@@ -59,7 +59,7 @@ export const GitHubInfoButton = () => {
 };
 
 // TaskNavigation component in task-utils.ts
-export const TaskNavigation = ({ project, participation, currentSubtaskId }: any) => {
+export const TaskNavigation = () => {
   return null; // Placeholder - the actual component is defined elsewhere
 };
 

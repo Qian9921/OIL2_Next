@@ -1,6 +1,6 @@
 import React from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Info, MessageSquare, TrendingUp, Trophy, Brain, Clock, Calendar, BookOpen, Award, FileText, CheckCircle } from 'lucide-react';
+import { MessageSquare, TrendingUp, Brain, Clock, BookOpen, FileText, CheckCircle, Award } from 'lucide-react';
 import { ScoreBadge, ScoreProgressBar } from './score-components';
 import Link from 'next/link';
 import { Activity } from '@/lib/types';
@@ -13,7 +13,6 @@ export const PromptQualitySummary = ({
   averageScore,
   bestStreak,
   totalPrompts,
-  goodPromptsPercentage,
 }: {
   averageScore: number;
   bestStreak: number;
@@ -45,22 +44,27 @@ export const PromptQualitySummary = ({
 };
 
 /**
+ * Interface for a prompt in the RecentPromptsCard component
+ */
+interface Prompt {
+  id: string;
+  projectTitle: string;
+  taskTitle: string;
+  content: string;
+  qualityScore: number;
+  timestamp: Date;
+  projectId: string;
+  subtaskId: string;
+}
+
+/**
  * Displays a list of recent prompts with quality metrics
  */
 export const RecentPromptsCard = ({
   prompts,
   onViewAllClick,
 }: {
-  prompts: Array<{
-    id: string;
-    projectTitle: string;
-    taskTitle: string;
-    content: string;
-    qualityScore: number;
-    timestamp: Date;
-    projectId: string;
-    subtaskId: string;
-  }>;
+  prompts: Prompt[];
   onViewAllClick?: () => void;
 }) => {
   return (
@@ -198,8 +202,30 @@ export const RecentActivityCard = ({
   );
 };
 
-// For backwards compatibility - keep the PromptTipsCard export but implement it as empty
-export const PromptTipsCard = () => {
+/**
+ * Interface for a prompt history item
+ */
+interface PromptHistoryItem {
+  id: string;
+  content: string;
+  qualityScore: number;
+  timestamp: Date;
+}
+
+/**
+ * For backwards compatibility - keep the PromptTipsCard export but implement it as empty
+ */
+export const PromptTipsCard = ({
+  /* eslint-disable @typescript-eslint/no-unused-vars */
+  // We're accepting these props for backwards compatibility but not using them
+  ...unusedProps
+}: {
+  averageGoalScore: number;
+  averageContextScore: number;
+  averageExpectationsScore: number;
+  averageSourceScore: number;
+  recentPrompts: PromptHistoryItem[];
+}) => {
   // This component is kept for backwards compatibility but doesn't render anything
   return null;
 };
