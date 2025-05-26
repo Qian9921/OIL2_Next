@@ -15,10 +15,10 @@ export default function Home() {
   useEffect(() => {
     if (status === "authenticated" && session?.user) {
       if (session.user.role) {
-        // 有角色的用户重定向到仪表板
+        // Users with a role are redirected to the dashboard
         router.push(`/${session.user.role}`);
       } else if (session.user.needsRoleSelection) {
-        // 需要选择角色的用户重定向到登录页面
+        // Users who need to select a role are redirected to the login page
         router.push("/auth/signin");
       }
     }
@@ -32,7 +32,7 @@ export default function Home() {
     );
   }
 
-  // 只有在已认证且有角色的情况下才显示loading
+  // Loading is displayed only when authenticated and with a role
   if (status === "authenticated" && session?.user?.role) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-purple-50 via-pink-50 to-cyan-50 flex items-center justify-center">

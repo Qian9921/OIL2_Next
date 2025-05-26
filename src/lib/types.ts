@@ -38,7 +38,7 @@ export interface Project {
   currentParticipants: number;
   tags?: string[];
   difficulty: 'beginner' | 'intermediate' | 'advanced';
-  estimatedHours?: number;
+  deadline: Timestamp;
   subtasks: Subtask[];
   requirements?: string[];
   learningGoals?: string[];
@@ -59,23 +59,44 @@ export interface Participation {
   id: string;
   projectId: string;
   studentId: string;
-  studentName: string;
-  status: 'active' | 'completed' | 'dropped' | 'pending_approval';
-  joinedAt: Timestamp;
-  completedAt?: Timestamp;
-  completedSubtasks: string[];
+  createdAt: Timestamp;
+  updatedAt: Timestamp;
+  startTime?: Timestamp;
+  endTime?: Timestamp;
+  status: 'active' | 'completed' | 'dropped';
+  progress: number;
   currentSubtaskId?: string;
-  progress: number; // 0-100
-  chatHistory: ChatMessage[];
-  submissions: Submission[];
+  completedSubtasks?: string[];
+  chatHistory?: { [subtaskId: string]: ChatMessage[] };
+  promptEvaluations?: {
+    [subtaskId: string]: Array<{
+      goalScore: number;
+      contextScore: number;
+      expectationsScore: number;
+      sourceScore: number;
+      overallScore: number;
+      prompt: string;
+      timestamp: Timestamp;
+      streak: number;
+      bestStreak: number;
+    }>;
+  };
+}
+
+export interface ChatMessagePart {
+  text?: string;
+  inlineData?: {
+    mimeType: string;
+    data: string; // For frontend, this can be base64 with prefix. API expects raw base64.
+  };
 }
 
 export interface ChatMessage {
-  id: string;
-  role: 'user' | 'assistant';
-  content: string;
-  timestamp: Timestamp;
-  subtaskId?: string;
+  // id: string; // ID can be optional if messages are not individually stored or identified
+  role: 'user' | 'model' | 'system'; // 'user' for student, 'model' for AI, 'system' for UI messages
+  parts: ChatMessagePart[]; // Use the new ChatMessagePart type
+  timestamp: Date; // Using JavaScript Date object for easier frontend handling
+  // subtaskId?: string; // Optional: if needed to associate messages to specific subtasks in DB
 }
 
 export interface Submission {

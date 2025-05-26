@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Avatar } from "@/components/ui/avatar";
 import { getProjects, createParticipation, getParticipations } from "@/lib/firestore";
 import { Project } from "@/lib/types";
-import { generateAvatar, getDifficultyColor } from "@/lib/utils";
+import { generateAvatar, getDifficultyColor, calculateEstimatedHours, formatDeadline } from "@/lib/utils";
 import { 
   BookOpen, 
   Users, 
@@ -19,12 +19,16 @@ import {
   TrendingUp,
   MapPin,
   CheckCircle,
-  Target
+  Target,
+  Calendar
 } from "lucide-react";
 import Link from "next/link";
+import { useToast } from "@/hooks/use-toast";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 
 export default function StudentProjectsPage() {
   const { data: session } = useSession();
+  const { toast } = useToast();
   const [projects, setProjects] = useState<Project[]>([]);
   const [filteredProjects, setFilteredProjects] = useState<Project[]>([]);
   const [userParticipations, setUserParticipations] = useState<string[]>([]);
@@ -33,6 +37,7 @@ export default function StudentProjectsPage() {
   const [difficultyFilter, setDifficultyFilter] = useState("all");
   const [tagFilter, setTagFilter] = useState("all");
   const [joiningProject, setJoiningProject] = useState<string | null>(null);
+  const [projectToJoin, setProjectToJoin] = useState<Project | null>(null);
 
   useEffect(() => {
     loadProjects();
@@ -84,17 +89,30 @@ export default function StudentProjectsPage() {
     setFilteredProjects(filtered);
   };
 
-  const handleJoinProject = async (projectId: string) => {
+  const handleJoinProjectIntent = (project: Project) => {
     if (!session?.user?.id) {
-      alert("User information incomplete, please log in again");
+      toast({
+        title: "Login Required",
+        description: "User information incomplete, please log in again",
+        variant: "destructive"
+      });
+      return;
+    }
+    
+    setProjectToJoin(project);
+  };
+
+  const handleJoinProject = async () => {
+    if (!projectToJoin || !session?.user?.id) {
+      setProjectToJoin(null);
       return;
     }
 
-    setJoiningProject(projectId);
+    setJoiningProject(projectToJoin.id);
     
     try {
       await createParticipation({
-        projectId,
+        projectId: projectToJoin.id,
         studentId: session.user.id,
         studentName: session.user.name || 'Student',
         status: 'active',
@@ -104,12 +122,21 @@ export default function StudentProjectsPage() {
 
       // Reload data
       await loadProjects();
-      alert("Successfully joined the project!");
+      toast({
+        title: "Project Joined",
+        description: "Successfully joined the project!",
+        variant: "default"
+      });
     } catch (error) {
       console.error("Error joining project:", error);
-      alert("Failed to join project, please try again");
+      toast({
+        title: "Join Failed",
+        description: "Failed to join project, please try again",
+        variant: "destructive"
+      });
     } finally {
       setJoiningProject(null);
+      setProjectToJoin(null);
     }
   };
 
@@ -144,6 +171,27 @@ export default function StudentProjectsPage() {
   return (
     <MainLayout>
       <div className="space-y-6">
+        {/* AlertDialog for joining project */}
+        <AlertDialog open={!!projectToJoin} onOpenChange={(open) => !open && setProjectToJoin(null)}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Join Project</AlertDialogTitle>
+              <AlertDialogDescription>
+                Are you sure you want to join "{projectToJoin?.title}"? You can leave the project at any time from your My Projects page.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction 
+                onClick={handleJoinProject}
+                className="bg-green-600 hover:bg-green-700 text-white"
+              >
+                {joiningProject === projectToJoin?.id ? 'Joining...' : 'Join Project'}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+
         {/* Header */}
         <div className="flex items-center justify-between">
           <div>
@@ -260,15 +308,25 @@ export default function StudentProjectsPage() {
                     </div>
                     <div className="flex items-center space-x-1">
                       <Clock className="w-3 h-3" />
-                      <span>{project.estimatedHours || 'TBD'} hours</span>
+                      <span>
+                        {calculateEstimatedHours(project) > 0 
+                          ? `${calculateEstimatedHours(project)} hours (est.)`
+                          : 'TBD hours'
+                        }
+                      </span>
                     </div>
                     <div className="flex items-center space-x-1">
                       <Target className="w-3 h-3" />
                       <span>{project.subtasks?.length || 0} tasks</span>
                     </div>
                     <div className="flex items-center space-x-1">
-                      <TrendingUp className="w-3 h-3" />
-                      <span>{project.difficulty}</span>
+                      <Calendar className="w-3 h-3" />
+                      <span>
+                        {project.deadline ? 
+                          `Due ${formatDeadline(project.deadline)}` 
+                          : 'No deadline'
+                        }
+                      </span>
                     </div>
                   </div>
 
@@ -308,7 +366,7 @@ export default function StudentProjectsPage() {
                       </Link>
                     ) : (
                       <Button
-                        onClick={() => handleJoinProject(project.id)}
+                        onClick={() => handleJoinProjectIntent(project)}
                         disabled={isProjectFull(project) || joiningProject === project.id}
                         className="flex-1"
                       >

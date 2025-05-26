@@ -1,14 +1,25 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, Fragment } from "react";
 import { useSession } from "next-auth/react";
 import { MainLayout } from "@/components/layout/main-layout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Avatar } from "@/components/ui/avatar";
+import { 
+  AlertDialog, 
+  AlertDialogAction, 
+  AlertDialogCancel, 
+  AlertDialogContent, 
+  AlertDialogDescription, 
+  AlertDialogFooter, 
+  AlertDialogHeader, 
+  AlertDialogTitle,
+  AlertDialogTrigger 
+} from "@/components/ui/alert-dialog"; // Uncommented AlertDialog imports
 import { getParticipations, getProject, updateParticipation, createSubmission, deleteParticipation, getSubmissions, handleRejectedProject } from "@/lib/firestore";
-import { Project, Participation, Submission } from "@/lib/types";
-import { generateAvatar, getStatusColor, getDifficultyColor } from "@/lib/utils";
+import { Project, Participation, Submission, Subtask } from "@/lib/types";
+import { generateAvatar, getStatusColor, getDifficultyColor, calculateEstimatedHours, formatDeadline } from "@/lib/utils";
 import { Timestamp } from "firebase/firestore";
 import { 
   BookOpen, 
@@ -29,24 +40,41 @@ import {
   AlertCircle,
   LogOut,
   XCircle,
-  Star
+  Star,
+  Loader2,
+  ListFilter,
+  Github,
+  SendHorizonal,
+  RefreshCw,
+  BookmarkX
 } from "lucide-react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { useToast } from "@/hooks/use-toast";
+import { GITHUB_SUBMISSION_SUBTASK_ID } from "@/lib/constants";
 
 interface ProjectWithDetails extends Participation {
   project: Project;
   submission?: Submission;
+  nextSubtask?: Subtask;
 }
+
+type ProjectFilter = "active" | "completed" | "action_required";
 
 export default function StudentMyProjectsPage() {
   const { data: session } = useSession();
+  const router = useRouter();
+  const { toast } = useToast();
+  
   const [projectsWithDetails, setProjectsWithDetails] = useState<ProjectWithDetails[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [updatingSubtask, setUpdatingSubtask] = useState<string | null>(null);
   const [submissionContent, setSubmissionContent] = useState<{[key: string]: string}>({});
   const [submittingProject, setSubmittingProject] = useState<string | null>(null);
-  const [feedback, setFeedback] = useState<{message: string, type: 'success' | 'error'} | null>(null);
   const [leavingProject, setLeavingProject] = useState<string | null>(null);
+  const [activeFilter, setActiveFilter] = useState<ProjectFilter>("active");
+  const [selectedProjectToLeave, setSelectedProjectToLeave] = useState<{id: string, title: string} | null>(null);
+  const [selectedRejectedProject, setSelectedRejectedProject] = useState<{id: string, title: string} | null>(null);
 
   useEffect(() => {
     if (session?.user?.id) {
@@ -54,39 +82,37 @@ export default function StudentMyProjectsPage() {
     }
   }, [session]);
 
-  useEffect(() => {
-    if (feedback) {
-      const timer = setTimeout(() => {
-        setFeedback(null);
-      }, 5000);
-      
-      return () => clearTimeout(timer);
-    }
-  }, [feedback]);
-
   const loadMyProjects = async () => {
+    setIsLoading(true);
     try {
       const participations = await getParticipations({ studentId: session!.user!.id });
       
-      const projectsWithDetails: ProjectWithDetails[] = [];
+      const loadedProjects: ProjectWithDetails[] = [];
       for (const participation of participations) {
         const project = await getProject(participation.projectId);
         if (project) {
-          // Get submission for this participation
           const submissions = await getSubmissions({ participationId: participation.id });
           const latestSubmission = submissions.length > 0 ? submissions[0] : undefined;
           
-          projectsWithDetails.push({
+          let nextSubtask: Subtask | undefined = undefined;
+          if (participation.status === 'active') {
+            const sortedSubtasks = [...project.subtasks].sort((a, b) => a.order - b.order);
+            nextSubtask = sortedSubtasks.find(st => !participation.completedSubtasks.includes(st.id));
+          }
+          
+          loadedProjects.push({
             ...participation,
             project,
-            submission: latestSubmission
+            submission: latestSubmission,
+            nextSubtask
           });
         }
       }
       
-      setProjectsWithDetails(projectsWithDetails);
+      setProjectsWithDetails(loadedProjects);
     } catch (error) {
       console.error("Error loading my projects:", error);
+      toast({ title: "Error", description: "Failed to load your projects. Please try again.", variant: "destructive" });
     } finally {
       setIsLoading(false);
     }
@@ -99,21 +125,30 @@ export default function StudentMyProjectsPage() {
       const participation = projectsWithDetails.find(p => p.id === participationId);
       if (!participation) return;
 
+      const currentSubtaskIndex = participation.project.subtasks.findIndex(st => st.id === subtaskId);
+      if (currentSubtaskIndex > 0) {
+        const previousSubtask = participation.project.subtasks[currentSubtaskIndex - 1];
+        if (!participation.completedSubtasks.includes(previousSubtask.id)) {
+          toast({ title: "Sequence Error", description: "Please complete previous tasks first.", variant: "destructive" });
+          setUpdatingSubtask(null);
+          return;
+        }
+      }
+
       const newCompletedSubtasks = [...participation.completedSubtasks, subtaskId];
       const totalSubtasks = participation.project.subtasks.length;
       const newProgress = Math.round((newCompletedSubtasks.length / totalSubtasks) * 100);
       
-      // If all subtasks are completed, keep status as active but allow submission
       await updateParticipation(participationId, {
         completedSubtasks: newCompletedSubtasks,
         progress: newProgress
       });
 
       await loadMyProjects();
-      setFeedback({ message: "Subtask completed successfully!", type: 'success' });
+      toast({ title: "Task Completed", description: "Subtask marked as complete!", variant: "default" });
     } catch (error) {
       console.error("Error completing subtask:", error);
-      setFeedback({ message: "Error completing subtask. Please try again.", type: 'error' });
+      toast({ title: "Error", description: "Failed to complete subtask. Please try again.", variant: "destructive" });
     } finally {
       setUpdatingSubtask(null);
     }
@@ -122,14 +157,13 @@ export default function StudentMyProjectsPage() {
   const handleSubmitProject = async (participation: ProjectWithDetails) => {
     const content = submissionContent[participation.id];
     if (!content?.trim()) {
-      setFeedback({ message: "Please write a submission summary before submitting.", type: 'error' });
+      toast({ title: "Missing Summary", description: "Please write a submission summary before submitting.", variant: "destructive" });
       return;
     }
 
     setSubmittingProject(participation.id);
     
     try {
-      // Create submission
       await createSubmission({
         participationId: participation.id,
         projectId: participation.projectId,
@@ -139,7 +173,6 @@ export default function StudentMyProjectsPage() {
         status: 'pending'
       });
 
-      // Update participation status to completed
       await updateParticipation(participation.id, {
         status: 'completed',
         completedAt: Timestamp.now()
@@ -147,66 +180,68 @@ export default function StudentMyProjectsPage() {
 
       await loadMyProjects();
       setSubmissionContent(prev => ({ ...prev, [participation.id]: '' }));
-      setFeedback({ message: "Project submitted successfully! Your teacher will review it soon.", type: 'success' });
+      toast({ title: "Project Submitted", description: "Your project has been submitted for review.", variant: "default" });
     } catch (error) {
       console.error("Error submitting project:", error);
-      setFeedback({ message: "Error submitting project. Please try again.", type: 'error' });
+      toast({ title: "Submission Error", description: "Failed to submit project. Please try again.", variant: "destructive" });
     } finally {
       setSubmittingProject(null);
     }
   };
 
-  const handleLeaveProject = async (participation: ProjectWithDetails) => {
-    if (!confirm(`Are you sure you want to leave "${participation.project.title}"? Your progress will be lost.`)) {
-      return;
-    }
-
-    setLeavingProject(participation.id);
-    
-    try {
-      await deleteParticipation(participation.id);
-      await loadMyProjects();
-      setFeedback({ message: "Successfully left the project.", type: 'success' });
-    } catch (error) {
-      console.error("Error leaving project:", error);
-      setFeedback({ message: "Error leaving project. Please try again.", type: 'error' });
-    } finally {
-      setLeavingProject(null);
-    }
+  const confirmAndLeaveProject = (participationId: string, projectTitle: string) => {
+    // Dialog is now handled by the AlertDialog component
+    setSelectedProjectToLeave({id: participationId, title: projectTitle});
   };
 
-  const handleRejectedProjectExit = async (participation: ProjectWithDetails) => {
-    if (!confirm(`Your submission for "${participation.project.title}" was rejected. You will be removed from this project. This action cannot be undone.`)) {
-      return;
-    }
-
-    setLeavingProject(participation.id);
-    
+  const handleLeaveProjectAction = async (participationId: string) => {
+    setLeavingProject(participationId);
     try {
-      await handleRejectedProject(participation.id);
+      await deleteParticipation(participationId);
       await loadMyProjects();
-      setFeedback({ message: "You have been removed from the project.", type: 'success' });
+      toast({ title: "Project Left", description: "You have successfully left the project.", variant: "default" });
     } catch (error) {
-      console.error("Error handling rejected project:", error);
-      setFeedback({ message: "Error removing you from project. Please try again.", type: 'error' });
+      console.error("Error leaving project:", error);
+      toast({ title: "Error", description: "Failed to leave project. Please try again.", variant: "destructive" });
     } finally {
       setLeavingProject(null);
+      setSelectedProjectToLeave(null);
+    }
+  };
+  
+  const confirmAndHandleRejectedProjectExit = (participationId: string, projectTitle: string) => {
+    // Dialog is now handled by the AlertDialog component
+    setSelectedRejectedProject({id: participationId, title: projectTitle});
+  };
+
+  const handleRejectedProjectExitAction = async (participationId: string) => {
+    setLeavingProject(participationId);
+    try {
+      await handleRejectedProject(participationId);
+      await loadMyProjects();
+      toast({ title: "Removed from Project", description: "You have been removed from the project.", variant: "default" });
+    } catch (error) {
+      console.error("Error handling rejected project:", error);
+      toast({ title: "Error", description: "Failed to remove you from the project. Please try again.", variant: "destructive" });
+    } finally {
+      setLeavingProject(null);
+      setSelectedRejectedProject(null);
     }
   };
 
   const getProjectStats = () => {
-    const activeProjects = projectsWithDetails.filter(p => p.status === 'active').length;
-    const completedProjects = projectsWithDetails.filter(p => p.status === 'completed').length;
+    const allActiveParticipations = projectsWithDetails.filter(p => p.status === 'active' && p.submission?.status !== 'rejected' && p.submission?.status !== 'needs_revision');
+    const activeProjectsCount = allActiveParticipations.length;
+    
+    const completedProjectsCount = projectsWithDetails.filter(p => p.status === 'completed' || p.submission?.status === 'approved').length;
+    
     const totalProgress = projectsWithDetails.reduce((sum, p) => sum + p.progress, 0);
     const averageProgress = projectsWithDetails.length > 0 ? Math.round(totalProgress / projectsWithDetails.length) : 0;
 
-    return { activeProjects, completedProjects, averageProgress };
+    return { activeProjects: activeProjectsCount, completedProjects: completedProjectsCount, averageProgress };
   };
 
   const canSubmitProject = (participation: ProjectWithDetails) => {
-    // Can submit if:
-    // 1. Project is active and 100% complete and no submission exists
-    // 2. Project has a submission that needs revision
     return (
       (participation.status === 'active' && participation.progress === 100 && !participation.submission) ||
       (participation.submission?.status === 'needs_revision')
@@ -217,28 +252,54 @@ export default function StudentMyProjectsPage() {
     return participation.submission?.status === 'needs_revision';
   };
 
-  const getSubmissionStatusDisplay = (submission: Submission) => {
+  const getSubmissionStatusDisplay = (submission?: Submission) => {
+    if (!submission) return { text: 'Not Submitted', color: 'bg-gray-100 text-gray-800', icon: Circle };
     switch (submission.status) {
       case 'pending':
-        return { text: 'Under Review', color: 'bg-yellow-100 text-yellow-800', icon: 'Clock' };
+        return { text: 'Under Review', color: 'bg-yellow-100 text-yellow-800', icon: Clock };
       case 'approved':
-        return { text: 'Approved', color: 'bg-green-100 text-green-800', icon: 'CheckCircle' };
+        return { text: 'Approved', color: 'bg-green-100 text-green-800', icon: CheckCircle };
       case 'rejected':
-        return { text: 'Rejected', color: 'bg-red-100 text-red-800', icon: 'XCircle' };
+        return { text: 'Rejected', color: 'bg-red-100 text-red-800', icon: XCircle };
       case 'needs_revision':
-        return { text: 'Needs Revision', color: 'bg-orange-100 text-orange-800', icon: 'AlertCircle' };
+        return { text: 'Needs Revision', color: 'bg-orange-100 text-orange-800', icon: AlertCircle };
       default:
-        return { text: 'Unknown', color: 'bg-gray-100 text-gray-800', icon: 'Circle' };
+        return { text: 'Unknown', color: 'bg-gray-100 text-gray-800', icon: Circle };
     }
   };
+  
+  const handleContinueLearning = (projectWithDetails: ProjectWithDetails) => {
+    if (projectWithDetails.status === 'active' && projectWithDetails.nextSubtask) {
+      router.push(`/projects/${projectWithDetails.projectId}/task/${projectWithDetails.nextSubtask.id}`);
+    } else if (canSubmitProject(projectWithDetails)) {
+      toast({ title: "Ready to Submit", description: "Please complete the submission form below.", variant: "default" });
+    } else {
+      router.push(`/projects/${projectWithDetails.projectId}`);
+    }
+  };
+
+  const filteredAndSortedProjects = projectsWithDetails
+    .filter(p => {
+      switch (activeFilter) {
+        case "active":
+          return p.status === 'active' && p.submission?.status !== 'rejected' && p.submission?.status !== 'needs_revision';
+        case "completed":
+          return p.status === 'completed' || p.submission?.status === 'approved';
+        case "action_required":
+          return p.submission?.status === 'rejected' || p.submission?.status === 'needs_revision';
+        default:
+          return true;
+      }
+    })
+    .sort((a, b) => b.joinedAt.toMillis() - a.joinedAt.toMillis());
 
   const stats = getProjectStats();
 
   if (isLoading) {
     return (
       <MainLayout>
-        <div className="flex items-center justify-center h-64">
-          <div className="loading-spinner" />
+        <div className="flex items-center justify-center h-[calc(100vh-var(--header-height,4rem))]">
+          <Loader2 className="w-12 h-12 text-purple-600 animate-spin" />
         </div>
       </MainLayout>
     );
@@ -247,6 +308,48 @@ export default function StudentMyProjectsPage() {
   return (
     <MainLayout>
       <div className="space-y-6">
+        {/* AlertDialog for leaving a project */}
+        <AlertDialog open={!!selectedProjectToLeave} onOpenChange={(open) => !open && setSelectedProjectToLeave(null)}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Leave Project</AlertDialogTitle>
+              <AlertDialogDescription>
+                Are you sure you want to leave "{selectedProjectToLeave?.title}"? Your current progress on this project will be lost.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction 
+                onClick={() => selectedProjectToLeave && handleLeaveProjectAction(selectedProjectToLeave.id)}
+                className="bg-red-600 hover:bg-red-700 text-white"
+              >
+                {leavingProject ? 'Leaving...' : 'Leave Project'}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+
+        {/* AlertDialog for rejected project exit */}
+        <AlertDialog open={!!selectedRejectedProject} onOpenChange={(open) => !open && setSelectedRejectedProject(null)}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Project Rejected</AlertDialogTitle>
+              <AlertDialogDescription>
+                Your submission for "{selectedRejectedProject?.title}" was rejected. You will be removed from this project. Are you sure? This action cannot be undone.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction 
+                onClick={() => selectedRejectedProject && handleRejectedProjectExitAction(selectedRejectedProject.id)}
+                className="bg-red-600 hover:bg-red-700 text-white"
+              >
+                {leavingProject ? 'Removing...' : 'Accept and Leave Project'}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+
         {/* Header */}
         <div className="flex items-center justify-between">
           <div>
@@ -262,24 +365,6 @@ export default function StudentMyProjectsPage() {
             </Button>
           </Link>
         </div>
-
-        {/* Feedback Message */}
-        {feedback && (
-          <div className={`p-4 rounded-lg border ${
-            feedback.type === 'success' 
-              ? 'bg-green-50 border-green-200 text-green-800' 
-              : 'bg-red-50 border-red-200 text-red-800'
-          }`}>
-            <div className="flex items-center">
-              {feedback.type === 'success' ? (
-                <CheckCircle className="w-5 h-5 mr-2" />
-              ) : (
-                <AlertCircle className="w-5 h-5 mr-2" />
-              )}
-              {feedback.message}
-            </div>
-          </div>
-        )}
 
         {/* Statistics Cards */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -326,47 +411,61 @@ export default function StudentMyProjectsPage() {
           </Card>
         </div>
 
+        {/* Filter Tabs */}
+        <div className="flex space-x-1 bg-gray-100 rounded-lg p-1">
+          {(['active', 'completed', 'action_required'] as ProjectFilter[]).map((filterKey) => {
+            const filterLabel = filterKey === "active" ? "Active" : filterKey === "completed" ? "Completed" : "Action Required";
+            const count = projectsWithDetails.filter(p => {
+                switch (filterKey) {
+                    case "active": return p.status === 'active' && p.submission?.status !== 'rejected' && p.submission?.status !== 'needs_revision';
+                    case "completed": return p.status === 'completed' || p.submission?.status === 'approved';
+                    case "action_required": return p.submission?.status === 'rejected' || p.submission?.status === 'needs_revision';
+                    default: return false;
+                }
+            }).length;
+            return (
+              <button
+                key={filterKey}
+                onClick={() => setActiveFilter(filterKey)}
+                className={`flex-1 px-4 py-2 text-sm font-medium rounded-md transition-colors ${
+                  activeFilter === filterKey
+                    ? 'bg-white text-purple-600 shadow-sm'
+                    : 'text-gray-600 hover:text-gray-900'
+                }`}
+              >
+                {filterLabel} ({count})
+              </button>
+            );
+          })}
+        </div>
+
         {/* Projects List */}
-        {projectsWithDetails.length > 0 ? (
-          <div className="space-y-6">
-            {projectsWithDetails.map((projectWithDetails) => {
-              const { project } = projectWithDetails;
-              const completedSubtasks = projectWithDetails.completedSubtasks.length;
+        {filteredAndSortedProjects.length > 0 ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 gap-6">
+            {filteredAndSortedProjects.map((projectWithDetails) => {
+              const { project, submission } = projectWithDetails;
+              const completedSubtasksCount = projectWithDetails.completedSubtasks.length;
               const totalSubtasks = project.subtasks.length;
               const progressPercentage = projectWithDetails.progress;
+              const submissionStatus = getSubmissionStatusDisplay(submission);
+              const SubmissionIcon = submissionStatus.icon;
 
               return (
-                <Card key={projectWithDetails.id} className="overflow-hidden">
+                <Card key={projectWithDetails.id} className="overflow-hidden flex flex-col h-full">
                   <CardHeader>
                     <div className="flex items-start justify-between">
                       <div className="flex-1">
                         <CardTitle className="text-xl mb-2">{project.title}</CardTitle>
-                        <div className="flex items-center space-x-2 mb-3">
+                        <div className="flex items-center flex-wrap gap-2 mb-3">
                           <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(projectWithDetails.status)}`}>
                             {projectWithDetails.status === 'active' ? 'In Progress' :
-                             projectWithDetails.status === 'completed' ? 'Completed' :
-                             projectWithDetails.status === 'dropped' ? 'Dropped' : 'Pending Approval'}
+                             projectWithDetails.status === 'completed' ? (submission?.status === 'approved' ? 'Approved' : 'Submitted') :
+                             projectWithDetails.status === 'dropped' ? 'Dropped' : 'Pending Action'}
                           </span>
                           <span className={`px-2 py-1 rounded-full text-xs font-medium ${getDifficultyColor(project.difficulty)}`}>
                             {project.difficulty === 'beginner' ? 'Beginner' :
                              project.difficulty === 'intermediate' ? 'Intermediate' : 'Advanced'}
                           </span>
-                          {projectWithDetails.status === 'completed' && (
-                            <span className="px-2 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
-                              <Award className="w-3 h-3 mr-1 inline" />
-                              Certificate Available
-                            </span>
-                          )}
-                          {/* Submission Status */}
-                          {projectWithDetails.submission && (
-                            <span className={`px-2 py-1 rounded-full text-xs font-medium ${getSubmissionStatusDisplay(projectWithDetails.submission).color}`}>
-                              {projectWithDetails.submission.status === 'pending' && <Clock className="w-3 h-3 mr-1 inline" />}
-                              {projectWithDetails.submission.status === 'approved' && <CheckCircle className="w-3 h-3 mr-1 inline" />}
-                              {projectWithDetails.submission.status === 'rejected' && <XCircle className="w-3 h-3 mr-1 inline" />}
-                              {projectWithDetails.submission.status === 'needs_revision' && <AlertCircle className="w-3 h-3 mr-1 inline" />}
-                              {getSubmissionStatusDisplay(projectWithDetails.submission).text}
-                            </span>
-                          )}
                         </div>
                         <p className="text-gray-600 text-sm">
                           by {project.ngoName}
@@ -380,12 +479,11 @@ export default function StudentMyProjectsPage() {
                     </div>
                   </CardHeader>
 
-                  <CardContent className="space-y-6">
-                    {/* Progress Bar */}
+                  <CardContent className="space-y-4 flex-grow">
                     <div>
                       <div className="flex justify-between items-center mb-2">
                         <span className="text-sm font-medium text-gray-700">
-                          Progress: {completedSubtasks}/{totalSubtasks} tasks
+                          Progress: {completedSubtasksCount}/{totalSubtasks} tasks
                         </span>
                         <span className="text-sm font-medium text-gray-700">
                           {progressPercentage}%
@@ -399,15 +497,44 @@ export default function StudentMyProjectsPage() {
                       </div>
                     </div>
 
-                    {/* Project Stats */}
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                    {/* Tag section */}
+                    <div className="flex flex-wrap gap-2">
+                      {submission && (
+                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${submissionStatus.color} flex items-center`}>
+                          <SubmissionIcon className="w-3 h-3 mr-1" />
+                          {submissionStatus.text}
+                        </span>
+                      )}
+                      {projectWithDetails.studentGitHubRepo && (
+                        <Link href={projectWithDetails.studentGitHubRepo} target="_blank" rel="noopener noreferrer" className="flex items-center">
+                          <span className="px-2 py-1 rounded-full text-xs font-medium bg-gray-700 text-white flex items-center hover:bg-gray-800">
+                            <Github className="w-3 h-3 mr-1.5" />
+                            GitHub Repo
+                          </span>
+                        </Link>
+                      )}
+                      {projectWithDetails.status === 'completed' && submission?.status === 'approved' && (
+                        <span className="px-2 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800 flex items-center">
+                          <Award className="w-3 h-3 mr-1" />
+                          Certificate
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Project Info Section */}
+                    <div className="grid grid-cols-2 gap-3 text-xs">
                       <div className="flex items-center space-x-2 text-gray-600">
                         <Users className="w-4 h-4" />
                         <span>{project.currentParticipants} participants</span>
                       </div>
                       <div className="flex items-center space-x-2 text-gray-600">
                         <Clock className="w-4 h-4" />
-                        <span>{project.estimatedHours || 'TBD'} hours</span>
+                        <span>
+                          {calculateEstimatedHours(project) > 0 
+                            ? `${calculateEstimatedHours(project)} hours (est.)`
+                            : 'TBD hours'
+                          }
+                        </span>
                       </div>
                       <div className="flex items-center space-x-2 text-gray-600">
                         <Target className="w-4 h-4" />
@@ -415,230 +542,108 @@ export default function StudentMyProjectsPage() {
                       </div>
                       <div className="flex items-center space-x-2 text-gray-600">
                         <Calendar className="w-4 h-4" />
-                        <span>Joined {projectWithDetails.joinedAt.toDate().toLocaleDateString()}</span>
+                        <span>
+                          {project.deadline 
+                            ? `Due ${formatDeadline(project.deadline)}` 
+                            : 'No deadline'
+                          }
+                        </span>
                       </div>
                     </div>
 
-                    {/* Subtasks */}
-                    {project.subtasks.length > 0 && (
-                      <div>
-                        <h4 className="font-medium text-gray-900 mb-3">Project Tasks</h4>
-                        <div className="space-y-3">
-                          {project.subtasks.map((subtask, index) => {
-                            const isCompleted = projectWithDetails.completedSubtasks.includes(subtask.id);
-                            const canComplete = projectWithDetails.status === 'active' && !isCompleted;
-
-                            return (
-                              <div
-                                key={subtask.id}
-                                className={`p-4 rounded-lg border transition-all ${
-                                  isCompleted 
-                                    ? 'bg-green-50 border-green-200' 
-                                    : 'bg-gray-50 border-gray-200 hover:border-gray-300'
-                                }`}
-                              >
-                                <div className="flex items-start space-x-3">
-                                  <div className="flex-shrink-0 mt-1">
-                                    {isCompleted ? (
-                                      <CheckCircle className="w-5 h-5 text-green-600" />
-                                    ) : (
-                                      <Circle className="w-5 h-5 text-gray-400" />
-                                    )}
-                                  </div>
-                                  <div className="flex-1">
-                                    <h5 className={`font-medium ${isCompleted ? 'text-green-900 line-through' : 'text-gray-900'}`}>
-                                      {subtask.title}
-                                    </h5>
-                                    <p className={`text-sm mt-1 ${isCompleted ? 'text-green-700' : 'text-gray-600'}`}>
-                                      {subtask.description}
-                                    </p>
-                                    {subtask.estimatedHours && (
-                                      <p className="text-xs text-gray-500 mt-2">
-                                        Estimated: {subtask.estimatedHours} hours
-                                      </p>
-                                    )}
-                                  </div>
-                                  {canComplete && (
-                                    <Button
-                                      size="sm"
-                                      onClick={() => handleCompleteSubtask(projectWithDetails.id, subtask.id)}
-                                      disabled={updatingSubtask === subtask.id}
-                                    >
-                                      {updatingSubtask === subtask.id ? (
-                                        <div className="loading-spinner" />
-                                      ) : (
-                                        <>
-                                          <CheckCircle className="w-4 h-4 mr-1" />
-                                          Complete
-                                        </>
-                                      )}
-                                    </Button>
-                                  )}
-                                </div>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Teacher Feedback */}
-                    {projectWithDetails.submission && projectWithDetails.submission.reviewComment && (
-                      <div className={`p-4 rounded-lg border ${
-                        projectWithDetails.submission.status === 'approved' ? 'bg-green-50 border-green-200' :
-                        projectWithDetails.submission.status === 'rejected' ? 'bg-red-50 border-red-200' :
-                        projectWithDetails.submission.status === 'needs_revision' ? 'bg-orange-50 border-orange-200' :
-                        'bg-blue-50 border-blue-200'
-                      }`}>
-                        <h4 className={`font-medium mb-2 flex items-center ${
-                          projectWithDetails.submission.status === 'approved' ? 'text-green-900' :
-                          projectWithDetails.submission.status === 'rejected' ? 'text-red-900' :
-                          projectWithDetails.submission.status === 'needs_revision' ? 'text-orange-900' :
-                          'text-blue-900'
-                        }`}>
-                          <FileText className="w-5 h-5 mr-2" />
-                          Teacher Feedback
-                        </h4>
-                        <p className={`text-sm ${
-                          projectWithDetails.submission.status === 'approved' ? 'text-green-800' :
-                          projectWithDetails.submission.status === 'rejected' ? 'text-red-800' :
-                          projectWithDetails.submission.status === 'needs_revision' ? 'text-orange-800' :
-                          'text-blue-800'
-                        }`}>
-                          {projectWithDetails.submission.reviewComment}
-                        </p>
-                        {projectWithDetails.submission.rating && projectWithDetails.submission.status === 'approved' && (
-                          <div className="flex items-center mt-2">
-                            <span className="text-sm text-green-700 mr-2">Rating:</span>
-                            <div className="flex items-center">
-                              {[...Array(5)].map((_, i) => (
-                                <Star
-                                  key={i}
-                                  className={`w-4 h-4 ${i < (projectWithDetails.submission?.rating || 0) ? 'text-yellow-400 fill-current' : 'text-gray-300'}`}
-                                />
-                              ))}
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    )}
-
-                    {/* Rejected Project Action */}
-                    {projectWithDetails.submission && projectWithDetails.submission.status === 'rejected' && (
-                      <div className="p-4 bg-red-50 border border-red-200 rounded-lg">
-                        <h4 className="font-medium text-red-900 mb-2 flex items-center">
-                          <XCircle className="w-5 h-5 mr-2" />
-                          Project Rejected
-                        </h4>
-                        <p className="text-red-800 text-sm mb-3">
-                          Your submission has been rejected. You will need to leave this project to join other projects.
-                        </p>
-                        <Button
-                          onClick={() => handleRejectedProjectExit(projectWithDetails)}
-                          disabled={leavingProject === projectWithDetails.id}
-                          variant="destructive"
-                        >
-                          {leavingProject === projectWithDetails.id ? (
-                            <div className="w-4 h-4 mr-2 loading-spinner" />
-                          ) : (
-                            <LogOut className="w-4 h-4 mr-2" />
-                          )}
-                          {leavingProject === projectWithDetails.id ? 'Removing...' : 'Accept and Leave Project'}
-                        </Button>
-                      </div>
-                    )}
-
-                    {/* Project Submission Form */}
-                    {canSubmitProject(projectWithDetails) && (
-                      <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
-                        <h4 className="font-medium text-blue-900 mb-3 flex items-center">
-                          <FileText className="w-5 h-5 mr-2" />
-                          {canResubmit(projectWithDetails) ? 'Resubmit Your Project' : 'Submit Your Project'}
-                        </h4>
-                        <p className="text-blue-800 text-sm mb-3">
-                          {canResubmit(projectWithDetails) 
-                            ? 'Please address the teacher\'s feedback and resubmit your work.'
-                            : 'Congratulations! You\'ve completed all tasks. Please write a summary of your work and submit for teacher review.'
-                          }
-                        </p>
-                        <textarea
-                          value={submissionContent[projectWithDetails.id] || ''}
-                          onChange={(e) => setSubmissionContent(prev => ({
-                            ...prev,
-                            [projectWithDetails.id]: e.target.value
-                          }))}
-                          className="w-full p-3 border border-blue-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                          rows={4}
-                          placeholder="Describe what you learned, challenges you faced, and outcomes you achieved..."
-                        />
-                        <Button
-                          onClick={() => handleSubmitProject(projectWithDetails)}
-                          disabled={submittingProject === projectWithDetails.id}
-                          className="mt-3 bg-blue-600 hover:bg-blue-700"
-                        >
-                          {submittingProject === projectWithDetails.id ? (
-                            <div className="w-4 h-4 mr-2 loading-spinner" />
-                          ) : (
-                            <Send className="w-4 h-4 mr-2" />
-                          )}
-                          {submittingProject === projectWithDetails.id ? 'Submitting...' : (canResubmit(projectWithDetails) ? 'Resubmit Project' : 'Submit Project')}
-                        </Button>
-                      </div>
-                    )}
-
                     {/* Action Buttons */}
-                    <div className="flex space-x-3 pt-4">
-                      <Link href={`/projects/${project.id}`} className="flex-1">
-                        <Button variant="outline" className="w-full">
-                          <BookOpen className="w-4 h-4 mr-2" />
-                          View Details
-                        </Button>
-                      </Link>
-                      {projectWithDetails.status === 'active' && progressPercentage < 100 && projectWithDetails.submission?.status !== 'rejected' && (
-                        <Button className="flex-1">
-                          <Play className="w-4 h-4 mr-2" />
+                    <div className="flex items-center justify-between mt-2 pt-2 border-t border-gray-100">
+                      {projectWithDetails.status === 'active' && (
+                        <Button 
+                          variant="default" 
+                          size="sm"
+                          onClick={() => handleContinueLearning(projectWithDetails)}
+                          className="flex-1 mr-2"
+                        >
+                          <Play className="w-4 h-4 mr-1.5" />
                           Continue Learning
                         </Button>
                       )}
-                      {projectWithDetails.status === 'active' && projectWithDetails.submission?.status !== 'rejected' && (
-                        <Button
-                          variant="destructive"
-                          onClick={() => handleLeaveProject(projectWithDetails)}
-                          disabled={leavingProject === projectWithDetails.id}
-                          className="flex-shrink-0"
+                      
+                      {canSubmitProject(projectWithDetails) && (
+                        <Button 
+                          variant="default" 
+                          size="sm"
+                          onClick={() => handleSubmitProject(projectWithDetails)}
+                          className="flex-1 mr-2"
                         >
-                          {leavingProject === projectWithDetails.id ? (
-                            <div className="w-4 h-4 mr-2 loading-spinner" />
-                          ) : (
-                            <LogOut className="w-4 h-4 mr-2" />
-                          )}
-                          {leavingProject === projectWithDetails.id ? 'Leaving...' : 'Leave'}
+                          <SendHorizonal className="w-4 h-4 mr-1.5" />
+                          Submit Project
+                        </Button>
+                      )}
+                      
+                      {canResubmit(projectWithDetails) && (
+                        <Button 
+                          variant="default" 
+                          size="sm"
+                          onClick={() => handleSubmitProject(projectWithDetails)}
+                          className="flex-1 mr-2"
+                        >
+                          <RefreshCw className="w-4 h-4 mr-1.5" />
+                          Resubmit
+                        </Button>
+                      )}
+                      
+                      {projectWithDetails.status === 'active' && (
+                        <Button 
+                          variant="outline"
+                          size="sm"
+                          onClick={() => confirmAndLeaveProject(projectWithDetails.id, project.title)}
+                          className="flex-1"
+                        >
+                          <LogOut className="w-4 h-4 mr-1.5" />
+                          Leave Project
                         </Button>
                       )}
                     </div>
+
+                    {submission && submission.reviewComment && (
+                      <div className={`p-3 rounded-lg border mt-3 ${
+                        submission.status === 'approved' ? 'bg-green-50 border-green-200' :
+                        submission.status === 'rejected' ? 'bg-red-50 border-red-200' :
+                        submission.status === 'needs_revision' ? 'bg-orange-50 border-orange-200' :
+                        'bg-blue-50 border-blue-200'
+                      }`}>
+                        <h4 className={`font-medium mb-1 flex items-center ${
+                          submission.status === 'approved' ? 'text-green-900' :
+                          submission.status === 'rejected' ? 'text-red-900' :
+                          submission.status === 'needs_revision' ? 'text-orange-900' :
+                          'text-blue-900'
+                        } text-xs`}>
+                          <FileText className="w-3.5 h-3.5 mr-1.5" />
+                          Teacher Feedback
+                        </h4>
+                        <p className={`text-xs ${
+                          submission.status === 'approved' ? 'text-green-800' :
+                          submission.status === 'rejected' ? 'text-red-800' :
+                          submission.status === 'needs_revision' ? 'text-orange-800' :
+                          'text-blue-800'
+                        }`}>
+                          {submission.reviewComment.length > 100 
+                            ? `${submission.reviewComment.substring(0, 100)}...` 
+                            : submission.reviewComment}
+                        </p>
+                      </div>
+                    )}
                   </CardContent>
                 </Card>
               );
             })}
           </div>
         ) : (
-          <Card>
-            <CardContent className="p-12 text-center">
-              <TrendingUp className="w-16 h-16 mx-auto mb-4 text-gray-300" />
-              <h3 className="text-xl font-semibold text-gray-900 mb-2">
-                You haven't joined any projects yet
-              </h3>
-              <p className="text-gray-600 mb-6">
-                Browse and join interesting social impact projects to start your learning journey!
-              </p>
-              <Link href="/student/projects">
-                <Button>
-                  <BookOpen className="w-4 h-4 mr-2" />
-                  Browse Projects
-                </Button>
-              </Link>
-            </CardContent>
-          </Card>
+          <div className="bg-gray-50 border border-gray-200 rounded-lg p-12 text-center">
+            <BookmarkX className="w-12 h-12 mx-auto text-gray-400 mb-4" />
+            <h3 className="text-lg font-medium text-gray-900 mb-2">No Projects Found</h3>
+            <p className="text-gray-600 mb-6">You don't have any {activeFilter.replace('_', ' ')} projects yet.</p>
+            <Link href="/student/projects">
+              <Button>Browse Projects</Button>
+            </Link>
+          </div>
         )}
       </div>
     </MainLayout>

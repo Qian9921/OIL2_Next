@@ -1,10 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, Fragment } from "react";
 import { useSession } from "next-auth/react";
 import { MainLayout } from "@/components/layout/main-layout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Avatar } from "@/components/ui/avatar";
 import { getSubmissions, updateSubmission, updateParticipation } from "@/lib/firestore";
 import { Submission } from "@/lib/types";
@@ -24,9 +26,12 @@ import {
   Download
 } from "lucide-react";
 import { Timestamp } from "firebase/firestore";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
+import { useToast } from "@/hooks/use-toast";
 
 export default function TeacherSubmissionsPage() {
   const { data: session } = useSession();
+  const { toast } = useToast();
   const [submissions, setSubmissions] = useState<Submission[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
@@ -36,21 +41,13 @@ export default function TeacherSubmissionsPage() {
   const [reviewComment, setReviewComment] = useState("");
   const [reviewRating, setReviewRating] = useState(5);
   const [processingSubmission, setProcessingSubmission] = useState<string | null>(null);
-  const [feedback, setFeedback] = useState<{message: string, type: 'success' | 'error'} | null>(null);
+  const [submissionToQuickApprove, setSubmissionToQuickApprove] = useState<Submission | null>(null);
+  const [submissionToReject, setSubmissionToReject] = useState<Submission | null>(null);
+  const [submissionToNeedsRevision, setSubmissionToNeedsRevision] = useState<Submission | null>(null);
 
   useEffect(() => {
     loadSubmissions();
   }, []);
-
-  useEffect(() => {
-    if (feedback) {
-      const timer = setTimeout(() => {
-        setFeedback(null);
-      }, 5000); // 5秒后清除消息
-      
-      return () => clearTimeout(timer);
-    }
-  }, [feedback]);
 
   const loadSubmissions = async () => {
     try {
@@ -93,18 +90,40 @@ export default function TeacherSubmissionsPage() {
       
       // Reload submissions
       await loadSubmissions();
-      setFeedback({ message: "Submission reviewed successfully!", type: 'success' });
+      toast({
+        title: "Review Success",
+        description: "Submission reviewed successfully!",
+        variant: "default"
+      });
     } catch (error) {
       console.error("Error reviewing submission:", error);
-      setFeedback({ message: "Error reviewing submission. Please try again.", type: 'error' });
+      toast({
+        title: "Review Failed",
+        description: "Error reviewing submission. Please try again.",
+        variant: "destructive"
+      });
     } finally {
       setProcessingSubmission(null);
+      setReviewingSubmission(null);
+      setReviewComment("");
+      setReviewRating(5);
     }
+  };
+
+  const handleQuickApprovalIntent = (submission: Submission) => {
+    setSubmissionToQuickApprove(submission);
+  };
+
+  const handleRejectIntent = (submission: Submission) => {
+    setSubmissionToReject(submission);
+  };
+
+  const handleNeedsRevisionIntent = (submission: Submission) => {
+    setSubmissionToNeedsRevision(submission);
   };
 
   const handleQuickApproval = async (submissionId: string) => {
     setProcessingSubmission(submissionId);
-    setFeedback(null);
     
     try {
       const updateData = {
@@ -116,6 +135,15 @@ export default function TeacherSubmissionsPage() {
 
       await updateSubmission(submissionId, updateData);
       
+      // Update participation status to completed
+      const submission = submissions.find(s => s.id === submissionId);
+      if (submission) {
+        await updateParticipation(submission.participationId, {
+          status: 'completed',
+          completedAt: Timestamp.now()
+        });
+      }
+      
       // Update local state
       setSubmissions(prev => prev.map(sub => 
         sub.id === submissionId 
@@ -123,18 +151,104 @@ export default function TeacherSubmissionsPage() {
           : sub
       ));
       
-      setFeedback({ 
-        message: "Submission approved successfully!", 
-        type: 'success' 
+      toast({
+        title: "Approval Success",
+        description: "Submission approved successfully!",
+        variant: "default"
       });
     } catch (error) {
       console.error("Error approving submission:", error);
-      setFeedback({ 
-        message: "Failed to approve submission. Please try again.", 
-        type: 'error' 
+      toast({
+        title: "Approval Failed",
+        description: "Failed to approve submission. Please try again.",
+        variant: "destructive"
       });
     } finally {
       setProcessingSubmission(null);
+      setSubmissionToQuickApprove(null);
+      setReviewComment("");
+      setReviewRating(5);
+      setReviewingSubmission(null);
+    }
+  };
+
+  const handleReject = async (submissionId: string, comment?: string) => {
+    setProcessingSubmission(submissionId);
+    
+    try {
+      const updateData = {
+        status: 'rejected' as const,
+        reviewedBy: session?.user?.id,
+        reviewComment: comment || 'Submission rejected'
+      };
+
+      await updateSubmission(submissionId, updateData);
+      
+      // Update local state
+      setSubmissions(prev => prev.map(sub => 
+        sub.id === submissionId 
+          ? { ...sub, ...updateData }
+          : sub
+      ));
+      
+      toast({
+        title: "Rejection Complete",
+        description: "Submission rejected successfully!",
+        variant: "default"
+      });
+    } catch (error) {
+      console.error("Error rejecting submission:", error);
+      toast({
+        title: "Rejection Failed",
+        description: "Failed to reject submission. Please try again.",
+        variant: "destructive"
+      });
+    } finally {
+      setProcessingSubmission(null);
+      setSubmissionToReject(null);
+      setReviewComment("");
+      setReviewRating(5);
+      setReviewingSubmission(null);
+    }
+  };
+
+  const handleNeedsRevision = async (submissionId: string, comment?: string) => {
+    setProcessingSubmission(submissionId);
+    
+    try {
+      const updateData = {
+        status: 'needs_revision' as const,
+        reviewedBy: session?.user?.id,
+        reviewComment: comment || 'Revision required'
+      };
+
+      await updateSubmission(submissionId, updateData);
+      
+      // Update local state
+      setSubmissions(prev => prev.map(sub => 
+        sub.id === submissionId 
+          ? { ...sub, ...updateData }
+          : sub
+      ));
+      
+      toast({
+        title: "Revision Requested",
+        description: "Revision requested successfully!",
+        variant: "default"
+      });
+    } catch (error) {
+      console.error("Error requesting revision:", error);
+      toast({
+        title: "Request Failed",
+        description: "Failed to request revision. Please try again.",
+        variant: "destructive"
+      });
+    } finally {
+      setProcessingSubmission(null);
+      setSubmissionToNeedsRevision(null);
+      setReviewComment("");
+      setReviewRating(5);
+      setReviewingSubmission(null);
     }
   };
 
@@ -191,6 +305,69 @@ export default function TeacherSubmissionsPage() {
   return (
     <MainLayout>
       <div className="space-y-6">
+        {/* AlertDialog for quick approval */}
+        <AlertDialog open={!!submissionToQuickApprove} onOpenChange={(open) => !open && setSubmissionToQuickApprove(null)}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Quick Approve Submission</AlertDialogTitle>
+              <AlertDialogDescription>
+                Are you sure you want to approve this submission from {submissionToQuickApprove?.studentName}? This will automatically give the student a 5-star rating.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction 
+                onClick={() => submissionToQuickApprove && handleQuickApproval(submissionToQuickApprove.id)}
+                className="bg-green-600 hover:bg-green-700 text-white"
+              >
+                {processingSubmission ? 'Approving...' : 'Approve Submission'}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+
+        {/* AlertDialog for rejection */}
+        <AlertDialog open={!!submissionToReject} onOpenChange={(open) => !open && setSubmissionToReject(null)}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Reject Submission</AlertDialogTitle>
+              <AlertDialogDescription>
+                Are you sure you want to reject this submission from {submissionToReject?.studentName}? This will remove the student from the project.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction 
+                onClick={() => submissionToReject && handleReject(submissionToReject.id, reviewComment)}
+                className="bg-red-600 hover:bg-red-700 text-white"
+              >
+                {processingSubmission ? 'Rejecting...' : 'Reject Submission'}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+
+        {/* AlertDialog for needs revision */}
+        <AlertDialog open={!!submissionToNeedsRevision} onOpenChange={(open) => !open && setSubmissionToNeedsRevision(null)}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Request Revision</AlertDialogTitle>
+              <AlertDialogDescription>
+                Are you sure you want to request revisions for this submission from {submissionToNeedsRevision?.studentName}? The student will need to resubmit their work.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction 
+                onClick={() => submissionToNeedsRevision && handleNeedsRevision(submissionToNeedsRevision.id, reviewComment)}
+                className="bg-orange-600 hover:bg-orange-700 text-white"
+              >
+                {processingSubmission ? 'Processing...' : 'Request Revision'}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+
         {/* Header */}
         <div className="flex items-center justify-between">
           <div>
@@ -226,24 +403,6 @@ export default function TeacherSubmissionsPage() {
             </Card>
           ))}
         </div>
-
-        {/* Feedback Message */}
-        {feedback && (
-          <div className={`p-4 rounded-lg border ${
-            feedback.type === 'success' 
-              ? 'bg-green-50 border-green-200 text-green-800' 
-              : 'bg-red-50 border-red-200 text-red-800'
-          }`}>
-            <div className="flex items-center">
-              {feedback.type === 'success' ? (
-                <CheckCircle className="w-5 h-5 mr-2" />
-              ) : (
-                <AlertCircle className="w-5 h-5 mr-2" />
-              )}
-              {feedback.message}
-            </div>
-          </div>
-        )}
 
         {/* Filters */}
         <Card>
@@ -369,7 +528,7 @@ export default function TeacherSubmissionsPage() {
                       <Button
                         variant="outline"
                         size="sm"
-                        onClick={() => handleQuickApproval(submission.id)}
+                        onClick={() => handleQuickApprovalIntent(submission)}
                         disabled={processingSubmission === submission.id}
                       >
                         {processingSubmission === submission.id ? (
@@ -436,7 +595,7 @@ export default function TeacherSubmissionsPage() {
                           {processingSubmission === submission.id ? 'Processing...' : 'Approve'}
                         </Button>
                         <Button
-                          onClick={() => handleReviewSubmission(submission.id, 'needs_revision', undefined, reviewComment)}
+                          onClick={() => handleNeedsRevisionIntent(submission)}
                           variant="outline"
                           className="border-orange-300 text-orange-700 hover:bg-orange-50"
                           disabled={processingSubmission === submission.id}
@@ -445,7 +604,7 @@ export default function TeacherSubmissionsPage() {
                           Needs Revision
                         </Button>
                         <Button
-                          onClick={() => handleReviewSubmission(submission.id, 'rejected', undefined, reviewComment)}
+                          onClick={() => handleRejectIntent(submission)}
                           variant="outline"
                           className="border-red-300 text-red-700 hover:bg-red-50"
                           disabled={processingSubmission === submission.id}
@@ -459,7 +618,6 @@ export default function TeacherSubmissionsPage() {
                             setReviewingSubmission(null);
                             setReviewComment("");
                             setReviewRating(5);
-                            setFeedback(null);
                           }}
                           disabled={processingSubmission === submission.id}
                         >

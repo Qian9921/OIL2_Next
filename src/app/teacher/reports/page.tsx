@@ -20,6 +20,7 @@ import {
   FileText,
   Calendar
 } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
 
 interface ReportData {
   totalStudents: number;
@@ -61,6 +62,7 @@ export default function TeacherReportsPage() {
   const [reportData, setReportData] = useState<ReportData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [selectedReport, setSelectedReport] = useState<string>("overview");
+  const { toast } = useToast();
 
   useEffect(() => {
     loadReportData();
@@ -163,7 +165,11 @@ export default function TeacherReportsPage() {
 
   const generateReport = (format: 'pdf' | 'excel' | 'csv') => {
     // In a real implementation, this would generate actual reports
-    alert(`Generating ${format.toUpperCase()} report... (Feature coming soon!)`);
+    toast({
+      title: "Feature Coming Soon",
+      description: `Generating ${format.toUpperCase()} report...`,
+      variant: "default"
+    });
   };
 
   if (isLoading) {

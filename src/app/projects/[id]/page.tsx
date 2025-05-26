@@ -9,11 +9,12 @@ import { Button } from "@/components/ui/button";
 import { Avatar } from "@/components/ui/avatar";
 import { getProject, getParticipations, createParticipation } from "@/lib/firestore";
 import { Project, Participation } from "@/lib/types";
-import { generateAvatar, getDifficultyColor } from "@/lib/utils";
+import { generateAvatar, getDifficultyColor, formatDeadline } from "@/lib/utils";
+import { useToast } from "@/hooks/use-toast";
 import { 
   ArrowLeft, 
   Users, 
-  Clock, 
+  Calendar, 
   Tag,
   Target,
   Plus,
@@ -23,20 +24,32 @@ import {
   Award,
   AlertCircle,
   ExternalLink,
-  Calendar,
-  GraduationCap
+  GraduationCap,
+  Clock
 } from "lucide-react";
 import Link from "next/link";
+import { 
+  AlertDialog, 
+  AlertDialogAction, 
+  AlertDialogCancel, 
+  AlertDialogContent, 
+  AlertDialogDescription, 
+  AlertDialogFooter, 
+  AlertDialogHeader, 
+  AlertDialogTitle 
+} from "@/components/ui/alert-dialog";
 
 export default function ProjectDetailPage() {
   const params = useParams();
   const router = useRouter();
   const { data: session } = useSession();
+  const { toast } = useToast();
   const [project, setProject] = useState<Project | null>(null);
   const [participations, setParticipations] = useState<Participation[]>([]);
   const [myParticipation, setMyParticipation] = useState<Participation | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isJoining, setIsJoining] = useState(false);
+  const [showJoinDialog, setShowJoinDialog] = useState(false);
 
   useEffect(() => {
     if (params.id) {
@@ -66,17 +79,27 @@ export default function ProjectDetailPage() {
     }
   };
 
-  const handleJoinProject = async () => {
+  const handleJoinButtonClick = () => {
     if (!session?.user?.id || !session?.user?.name || !project) {
-      alert("请先登录");
+      toast({ title: "Login Required", description: "Please log in first to join the project.", variant: "destructive" });
       return;
     }
 
     if (session.user.role !== 'student') {
-      alert("只有学生可以加入项目");
+      toast({ title: "Access Denied", description: "Only students can join projects.", variant: "destructive" });
       return;
     }
 
+    // Show confirmation dialog
+    setShowJoinDialog(true);
+  };
+
+  const handleJoinProject = async () => {
+    if (!session?.user?.id || !session?.user?.name || !project) {
+      setShowJoinDialog(false);
+      return;
+    }
+    
     setIsJoining(true);
     
     try {
@@ -91,12 +114,13 @@ export default function ProjectDetailPage() {
       
       // Reload data to show updated state
       await loadProjectData();
-      alert("成功加入项目！");
+      toast({ title: "Project Joined!", description: "Successfully joined the project!", variant: "default" });
     } catch (error) {
       console.error("Error joining project:", error);
-      alert("加入项目失败，请重试");
+      toast({ title: "Join Failed", description: "Failed to join the project, please try again.", variant: "destructive" });
     } finally {
       setIsJoining(false);
+      setShowJoinDialog(false);
     }
   };
 
@@ -113,6 +137,27 @@ export default function ProjectDetailPage() {
     return true;
   };
 
+  const calculateEstimatedHours = (subtasks: any[], difficulty: string) => {
+    if (!subtasks || subtasks.length === 0) return 0;
+    
+    // First try to use actual estimated hours from subtasks
+    const sumOfEstimatedHours = subtasks
+      .filter(subtask => subtask.estimatedHours && subtask.estimatedHours > 0)
+      .reduce((total, subtask) => total + subtask.estimatedHours, 0);
+    
+    // If we have valid estimated hours, return them
+    if (sumOfEstimatedHours > 0) {
+      return sumOfEstimatedHours;
+    }
+    
+    // Otherwise fall back to calculation based on difficulty
+    const hoursPerTask = 
+      difficulty === 'beginner' ? 3 : 
+      difficulty === 'intermediate' ? 5 : 8;
+    
+    return subtasks.length * hoursPerTask;
+  };
+
   if (isLoading) {
     return (
       <MainLayout>
@@ -127,10 +172,10 @@ export default function ProjectDetailPage() {
     return (
       <MainLayout>
         <div className="text-center py-12">
-          <h1 className="text-2xl font-bold text-gray-900 mb-4">项目未找到</h1>
-          <p className="text-gray-600 mb-6">请检查项目ID是否正确</p>
+          <h1 className="text-2xl font-bold text-gray-900 mb-4">Project Not Found</h1>
+          <p className="text-gray-600 mb-6">Please check if the project ID is correct</p>
           <Link href="/student/projects">
-            <Button>返回项目列表</Button>
+            <Button>Back to Project List</Button>
           </Link>
         </div>
       </MainLayout>
@@ -140,32 +185,50 @@ export default function ProjectDetailPage() {
   return (
     <MainLayout>
       <div className="space-y-6">
+        {/* Join Project AlertDialog */}
+        <AlertDialog open={showJoinDialog} onOpenChange={setShowJoinDialog}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Join Project</AlertDialogTitle>
+              <AlertDialogDescription>
+                Are you sure you want to join "{project?.title}"? You can leave the project at any time from your My Projects page.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction onClick={handleJoinProject} className="bg-green-600 hover:bg-green-700 text-white">
+                {isJoining ? 'Joining...' : 'Join Project'}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+
         {/* Header */}
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-4">
             <Link href={session?.user?.role === 'student' ? "/student/projects" : "/ngo/projects"}>
               <Button variant="ghost" size="sm">
                 <ArrowLeft className="w-4 h-4 mr-2" />
-                返回
+                Back
               </Button>
             </Link>
             <div>
               <h1 className="text-3xl font-bold text-gray-900">{project.title}</h1>
               <p className="text-gray-600 mt-2 flex items-center">
                 <GraduationCap className="w-4 h-4 mr-2" />
-                由 {project.ngoName} 发起
+                Initiated by {project.ngoName}
               </p>
             </div>
           </div>
           <div className="flex items-center space-x-2">
             <span className={`px-3 py-1 rounded-full text-sm font-medium ${getDifficultyColor(project.difficulty)}`}>
-              {project.difficulty === 'beginner' ? '初级' :
-               project.difficulty === 'intermediate' ? '中级' : '高级'}
+              {project.difficulty === 'beginner' ? 'Beginner' :
+               project.difficulty === 'intermediate' ? 'Intermediate' : 'Advanced'}
             </span>
             {myParticipation && (
               <span className="px-3 py-1 rounded-full text-sm font-medium bg-green-100 text-green-800">
                 <CheckCircle className="w-4 h-4 mr-1 inline" />
-                已加入
+                Joined
               </span>
             )}
           </div>
@@ -179,7 +242,7 @@ export default function ProjectDetailPage() {
               <CardHeader>
                 <CardTitle className="flex items-center space-x-2">
                   <BookOpen className="w-5 h-5 text-blue-600" />
-                  <span>项目介绍</span>
+                  <span>Project Introduction</span>
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
@@ -190,7 +253,7 @@ export default function ProjectDetailPage() {
                 )}
                 
                 <div>
-                  <h4 className="font-medium text-gray-900 mb-3">详细描述</h4>
+                  <h4 className="font-medium text-gray-900 mb-3">Detailed Description</h4>
                   <p className="text-gray-700 leading-relaxed">{project.description}</p>
                 </div>
 
@@ -202,28 +265,28 @@ export default function ProjectDetailPage() {
                       {project.currentParticipants}
                       {project.maxParticipants && `/${project.maxParticipants}`}
                     </div>
-                    <div className="text-xs text-gray-600">参与者</div>
+                    <div className="text-xs text-gray-600">Participants</div>
                   </div>
                   <div className="text-center">
-                    <Clock className="w-6 h-6 text-green-600 mx-auto mb-1" />
+                    <Calendar className="w-6 h-6 text-green-600 mx-auto mb-1" />
                     <div className="text-lg font-bold text-gray-900">
-                      {project.estimatedHours || 'TBD'}
+                      {project.deadline ? formatDeadline(project.deadline) : 'No deadline'}
                     </div>
-                    <div className="text-xs text-gray-600">预估小时</div>
+                    <div className="text-xs text-gray-600">Project Deadline</div>
+                  </div>
+                  <div className="text-center">
+                    <Clock className="w-6 h-6 text-amber-600 mx-auto mb-1" />
+                    <div className="text-lg font-bold text-gray-900">
+                      {calculateEstimatedHours(project.subtasks, project.difficulty)} hours
+                    </div>
+                    <div className="text-xs text-gray-600">Est. Completion Time</div>
                   </div>
                   <div className="text-center">
                     <Target className="w-6 h-6 text-purple-600 mx-auto mb-1" />
                     <div className="text-lg font-bold text-gray-900">
                       {project.subtasks?.length || 0}
                     </div>
-                    <div className="text-xs text-gray-600">学习任务</div>
-                  </div>
-                  <div className="text-center">
-                    <Calendar className="w-6 h-6 text-orange-600 mx-auto mb-1" />
-                    <div className="text-lg font-bold text-gray-900">
-                      {project.createdAt.toDate().toLocaleDateString()}
-                    </div>
-                    <div className="text-xs text-gray-600">发布日期</div>
+                    <div className="text-xs text-gray-600">Learning Tasks</div>
                   </div>
                 </div>
               </CardContent>
@@ -235,10 +298,10 @@ export default function ProjectDetailPage() {
                 <CardHeader>
                   <CardTitle className="flex items-center space-x-2">
                     <Award className="w-5 h-5 text-yellow-600" />
-                    <span>学习目标</span>
+                    <span>Learning Goals</span>
                   </CardTitle>
                   <CardDescription>
-                    完成这个项目后，您将掌握以下技能和知识
+                    After completing this project, you will master the following skills and knowledge
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
@@ -260,10 +323,10 @@ export default function ProjectDetailPage() {
                 <CardHeader>
                   <CardTitle className="flex items-center space-x-2">
                     <Target className="w-5 h-5 text-green-600" />
-                    <span>学习路径</span>
+                    <span>Learning Path</span>
                   </CardTitle>
                   <CardDescription>
-                    项目包含 {project.subtasks.length} 个学习任务
+                    Project contains {project.subtasks.length} learning tasks
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
@@ -284,8 +347,8 @@ export default function ProjectDetailPage() {
                           </p>
                           {subtask.estimatedHours && (
                             <div className="flex items-center text-xs text-gray-500">
-                              <Clock className="w-3 h-3 mr-1" />
-                              预估时长: {subtask.estimatedHours} 小时
+                              <Calendar className="w-3 h-3 mr-1" />
+                              Estimated Duration: {subtask.estimatedHours} hours
                             </div>
                           )}
                         </div>
@@ -302,7 +365,7 @@ export default function ProjectDetailPage() {
                 <CardHeader>
                   <CardTitle className="flex items-center space-x-2">
                     <AlertCircle className="w-5 h-5 text-orange-600" />
-                    <span>参与要求</span>
+                    <span>Participation Requirements</span>
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
@@ -324,26 +387,26 @@ export default function ProjectDetailPage() {
             {/* Join Project Card */}
             <Card>
               <CardHeader>
-                <CardTitle className="text-lg">加入项目</CardTitle>
+                <CardTitle className="text-lg">Join Project</CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
                 {myParticipation ? (
                   <div className="text-center">
                     <CheckCircle className="w-12 h-12 text-green-600 mx-auto mb-3" />
-                    <p className="text-green-800 font-medium mb-2">您已加入此项目</p>
+                    <p className="text-green-800 font-medium mb-2">You have joined this project</p>
                     <p className="text-sm text-gray-600 mb-4">
-                      当前进度: {myParticipation.progress}%
+                      Current Progress: {myParticipation.progress}%
                     </p>
                     <Link href="/student/my-projects">
                       <Button className="w-full">
-                        查看我的项目
+                        View My Projects
                       </Button>
                     </Link>
                   </div>
                 ) : canJoinProject() ? (
                   <div className="text-center">
                     <Button
-                      onClick={handleJoinProject}
+                      onClick={handleJoinButtonClick}
                       disabled={isJoining}
                       className="w-full"
                       size="lg"
@@ -353,29 +416,29 @@ export default function ProjectDetailPage() {
                       ) : (
                         <Plus className="w-4 h-4 mr-2" />
                       )}
-                      加入项目
+                      Join Project
                     </Button>
                     <p className="text-xs text-gray-500 mt-2">
-                      免费加入，随时可以退出
+                      Free to join, you can exit anytime
                     </p>
                   </div>
                 ) : (
                   <div className="text-center">
                     {!session?.user ? (
                       <>
-                        <p className="text-gray-600 mb-3">请先登录以加入项目</p>
+                        <p className="text-gray-600 mb-3">Please log in to join the project</p>
                         <Link href="/auth/signin">
-                          <Button className="w-full">登录</Button>
+                          <Button className="w-full">Login</Button>
                         </Link>
                       </>
                     ) : session.user.role !== 'student' ? (
-                      <p className="text-gray-600">只有学生可以加入项目</p>
+                      <p className="text-gray-600">Only students can join projects</p>
                     ) : project.status !== 'published' ? (
-                      <p className="text-gray-600">项目尚未发布</p>
+                      <p className="text-gray-600">Project is not published yet</p>
                     ) : isProjectFull() ? (
-                      <p className="text-gray-600">项目名额已满</p>
+                      <p className="text-gray-600">Project is full</p>
                     ) : (
-                      <p className="text-gray-600">无法加入项目</p>
+                      <p className="text-gray-600">Cannot join the project</p>
                     )}
                   </div>
                 )}
@@ -388,7 +451,7 @@ export default function ProjectDetailPage() {
                 <CardHeader>
                   <CardTitle className="flex items-center space-x-2 text-lg">
                     <Tag className="w-5 h-5 text-purple-600" />
-                    <span>项目标签</span>
+                    <span>Project Tags</span>
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
@@ -408,7 +471,7 @@ export default function ProjectDetailPage() {
               <CardHeader>
                 <CardTitle className="flex items-center space-x-2 text-lg">
                   <Heart className="w-5 h-5 text-red-600" />
-                  <span>发起组织</span>
+                  <span>Initiated Organization</span>
                 </CardTitle>
               </CardHeader>
               <CardContent>
@@ -420,11 +483,11 @@ export default function ProjectDetailPage() {
                   />
                   <div>
                     <h4 className="font-medium text-gray-900">{project.ngoName}</h4>
-                    <p className="text-sm text-gray-600">非营利组织</p>
+                    <p className="text-sm text-gray-600">Non-profit Organization</p>
                   </div>
                 </div>
                 <p className="text-sm text-gray-600">
-                  致力于推动社会积极变化，为学生提供实践学习机会。
+                  Dedicated to promoting social positive change and providing students with practical learning opportunities.
                 </p>
               </CardContent>
             </Card>
@@ -435,7 +498,7 @@ export default function ProjectDetailPage() {
                 <CardHeader>
                   <CardTitle className="flex items-center space-x-2 text-lg">
                     <Users className="w-5 h-5 text-blue-600" />
-                    <span>最新参与者</span>
+                    <span>Recent Participants</span>
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
@@ -452,14 +515,14 @@ export default function ProjectDetailPage() {
                             {participation.studentName}
                           </p>
                           <p className="text-xs text-gray-500">
-                            进度: {participation.progress}%
+                            Progress: {participation.progress}%
                           </p>
                         </div>
                       </div>
                     ))}
                     {participations.length > 5 && (
                       <p className="text-xs text-gray-500 text-center">
-                        +{participations.length - 5} 更多参与者
+                        +{participations.length - 5} more participants
                       </p>
                     )}
                   </div>

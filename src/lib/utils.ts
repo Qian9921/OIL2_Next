@@ -1,103 +1,148 @@
-import { type ClassValue, clsx } from "clsx";
-import { twMerge } from "tailwind-merge";
+import { clsx, type ClassValue } from "clsx"
+import { twMerge } from "tailwind-merge"
+import { Timestamp } from "firebase/firestore"
 
 export function cn(...inputs: ClassValue[]) {
-  return twMerge(clsx(inputs));
+  return twMerge(clsx(inputs))
 }
 
-// Generate cute avatar URL using DiceBear API
-export function generateAvatar(seed: string, style: string = "adventurer") {
-  return `https://api.dicebear.com/7.x/${style}/svg?seed=${encodeURIComponent(seed)}&backgroundColor=b6e3f4,c0aede,d1d4f9,ffd5dc,ffdfbf`;
-}
+// Function to generate an avatar URL from a seed (e.g., email or ID)
+export const generateAvatar = (seed: string | undefined): string => {
+  return `https://api.dicebear.com/7.x/initials/svg?seed=${seed || 'default'}`;
+};
 
-// Format date for display
-export function formatDate(date: Date): string {
-  return new Intl.DateTimeFormat('en-US', {
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric'
-  }).format(date);
-}
+// Function to get Tailwind CSS classes for project status
+export const getStatusColor = (status: string | undefined): string => {
+  if (status === 'draft') return 'bg-gray-100 text-gray-800';
+  if (status === 'published') return 'bg-blue-100 text-blue-800';
+  if (status === 'completed') return 'bg-green-100 text-green-800';
+  if (status === 'archived') return 'bg-red-100 text-red-800';
+  if (status === 'active') return 'bg-yellow-100 text-yellow-800'; // For participation status
+  return 'bg-gray-100 text-gray-800'; // Default or other statuses
+};
 
-// Format relative time (e.g., "2 hours ago")
-export function formatRelativeTime(date: Date): string {
-  const now = new Date();
-  const diffInSeconds = Math.floor((now.getTime() - date.getTime()) / 1000);
-  
-  const intervals = [
-    { label: 'year', seconds: 31536000 },
-    { label: 'month', seconds: 2592000 },
-    { label: 'week', seconds: 604800 },
-    { label: 'day', seconds: 86400 },
-    { label: 'hour', seconds: 3600 },
-    { label: 'minute', seconds: 60 },
-    { label: 'second', seconds: 1 }
-  ];
+// Function to get Tailwind CSS classes for project difficulty
+export const getDifficultyColor = (difficulty: string | undefined): string => {
+  if (difficulty === 'beginner') return 'bg-green-100 text-green-800';
+  if (difficulty === 'intermediate') return 'bg-yellow-100 text-yellow-800';
+  if (difficulty === 'advanced') return 'bg-red-100 text-red-800';
+  return 'bg-gray-100 text-gray-800'; // Default or other difficulties
+};
 
-  for (const interval of intervals) {
-    const count = Math.floor(diffInSeconds / interval.seconds);
-    if (count > 0) {
-      return `${count} ${interval.label}${count !== 1 ? 's' : ''} ago`;
-    }
+// Function to format a date object into a relative time string (e.g., "2 hours ago")
+export const formatRelativeTime = (date: Date | Timestamp): string => {
+  if (!date) {
+    return "Invalid date";
   }
-  
-  return 'just now';
-}
 
-// Calculate progress percentage
-export function calculateProgress(completed: number, total: number): number {
-  if (total === 0) return 0;
-  return Math.round((completed / total) * 100);
-}
+  // Convert Firebase Timestamp to JS Date if necessary
+  const jsDate = typeof (date as Timestamp).toDate === 'function' ? (date as Timestamp).toDate() : date as Date;
 
-// Truncate text with ellipsis
-export function truncateText(text: string, maxLength: number): string {
-  if (text.length <= maxLength) return text;
-  return text.substring(0, maxLength - 3) + '...';
-}
+  if (!(jsDate instanceof Date) || isNaN(jsDate.getTime())) {
+    return "Invalid date"; 
+  }
 
-// Generate random pastel color
-export function generatePastelColor(): string {
-  const hue = Math.floor(Math.random() * 360);
-  return `hsl(${hue}, 70%, 85%)`;
-}
+  const now = new Date();
+  const seconds = Math.round((now.getTime() - jsDate.getTime()) / 1000);
+  const minutes = Math.round(seconds / 60);
+  const hours = Math.round(minutes / 60);
+  const days = Math.round(hours / 24);
+  const weeks = Math.round(days / 7);
+  const months = Math.round(days / 30.44); // Average days in a month
+  const years = Math.round(days / 365.25); // Account for leap years
 
-// Validate email format
-export function validateEmail(email: string): boolean {
-  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-  return emailRegex.test(email);
-}
+  if (seconds < 5) return "just now";
+  if (seconds < 60) return `${seconds} seconds ago`;
+  if (minutes < 60) return `${minutes} minutes ago`;
+  if (hours < 24) return `${hours} hours ago`;
+  if (days < 7) return `${days} days ago`;
+  if (weeks < 5) return `${weeks} weeks ago`; // Up to 4 weeks
+  if (months < 12) return `${months} months ago`;
+  return `${years} years ago`;
+};
 
-// Get difficulty color
-export function getDifficultyColor(difficulty: 'beginner' | 'intermediate' | 'advanced'): string {
+// Function to get raw base64 data from a data URL string
+export const getRawBase64 = (dataUrl?: string): string | undefined => {
+  if (!dataUrl) return undefined;
+  const commaIndex = dataUrl.indexOf(',');
+  if (commaIndex === -1) {
+    // It might already be a raw base64 string, or an invalid data URL.
+    // For robustness, let's assume if no comma, it might be raw, or needs to be handled by caller.
+    // console.warn("getRawBase64: No comma found, returning original string. Might not be a data URL.");
+    return dataUrl; 
+  }
+  return dataUrl.substring(commaIndex + 1);
+};
+
+/**
+ * Estimates a reasonable number of days to complete a project based on difficulty
+ * @param difficulty Project difficulty level
+ * @returns Number of days estimated to complete the project
+ */
+export function estimateDaysFromDifficulty(difficulty: 'beginner' | 'intermediate' | 'advanced'): number {
   switch (difficulty) {
     case 'beginner':
-      return 'bg-green-100 text-green-800';
+      return 21; // 3 weeks
     case 'intermediate':
-      return 'bg-yellow-100 text-yellow-800';
+      return 35; // 5 weeks
     case 'advanced':
-      return 'bg-red-100 text-red-800';
+      return 49; // 7 weeks
     default:
-      return 'bg-gray-100 text-gray-800';
+      return 28; // 4 weeks as a fallback
   }
 }
 
-// Get status color
-export function getStatusColor(status: string): string {
-  switch (status) {
-    case 'active':
-    case 'published':
-    case 'approved':
-      return 'bg-green-100 text-green-800';
-    case 'pending':
-    case 'draft':
-      return 'bg-yellow-100 text-yellow-800';
-    case 'completed':
-      return 'bg-blue-100 text-blue-800';
-    case 'rejected':
-    case 'dropped':
-      return 'bg-red-100 text-red-800';
-    default:
-      return 'bg-gray-100 text-gray-800';
+/**
+ * Calculates a deadline date based on the current date and estimated days to complete
+ * @param estimatedDays Number of days estimated to complete the project
+ * @param fromDate Optional start date (defaults to current date)
+ * @returns Date object representing the deadline
+ */
+export function calculateDeadlineFromDays(estimatedDays: number, fromDate: Date = new Date()): Date {
+  const deadline = new Date(fromDate);
+  deadline.setDate(deadline.getDate() + estimatedDays);
+  return deadline;
+}
+
+/**
+ * Formats a deadline date for display in the UI with optional fallback text
+ * @param deadline Date or Timestamp object representing the deadline
+ * @param fallbackText Text to display if no deadline is provided
+ * @returns Formatted deadline string
+ */
+export function formatDeadline(deadline: Date | Timestamp | undefined | null, fallbackText: string = 'No deadline'): string {
+  if (!deadline) return fallbackText;
+  
+  const dateObj = deadline instanceof Date ? deadline : deadline.toDate();
+  return dateObj.toLocaleDateString(undefined, { 
+    year: 'numeric', 
+    month: 'short', 
+    day: 'numeric' 
+  });
+}
+
+/**
+ * Calculates estimated hours to complete a project based on subtasks or difficulty
+ * @param project Project object with subtasks and difficulty
+ * @returns Estimated hours as a number
+ */
+export function calculateEstimatedHours(project: { 
+  subtasks?: { id: string; estimatedHours?: number }[]; 
+  difficulty?: 'beginner' | 'intermediate' | 'advanced'
+}): number {
+  if (!project.subtasks?.length) return 0;
+  
+  // First try to sum up actual estimatedHours from subtasks if available
+  const subtasksWithHours = project.subtasks.filter(st => typeof st.estimatedHours === 'number' && st.estimatedHours > 0);
+  if (subtasksWithHours.length > 0) {
+    const totalHours = subtasksWithHours.reduce((sum, st) => sum + (st.estimatedHours || 0), 0);
+    return totalHours;
   }
-} 
+  
+  // Fallback to calculation based on difficulty if no explicit hours are defined
+  const subtaskCount = project.subtasks.length;
+  const hoursPerSubtask = project.difficulty === 'advanced' ? 8 : 
+                         project.difficulty === 'intermediate' ? 5 : 3;
+  
+  return subtaskCount * hoursPerSubtask;
+}

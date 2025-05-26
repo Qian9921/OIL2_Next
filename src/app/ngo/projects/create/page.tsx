@@ -8,6 +8,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { createProject } from "@/lib/firestore";
 import { Subtask } from "@/lib/types";
+import { useToast } from "@/hooks/use-toast";
+import { Timestamp } from "firebase/firestore";
 import { 
   Save, 
   Plus, 
@@ -16,44 +18,57 @@ import {
   Upload,
   Tag,
   X,
-  Clock,
   Users,
   BookOpen,
-  Target
+  Target,
+  Sparkles,
+  Eraser,
+  Calendar
 } from "lucide-react";
 import Link from "next/link";
+import { GITHUB_SUBMISSION_SUBTASK_ID, GITHUB_SUBMISSION_SUBTASK_PROPS } from "@/lib/constants";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
+import { calculateDeadlineFromDays, estimateDaysFromDifficulty } from "@/lib/utils";
+
+const initialFormData = {
+  title: "",
+  description: "",
+  shortDescription: "",
+  difficulty: "beginner" as "beginner" | "intermediate" | "advanced",
+  maxParticipants: "",
+  deadline: "",
+  tags: [] as string[],
+  requirements: [] as string[],
+  learningGoals: [] as string[]
+};
+
+const initialSubtasks = [
+  {
+    title: "",
+    description: "",
+    order: 1,
+    estimatedHours: 0,
+    resources: [],
+    completionCriteria: []
+  }
+];
 
 export default function CreateProjectPage() {
   const { data: session } = useSession();
   const router = useRouter();
+  const { toast } = useToast();
   
   const [isLoading, setIsLoading] = useState(false);
-  const [formData, setFormData] = useState({
-    title: "",
-    description: "",
-    shortDescription: "",
-    difficulty: "beginner" as "beginner" | "intermediate" | "advanced",
-    maxParticipants: "",
-    estimatedHours: "",
-    tags: [] as string[],
-    requirements: [] as string[],
-    learningGoals: [] as string[]
-  });
+  const [isRefining, setIsRefining] = useState(false);
+  const [isRefiningSubtasks, setIsRefiningSubtasks] = useState(false);
+  const [formData, setFormData] = useState({...initialFormData});
   
-  const [subtasks, setSubtasks] = useState<Omit<Subtask, 'id'>[]>([
-    {
-      title: "",
-      description: "",
-      order: 1,
-      estimatedHours: 0,
-      resources: [],
-      completionCriteria: []
-    }
-  ]);
+  const [subtasks, setSubtasks] = useState<Omit<Subtask, 'id'>[]>([...initialSubtasks.map(st => ({...st}))]);
   
   const [newTag, setNewTag] = useState("");
   const [newRequirement, setNewRequirement] = useState("");
   const [newLearningGoal, setNewLearningGoal] = useState("");
+  const [showClearFormDialog, setShowClearFormDialog] = useState(false);
 
   const handleInputChange = (field: string, value: any) => {
     setFormData(prev => ({ ...prev, [field]: value }));
@@ -116,38 +131,264 @@ export default function CreateProjectPage() {
     handleInputChange('learningGoals', formData.learningGoals.filter(g => g !== goal));
   };
 
+  const handleClearFormIntent = () => {
+    setShowClearFormDialog(true);
+  };
+
+  const handleClearForm = () => {
+    setFormData({...initialFormData});
+    setSubtasks([...initialSubtasks.map(st => ({...st}))]);
+    setNewTag("");
+    setNewRequirement("");
+    setNewLearningGoal("");
+    toast({ title: "Form Cleared", description: "All project information fields have been cleared.", variant: "default" });
+    setShowClearFormDialog(false);
+  };
+
+  const handleRefineSubtasksWithAI = async () => {
+    if (!formData.title?.trim() || !formData.description?.trim()) {
+      toast({ title: "Missing Information", description: "Please fill in project title and description before refining subtasks.", variant: "destructive" });
+      return;
+    }
+    // Check if there is at least one subtask with some content to refine, or allow generation from scratch if desired.
+    // For now, let's assume we proceed even with empty initial subtasks to let AI generate them.
+
+    setIsRefiningSubtasks(true);
+    try {
+      const dataToRefine = {
+        projectTitle: formData.title,
+        projectDescription: formData.description,
+        projectDifficulty: formData.difficulty,
+        projectRequirements: formData.requirements,
+        projectLearningGoals: formData.learningGoals,
+        existingSubtasks: subtasks.map(st => ({ 
+          title: st.title,
+          description: st.description,
+          estimatedHours: st.estimatedHours
+        })),
+      };
+
+      const response = await fetch('/api/refine-subtasks', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(dataToRefine),
+      });
+
+      const responseData = await response.json();
+
+      if (!response.ok) {
+        // Handle error response - responseData should be an error object with a message
+        const errorMessage = typeof responseData === 'object' && responseData !== null && 'message' in responseData 
+          ? responseData.message 
+          : 'Failed to refine subtasks with AI.';
+        
+        toast({ title: "AI Subtask Refinement Error", description: errorMessage, variant: "destructive" });
+        throw new Error(errorMessage);
+      }
+
+      // Check if responseData is a valid array of subtasks
+      if (Array.isArray(responseData) && responseData.length > 0) {
+        // Validate each subtask has the required fields
+        const validSubtasks = responseData.filter(st => 
+          st && typeof st === 'object' && 
+          'title' in st && 
+          'description' in st
+        );
+        
+        if (validSubtasks.length === 0) {
+          toast({ title: "AI Refinement Issue", description: "AI returned subtasks but they were invalid. Using default subtasks instead.", variant: "destructive" });
+          console.error("Invalid subtasks format received:", responseData);
+          setSubtasks([...initialSubtasks.map(st => ({...st}))]);
+          return;
+        }
+        
+        setSubtasks(validSubtasks.map((st, index) => ({
+          ...initialSubtasks[0], // Reset parts like resources, completionCriteria to default
+          title: st.title || "",
+          description: st.description || "",
+          estimatedHours: typeof st.estimatedHours === 'number' ? st.estimatedHours : 0,
+          order: index + 1, // Re-assign order
+          // AI might not provide resources/completionCriteria, so we ensure they exist from initialSubtasks structure
+          resources: st.resources || [], 
+          completionCriteria: st.completionCriteria || [], 
+        })));
+        toast({ title: "Subtasks Refined", description: "Project subtasks have been refined with AI!", variant: "default" });
+      } else {
+        // Handle cases where AI might return empty or non-array response for subtasks
+        toast({ title: "AI Refinement Issue", description: "AI refinement did not return valid subtasks. Subtasks have been reset.", variant: "destructive" });
+        console.error("Unexpected response format:", responseData);
+        setSubtasks([...initialSubtasks.map(st => ({...st}))]); // Reset to initial if AI fails to provide valid subtasks
+      }
+
+    } catch (error: any) {
+      console.error("Error refining subtasks with AI:", error);
+      // Avoid double-toasting if already handled above
+      if (!error.message?.includes('Failed to refine subtasks with AI')) {
+        toast({ title: "AI Subtask Refinement Error", description: error.message, variant: "destructive" });
+      }
+    } finally {
+      setIsRefiningSubtasks(false);
+    }
+  };
+
+  const handleRefineWithAI = async () => {
+    setIsRefining(true);
+    try {
+      // Calculate total estimated hours from all subtasks
+      const totalEstimatedHours = subtasks.reduce((total, subtask) => {
+        return total + (typeof subtask.estimatedHours === 'number' ? subtask.estimatedHours : 0);
+      }, 0);
+
+      const projectDetailsToRefine = {
+        title: formData.title,
+        shortDescription: formData.shortDescription,
+        description: formData.description,
+        difficulty: formData.difficulty,
+        maxParticipants: formData.maxParticipants,
+        deadline: formData.deadline,
+        estimatedHours: totalEstimatedHours.toString(), // Pass the calculated total
+        tags: formData.tags,
+        requirements: formData.requirements,
+        learningGoals: formData.learningGoals,
+      };
+
+      if (!projectDetailsToRefine.title.trim() && !projectDetailsToRefine.description.trim()) {
+        toast({ title: "Missing Information", description: "Please provide at least a project title or description to refine.", variant: "destructive" });
+        setIsRefining(false);
+        return;
+      }
+
+      const response = await fetch('/api/refine-project', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(projectDetailsToRefine),
+      });
+
+      const responseData = await response.json();
+
+      if (!response.ok) {
+        toast({ title: "AI Refinement Error", description: responseData.message || 'Failed to refine project details with AI.', variant: "destructive" });
+        throw new Error(responseData.message || 'Failed to refine project details with AI.');
+      }
+
+      // Calculate deadline from estimatedDays if available
+      let formattedDeadline = formData.deadline; // Keep existing deadline by default
+      
+      if (responseData.estimatedDays && typeof responseData.estimatedDays === 'number') {
+        // Use our utility function to calculate a deadline from estimated days
+        const deadlineDate = calculateDeadlineFromDays(responseData.estimatedDays);
+        formattedDeadline = deadlineDate.toISOString().split('T')[0]; // Format as YYYY-MM-DD
+      } else if (responseData.deadline) {
+        // For backward compatibility, use deadline directly if provided
+        try {
+          const deadlineDate = new Date(responseData.deadline);
+          if (!isNaN(deadlineDate.getTime())) {
+            formattedDeadline = deadlineDate.toISOString().split('T')[0]; // Format as YYYY-MM-DD
+          }
+        } catch (e) {
+          console.error("Error formatting deadline:", e);
+          // If there's an error with the provided deadline, use our utility function to calculate a reasonable one
+          const estimatedDays = estimateDaysFromDifficulty(responseData.difficulty || formData.difficulty);
+          const deadlineDate = calculateDeadlineFromDays(estimatedDays);
+          formattedDeadline = deadlineDate.toISOString().split('T')[0]; // Format as YYYY-MM-DD
+        }
+      }
+
+      setFormData(prev => ({
+        ...prev,
+        title: responseData.title || prev.title,
+        shortDescription: responseData.shortDescription || prev.shortDescription,
+        description: responseData.description || prev.description,
+        difficulty: responseData.difficulty || prev.difficulty,
+        maxParticipants: responseData.maxParticipants !== undefined && responseData.maxParticipants !== null ? String(responseData.maxParticipants) : prev.maxParticipants,
+        deadline: formattedDeadline || prev.deadline,
+        tags: responseData.tags || prev.tags,
+        requirements: responseData.requirements || prev.requirements,
+        learningGoals: responseData.learningGoals || prev.learningGoals,
+      }));
+      
+      toast({ title: "Project Details Refined", description: "Project details have been refined with AI!", variant: "default" });
+
+    } catch (error: any) {
+      console.error("Error refining project with AI:", error);
+      // Avoid double-toasting
+      if (!error.message?.includes('Failed to refine project details with AI')) {
+         toast({ title: "AI Refinement Error", description: error.message, variant: "destructive" });
+      }
+    } finally {
+      setIsRefining(false);
+    }
+  };
+
   const handleSubmit = async (status: 'draft' | 'published') => {
     if (!session?.user?.id || !session?.user?.name) {
-      alert("用户信息不完整，请重新登录");
+      toast({ title: "Authentication Error", description: "User information is incomplete, please log in again.", variant: "destructive" });
       return;
     }
 
-    // 验证必填字段
+    // Validate required fields
     if (!formData.title.trim()) {
-      alert("请填写项目标题");
+      toast({ title: "Validation Error", description: "Please fill in the project title.", variant: "destructive" });
       return;
     }
     
     if (!formData.description.trim()) {
-      alert("请填写项目描述");
+      toast({ title: "Validation Error", description: "Please fill in the project description.", variant: "destructive" });
+      return;
+    }
+
+    if (status === 'published' && !formData.deadline) {
+      toast({ title: "Validation Error", description: "Please set a deadline for the project.", variant: "destructive" });
       return;
     }
 
     const validSubtasks = subtasks.filter(s => s.title.trim() && s.description.trim());
     if (validSubtasks.length === 0) {
-      alert("请至少添加一个有效的子任务");
+      toast({ title: "Validation Error", description: "Please add at least one valid subtask.", variant: "destructive" });
       return;
     }
 
     setIsLoading(true);
     
     try {
-      // 生成subtask IDs
-      const subtasksWithIds: Subtask[] = validSubtasks.map((subtask, index) => ({
+      // Generate subtask IDs
+      const userDefinedSubtasksWithIds: Subtask[] = validSubtasks.map((subtask, index) => ({
         ...subtask,
         id: `subtask_${Date.now()}_${index}`,
-        order: index + 1
+        // User-defined tasks start from order 1 (or higher if GitHub task is 0 or 1)
+        order: index + 1 // This will be adjusted after prepending GitHub task
       }));
+
+      // Create the GitHub submission task
+      const githubSubtask: Subtask = {
+        id: GITHUB_SUBMISSION_SUBTASK_ID,
+        ...GITHUB_SUBMISSION_SUBTASK_PROPS,
+        order: 0, // Ensuring it's the very first task
+      };
+
+      // Prepend GitHub task and re-order subsequent tasks
+      const allSubtasksWithGithubFirst: Subtask[] = [githubSubtask, ...userDefinedSubtasksWithIds].map((st, index) => ({
+        ...st,
+        order: index, // Re-assign order: GitHub task 0, next user task 1, etc.
+      })); 
+
+      // Convert deadline string to Timestamp
+      let deadlineTimestamp;
+      if (formData.deadline) {
+        // Create a date at 23:59:59 on the selected day for deadline
+        const deadlineDate = new Date(formData.deadline);
+        deadlineDate.setHours(23, 59, 59);
+        deadlineTimestamp = Timestamp.fromDate(deadlineDate);
+      } else {
+        // If no deadline specified (for draft), set a default far future date
+        const futureDate = new Date();
+        futureDate.setFullYear(futureDate.getFullYear() + 1); // One year from now
+        deadlineTimestamp = Timestamp.fromDate(futureDate);
+      }
 
       const projectData = {
         title: formData.title.trim(),
@@ -158,21 +399,21 @@ export default function CreateProjectPage() {
         status,
         difficulty: formData.difficulty,
         maxParticipants: formData.maxParticipants ? parseInt(formData.maxParticipants) : undefined,
-        estimatedHours: formData.estimatedHours ? parseInt(formData.estimatedHours) : undefined,
+        deadline: deadlineTimestamp,
         tags: formData.tags,
         requirements: formData.requirements,
         learningGoals: formData.learningGoals,
-        subtasks: subtasksWithIds
+        subtasks: allSubtasksWithGithubFirst // Use the array with GitHub task prepended and re-ordered
       };
 
-      console.log("创建项目:", projectData);
+      console.log("Creating project:", projectData);
       const projectId = await createProject(projectData);
-      console.log("项目创建成功，ID:", projectId);
+      console.log("Project created successfully, ID:", projectId);
       
       router.push(`/ngo/projects/${projectId}`);
     } catch (error) {
       console.error("Error creating project:", error);
-      alert("创建项目失败，请重试");
+      toast({ title: "Project Creation Failed", description: "Failed to create project, please try again.", variant: "destructive" });
     } finally {
       setIsLoading(false);
     }
@@ -187,13 +428,13 @@ export default function CreateProjectPage() {
             <Link href="/ngo/projects">
               <Button variant="ghost" size="sm">
                 <ArrowLeft className="w-4 h-4 mr-2" />
-                返回项目列表
+                Back to Project List
               </Button>
             </Link>
             <div>
-              <h1 className="text-3xl font-bold text-gray-900">创建新项目</h1>
+              <h1 className="text-3xl font-bold text-gray-900">Create New Project</h1>
               <p className="text-gray-600 mt-2">
-                创建一个有意义的社会影响项目 ✨
+                Create a meaningful social impact project ✨
               </p>
             </div>
           </div>
@@ -207,93 +448,109 @@ export default function CreateProjectPage() {
               <CardHeader>
                 <CardTitle className="flex items-center space-x-2">
                   <BookOpen className="w-5 h-5 text-blue-600" />
-                  <span>基本信息</span>
+                  <span>Basic Information</span>
+                  <Button
+                    onClick={handleRefineWithAI}
+                    disabled={isLoading || isRefining}
+                    variant="outline"
+                    size="sm"
+                    className="ml-auto"
+                  >
+                    {isRefining ? (
+                      <div className="loading-spinner w-4 h-4 mr-2" />
+                    ) : (
+                      <Sparkles className="w-4 h-4 mr-2" />
+                    )}
+                    Refine with AI
+                  </Button>
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
-                    项目标题 *
+                    Project Title *
                   </label>
                   <input
                     type="text"
                     value={formData.title}
                     onChange={(e) => handleInputChange('title', e.target.value)}
                     className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    placeholder="例如：社区清洁水源项目"
+                    placeholder="e.g., Community Clean Water Project"
                   />
                 </div>
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
-                    简短描述
+                    Short Description
                   </label>
                   <input
                     type="text"
                     value={formData.shortDescription}
                     onChange={(e) => handleInputChange('shortDescription', e.target.value)}
                     className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    placeholder="一句话描述项目..."
+                    placeholder="Describe the project in one sentence..."
                     maxLength={150}
                   />
-                  <p className="text-xs text-gray-500 mt-1">{formData.shortDescription.length}/150 字符</p>
+                  <p className="text-xs text-gray-500 mt-1">{formData.shortDescription.length}/150 characters</p>
                 </div>
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
-                    详细描述 *
+                    Detailed Description *
                   </label>
                   <textarea
                     value={formData.description}
                     onChange={(e) => handleInputChange('description', e.target.value)}
                     className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                     rows={6}
-                    placeholder="详细描述项目的目标、背景、预期影响等..."
+                    placeholder="Describe the project's goals, background, expected impact, etc..."
                   />
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
-                      难度等级
+                      Difficulty Level
                     </label>
                     <select
                       value={formData.difficulty}
                       onChange={(e) => handleInputChange('difficulty', e.target.value)}
                       className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                     >
-                      <option value="beginner">初级</option>
-                      <option value="intermediate">中级</option>
-                      <option value="advanced">高级</option>
+                      <option value="beginner">Beginner</option>
+                      <option value="intermediate">Intermediate</option>
+                      <option value="advanced">Advanced</option>
                     </select>
                   </div>
 
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
-                      最大参与人数
+                      Maximum Participants
                     </label>
                     <input
                       type="number"
                       value={formData.maxParticipants}
                       onChange={(e) => handleInputChange('maxParticipants', e.target.value)}
                       className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                      placeholder="不限制可留空"
+                      placeholder="Leave blank for no limit"
                       min="1"
                     />
                   </div>
 
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
-                      预估学习时长(小时)
+                      Deadline *
                     </label>
-                    <input
-                      type="number"
-                      value={formData.estimatedHours}
-                      onChange={(e) => handleInputChange('estimatedHours', e.target.value)}
-                      className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                      placeholder="例如：40"
-                      min="1"
-                    />
+                    <div className="relative">
+                      <Calendar className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500 w-4 h-4" />
+                      <input
+                        type="date"
+                        value={formData.deadline}
+                        onChange={(e) => handleInputChange('deadline', e.target.value)}
+                        className="w-full pl-10 p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      />
+                    </div>
+                    <p className="text-xs text-gray-500 mt-1">Project will be automatically marked complete after this date</p>
                   </div>
                 </div>
               </CardContent>
@@ -304,10 +561,10 @@ export default function CreateProjectPage() {
               <CardHeader>
                 <CardTitle className="flex items-center space-x-2">
                   <Tag className="w-5 h-5 text-purple-600" />
-                  <span>项目标签</span>
+                  <span>Project Tags</span>
                 </CardTitle>
                 <CardDescription>
-                  添加相关标签帮助学生发现您的项目
+                  Add relevant tags to help students discover your project
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
@@ -331,10 +588,10 @@ export default function CreateProjectPage() {
                     onChange={(e) => setNewTag(e.target.value)}
                     onKeyPress={(e) => e.key === 'Enter' && addTag()}
                     className="flex-1 p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    placeholder="添加标签..."
+                    placeholder="Add tag..."
                   />
                   <Button onClick={addTag} variant="outline">
-                    添加
+                    Add
                   </Button>
                 </div>
               </CardContent>
@@ -345,17 +602,38 @@ export default function CreateProjectPage() {
               <CardHeader>
                 <CardTitle className="flex items-center space-x-2">
                   <Target className="w-5 h-5 text-green-600" />
-                  <span>项目子任务</span>
+                  <span>Project Subtasks</span>
+                  <Button
+                    onClick={handleRefineSubtasksWithAI}
+                    disabled={isLoading || isRefining || isRefiningSubtasks || 
+                              !formData.title?.trim() || !formData.description?.trim() || 
+                              formData.requirements.length === 0 || formData.learningGoals.length === 0}
+                    variant="outline"
+                    size="sm"
+                    className="ml-auto"
+                    title={(!formData.title?.trim() || !formData.description?.trim()) 
+                           ? "Fill project title & description first" 
+                           : (formData.requirements.length === 0 || formData.learningGoals.length === 0) 
+                           ? "Add at least one requirement and one learning goal first" 
+                           : "Refine subtasks with AI"}
+                  >
+                    {isRefiningSubtasks ? (
+                      <div className="loading-spinner w-4 h-4 mr-2" />
+                    ) : (
+                      <Sparkles className="w-4 h-4 mr-2" />
+                    )}
+                    Refine Subtasks
+                  </Button>
                 </CardTitle>
                 <CardDescription>
-                  将项目分解为具体的学习任务
+                  Break down the project into specific learning tasks
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
                 {subtasks.map((subtask, index) => (
                   <div key={index} className="border rounded-lg p-4 space-y-3">
                     <div className="flex items-center justify-between">
-                      <h4 className="font-medium text-gray-900">子任务 {index + 1}</h4>
+                      <h4 className="font-medium text-gray-900">Subtask {index + 1}</h4>
                       {subtasks.length > 1 && (
                         <Button
                           variant="ghost"
@@ -374,7 +652,7 @@ export default function CreateProjectPage() {
                         value={subtask.title}
                         onChange={(e) => handleSubtaskChange(index, 'title', e.target.value)}
                         className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                        placeholder="子任务标题..."
+                        placeholder="Subtask title..."
                       />
                     </div>
                     
@@ -384,7 +662,7 @@ export default function CreateProjectPage() {
                         onChange={(e) => handleSubtaskChange(index, 'description', e.target.value)}
                         className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                         rows={3}
-                        placeholder="子任务详细描述..."
+                        placeholder="Subtask detailed description..."
                       />
                     </div>
                     
@@ -394,7 +672,7 @@ export default function CreateProjectPage() {
                         value={subtask.estimatedHours || ''}
                         onChange={(e) => handleSubtaskChange(index, 'estimatedHours', e.target.value ? parseInt(e.target.value) : 0)}
                         className="w-32 p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                        placeholder="预估小时"
+                        placeholder="Est. hours"
                         min="0"
                       />
                     </div>
@@ -403,7 +681,7 @@ export default function CreateProjectPage() {
                 
                 <Button onClick={addSubtask} variant="outline" className="w-full">
                   <Plus className="w-4 h-4 mr-2" />
-                  添加子任务
+                  Add Subtask
                 </Button>
               </CardContent>
             </Card>
@@ -414,7 +692,7 @@ export default function CreateProjectPage() {
             {/* Requirements */}
             <Card>
               <CardHeader>
-                <CardTitle className="text-lg">参与要求</CardTitle>
+                <CardTitle className="text-lg">Participation Requirements</CardTitle>
               </CardHeader>
               <CardContent className="space-y-3">
                 <div className="space-y-2">
@@ -437,10 +715,10 @@ export default function CreateProjectPage() {
                     onChange={(e) => setNewRequirement(e.target.value)}
                     onKeyPress={(e) => e.key === 'Enter' && addRequirement()}
                     className="flex-1 p-2 border border-gray-300 rounded-lg text-sm"
-                    placeholder="添加要求..."
+                    placeholder="Add requirement..."
                   />
                   <Button onClick={addRequirement} size="sm" variant="outline">
-                    添加
+                    Add
                   </Button>
                 </div>
               </CardContent>
@@ -449,7 +727,7 @@ export default function CreateProjectPage() {
             {/* Learning Goals */}
             <Card>
               <CardHeader>
-                <CardTitle className="text-lg">学习目标</CardTitle>
+                <CardTitle className="text-lg">Learning Goals</CardTitle>
               </CardHeader>
               <CardContent className="space-y-3">
                 <div className="space-y-2">
@@ -472,10 +750,10 @@ export default function CreateProjectPage() {
                     onChange={(e) => setNewLearningGoal(e.target.value)}
                     onKeyPress={(e) => e.key === 'Enter' && addLearningGoal()}
                     className="flex-1 p-2 border border-gray-300 rounded-lg text-sm"
-                    placeholder="添加学习目标..."
+                    placeholder="Add learning goal..."
                   />
                   <Button onClick={addLearningGoal} size="sm" variant="outline">
-                    添加
+                    Add
                   </Button>
                 </div>
               </CardContent>
@@ -486,30 +764,61 @@ export default function CreateProjectPage() {
               <CardContent className="p-4 space-y-3">
                 <Button
                   onClick={() => handleSubmit('published')}
-                  disabled={isLoading}
+                  disabled={isLoading || isRefining || isRefiningSubtasks}
                   className="w-full"
                 >
-                  {isLoading ? (
+                  {isLoading && !isRefining && !isRefiningSubtasks ? (
                     <div className="loading-spinner mr-2" />
                   ) : (
                     <Save className="w-4 h-4 mr-2" />
                   )}
-                  发布项目
+                  Publish Project
                 </Button>
                 
                 <Button
                   onClick={() => handleSubmit('draft')}
-                  disabled={isLoading}
+                  disabled={isLoading || isRefining || isRefiningSubtasks}
                   variant="outline"
                   className="w-full"
                 >
-                  保存为草稿
+                  Save as Draft
+                </Button>
+
+                <Button
+                  onClick={handleClearFormIntent}
+                  disabled={isLoading || isRefining || isRefiningSubtasks}
+                  variant="destructive"
+                  className="w-full mt-2"
+                >
+                  <Eraser className="w-4 h-4 mr-2" />
+                  Clear Form (Basic Info, Tags, Subtasks)
                 </Button>
               </CardContent>
             </Card>
           </div>
         </div>
       </div>
+
+      {/* AlertDialog for clearing form */}
+      <AlertDialog open={showClearFormDialog} onOpenChange={setShowClearFormDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Clear Form</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to clear all form fields? This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction 
+              onClick={handleClearForm}
+              className="bg-red-600 hover:bg-red-700 text-white"
+            >
+              Clear Form
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </MainLayout>
   );
 } 

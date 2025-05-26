@@ -19,6 +19,7 @@ import {
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { signOut } from "next-auth/react";
+import { Toaster } from "@/components/ui/toaster";
 
 interface MainLayoutProps {
   children: React.ReactNode;
@@ -139,9 +140,9 @@ export function MainLayout({ children }: MainLayoutProps) {
       </div>
 
       {/* Main Content */}
-      <div className="pl-64">
+      <div className="pl-64 flex flex-col h-screen overflow-hidden">
         {/* Top Bar */}
-        <div className="bg-white shadow-sm border-b border-purple-100 h-16 flex items-center justify-between px-6">
+        <div className="bg-white shadow-sm border-b border-purple-100 h-16 flex-shrink-0 flex items-center justify-between px-6">
           <div className="flex items-center space-x-2">
             <Sparkles className="w-5 h-5 text-purple-500" />
             <span className="text-lg font-semibold text-gray-800">
@@ -151,10 +152,11 @@ export function MainLayout({ children }: MainLayoutProps) {
         </div>
 
         {/* Page Content */}
-        <main className="flex-1 p-6 page-transition">
+        <main className="flex-1 p-6 page-transition overflow-y-auto">
           {children}
         </main>
       </div>
+      <Toaster />
     </div>
   );
 } 

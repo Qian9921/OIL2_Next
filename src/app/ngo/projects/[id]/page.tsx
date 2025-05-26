@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Avatar } from "@/components/ui/avatar";
 import { getProject, getParticipations, updateProject } from "@/lib/firestore";
 import { Project, Participation } from "@/lib/types";
-import { generateAvatar, getStatusColor, getDifficultyColor } from "@/lib/utils";
+import { generateAvatar, getStatusColor, getDifficultyColor, calculateEstimatedHours } from "@/lib/utils";
 import { 
   ArrowLeft, 
   Users, 
@@ -98,10 +98,10 @@ export default function NGOProjectDetailPage() {
     return (
       <MainLayout>
         <div className="text-center py-12">
-          <h1 className="text-2xl font-bold text-gray-900 mb-4">项目未找到</h1>
-          <p className="text-gray-600 mb-6">请检查项目ID是否正确</p>
+          <h1 className="text-2xl font-bold text-gray-900 mb-4">Project Not Found</h1>
+          <p className="text-gray-600 mb-6">Please check if the project ID is correct</p>
           <Link href="/ngo/projects">
-            <Button>返回项目列表</Button>
+            <Button>Back to Project List</Button>
           </Link>
         </div>
       </MainLayout>
@@ -114,10 +114,10 @@ export default function NGOProjectDetailPage() {
     return (
       <MainLayout>
         <div className="text-center py-12">
-          <h1 className="text-2xl font-bold text-gray-900 mb-4">访问被拒绝</h1>
-          <p className="text-gray-600 mb-6">您没有权限查看此项目</p>
+          <h1 className="text-2xl font-bold text-gray-900 mb-4">Access Denied</h1>
+          <p className="text-gray-600 mb-6">You do not have permission to view this project</p>
           <Link href="/ngo/projects">
-            <Button>返回项目列表</Button>
+            <Button>Back to Project List</Button>
           </Link>
         </div>
       </MainLayout>
@@ -135,13 +135,13 @@ export default function NGOProjectDetailPage() {
             <Link href="/ngo/projects">
               <Button variant="ghost" size="sm">
                 <ArrowLeft className="w-4 h-4 mr-2" />
-                返回项目列表
+                Back to Project List
               </Button>
             </Link>
             <div>
               <h1 className="text-3xl font-bold text-gray-900">{project.title}</h1>
               <p className="text-gray-600 mt-2">
-                项目详情和管理 📊
+                Project Details and Management 📊
               </p>
             </div>
           </div>
@@ -149,13 +149,13 @@ export default function NGOProjectDetailPage() {
             <Link href={`/ngo/projects/${project.id}/edit`}>
               <Button variant="outline">
                 <Edit className="w-4 h-4 mr-2" />
-                编辑项目
+                Edit Project
               </Button>
             </Link>
             <Link href={`/projects/${project.id}`}>
               <Button variant="outline">
                 <Eye className="w-4 h-4 mr-2" />
-                预览
+                Preview
               </Button>
             </Link>
           </div>
@@ -170,30 +170,30 @@ export default function NGOProjectDetailPage() {
                 <div className="flex items-center justify-between">
                   <CardTitle className="flex items-center space-x-2">
                     <BookOpen className="w-5 h-5 text-blue-600" />
-                    <span>项目信息</span>
+                    <span>Project Information</span>
                   </CardTitle>
                   <div className="flex items-center space-x-2">
                     <span className={`px-3 py-1 rounded-full text-sm font-medium ${getStatusColor(project.status)}`}>
-                      {project.status === 'draft' ? '草稿' :
-                       project.status === 'published' ? '发布中' :
-                       project.status === 'completed' ? '已完成' : '已归档'}
+                      {project.status === 'draft' ? 'Draft' :
+                       project.status === 'published' ? 'Published' :
+                       project.status === 'completed' ? 'Completed' : 'Archived'}
                     </span>
                     <span className={`px-3 py-1 rounded-full text-sm font-medium ${getDifficultyColor(project.difficulty)}`}>
-                      {project.difficulty === 'beginner' ? '初级' :
-                       project.difficulty === 'intermediate' ? '中级' : '高级'}
+                      {project.difficulty === 'beginner' ? 'Beginner' :
+                       project.difficulty === 'intermediate' ? 'Intermediate' : 'Advanced'}
                     </span>
                   </div>
                 </div>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div>
-                  <h4 className="font-medium text-gray-900 mb-2">项目描述</h4>
+                  <h4 className="font-medium text-gray-900 mb-2">Project Description</h4>
                   <p className="text-gray-700">{project.description}</p>
                 </div>
 
                 {project.shortDescription && (
                   <div>
-                    <h4 className="font-medium text-gray-900 mb-2">简短描述</h4>
+                    <h4 className="font-medium text-gray-900 mb-2">Short Description</h4>
                     <p className="text-gray-700">{project.shortDescription}</p>
                   </div>
                 )}
@@ -205,35 +205,40 @@ export default function NGOProjectDetailPage() {
                     <div className="text-lg font-bold text-blue-600">
                       {project.currentParticipants}
                     </div>
-                    <div className="text-xs text-gray-600">参与者</div>
+                    <div className="text-xs text-gray-600">Participants</div>
                   </div>
                   <div className="text-center p-3 bg-green-50 rounded-lg">
                     <Clock className="w-6 h-6 text-green-600 mx-auto mb-1" />
                     <div className="text-lg font-bold text-green-600">
-                      {project.estimatedHours || 'TBD'}
+                      {calculateEstimatedHours(project) > 0 
+                        ? `${calculateEstimatedHours(project)} hours (est.)`
+                        : 'TBD'
+                      }
                     </div>
-                    <div className="text-xs text-gray-600">预估小时</div>
+                    <div className="text-xs text-gray-600">Estimated Hours</div>
                   </div>
                   <div className="text-center p-3 bg-purple-50 rounded-lg">
                     <Target className="w-6 h-6 text-purple-600 mx-auto mb-1" />
                     <div className="text-lg font-bold text-purple-600">
                       {project.subtasks?.length || 0}
                     </div>
-                    <div className="text-xs text-gray-600">子任务</div>
+                    <div className="text-xs text-gray-600">Subtasks</div>
                   </div>
-                  <div className="text-center p-3 bg-yellow-50 rounded-lg">
-                    <BarChart3 className="w-6 h-6 text-yellow-600 mx-auto mb-1" />
-                    <div className="text-lg font-bold text-yellow-600">
-                      {averageProgress}%
+                  <div className="text-center p-3 bg-amber-50 rounded-lg">
+                    <Calendar className="w-6 h-6 text-amber-600 mx-auto mb-1" />
+                    <div className="text-lg font-bold text-amber-600">
+                      {project.deadline 
+                        ? project.deadline.toDate().toLocaleDateString() 
+                        : 'No deadline'}
                     </div>
-                    <div className="text-xs text-gray-600">平均进度</div>
+                    <div className="text-xs text-gray-600">Deadline</div>
                   </div>
                 </div>
 
                 {/* Tags */}
                 {project.tags && project.tags.length > 0 && (
                   <div>
-                    <h4 className="font-medium text-gray-900 mb-2">项目标签</h4>
+                    <h4 className="font-medium text-gray-900 mb-2">Project Tags</h4>
                     <div className="flex flex-wrap gap-2">
                       {project.tags.map((tag, index) => (
                         <span key={index} className="px-3 py-1 bg-gray-100 text-gray-700 text-sm rounded-full">
@@ -247,7 +252,7 @@ export default function NGOProjectDetailPage() {
                 {/* Requirements */}
                 {project.requirements && project.requirements.length > 0 && (
                   <div>
-                    <h4 className="font-medium text-gray-900 mb-2">参与要求</h4>
+                    <h4 className="font-medium text-gray-900 mb-2">Participation Requirements</h4>
                     <ul className="list-disc list-inside text-gray-700 space-y-1">
                       {project.requirements.map((req, index) => (
                         <li key={index}>{req}</li>
@@ -259,7 +264,7 @@ export default function NGOProjectDetailPage() {
                 {/* Learning Goals */}
                 {project.learningGoals && project.learningGoals.length > 0 && (
                   <div>
-                    <h4 className="font-medium text-gray-900 mb-2">学习目标</h4>
+                    <h4 className="font-medium text-gray-900 mb-2">Learning Goals</h4>
                     <ul className="list-disc list-inside text-gray-700 space-y-1">
                       {project.learningGoals.map((goal, index) => (
                         <li key={index}>{goal}</li>
@@ -276,7 +281,7 @@ export default function NGOProjectDetailPage() {
                 <CardHeader>
                   <CardTitle className="flex items-center space-x-2">
                     <Target className="w-5 h-5 text-green-600" />
-                    <span>项目任务</span>
+                    <span>Project Tasks</span>
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
@@ -293,7 +298,7 @@ export default function NGOProjectDetailPage() {
                             </p>
                             {subtask.estimatedHours && (
                               <p className="text-xs text-gray-500">
-                                预估时长: {subtask.estimatedHours} 小时
+                                Estimated Duration: {subtask.estimatedHours} hours
                               </p>
                             )}
                           </div>
@@ -313,27 +318,65 @@ export default function NGOProjectDetailPage() {
               <CardHeader>
                 <CardTitle className="flex items-center space-x-2">
                   <Settings className="w-5 h-5 text-gray-600" />
-                  <span>项目状态</span>
+                  <span>Project Status</span>
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-3">
                 <div className="space-y-2">
-                  {[
-                    { key: 'draft', label: '草稿', color: 'bg-gray-100 text-gray-800' },
-                    { key: 'published', label: '发布', color: 'bg-blue-100 text-blue-800' },
-                    { key: 'completed', label: '完成', color: 'bg-green-100 text-green-800' },
-                    { key: 'archived', label: '归档', color: 'bg-red-100 text-red-800' }
-                  ].map((status) => (
-                    <Button
-                      key={status.key}
-                      variant={project.status === status.key ? "default" : "outline"}
-                      className="w-full justify-start"
-                      onClick={() => handleStatusChange(status.key as Project['status'])}
-                      disabled={isUpdating}
-                    >
-                      {status.label}
-                    </Button>
-                  ))}
+                  {/* Draft button - always available for draft projects */}
+                  <Button
+                    key="draft"
+                    variant={project.status === 'draft' ? "default" : "outline"}
+                    className="w-full justify-start"
+                    onClick={() => handleStatusChange('draft')}
+                    disabled={isUpdating || project.status === 'published' || project.status === 'completed' || project.status === 'archived'}
+                    title={project.status !== 'draft' ? "Published projects cannot return to draft status" : "Save as draft"}
+                  >
+                    Draft
+                  </Button>
+                  
+                  {/* Publish button - only available for draft projects */}
+                  <Button
+                    key="published"
+                    variant={project.status === 'published' ? "default" : "outline"}
+                    className="w-full justify-start"
+                    onClick={() => handleStatusChange('published')}
+                    disabled={isUpdating || project.status === 'completed' || project.status === 'archived'}
+                    title={project.status === 'completed' || project.status === 'archived' ? 
+                      "Completed or archived projects cannot be republished" : 
+                      "Publish project to make it available to students"}
+                  >
+                    Publish
+                  </Button>
+                  
+                  {/* Note: No manual completion button - this happens automatically when deadline is reached */}
+                  <div className="px-4 py-2 text-sm text-gray-600 bg-blue-50 rounded-md">
+                    <p><strong>Note:</strong> Projects are automatically marked as completed when their deadline is reached.</p>
+                  </div>
+                  
+                  {/* Archive button - only available for completed projects */}
+                  <Button
+                    key="archived"
+                    variant={project.status === 'archived' ? "default" : "outline"}
+                    className="w-full justify-start"
+                    onClick={() => handleStatusChange('archived')}
+                    disabled={isUpdating || project.status !== 'completed'}
+                    title={project.status !== 'completed' ? 
+                      "Only completed projects can be archived" : 
+                      "Archive this completed project"}
+                  >
+                    Archive
+                  </Button>
+                </div>
+                
+                {/* Status transitions explainer */}
+                <div className="mt-4 p-3 text-xs text-gray-600 bg-gray-50 rounded-md">
+                  <p className="font-medium mb-1">Project Lifecycle:</p>
+                  <ul className="list-disc list-inside space-y-1">
+                    <li>Draft → Published: Make available to students</li>
+                    <li>Published → Completed: Automatic when deadline is reached</li>
+                    <li>Completed → Archived: Remove from active projects</li>
+                  </ul>
                 </div>
               </CardContent>
             </Card>
@@ -343,7 +386,7 @@ export default function NGOProjectDetailPage() {
               <CardHeader>
                 <CardTitle className="flex items-center space-x-2">
                   <TrendingUp className="w-5 h-5 text-purple-600" />
-                  <span>项目统计</span>
+                  <span>Project Statistics</span>
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
@@ -351,21 +394,21 @@ export default function NGOProjectDetailPage() {
                   <div className="text-2xl font-bold text-blue-600">
                     {participations.length}
                   </div>
-                  <div className="text-sm text-gray-600">总参与者</div>
+                  <div className="text-sm text-gray-600">Total Participants</div>
                 </div>
 
                 <div className="text-center p-3 bg-green-50 rounded-lg">
                   <div className="text-2xl font-bold text-green-600">
                     {completionRate}%
                   </div>
-                  <div className="text-sm text-gray-600">完成率</div>
+                  <div className="text-sm text-gray-600">Completion Rate</div>
                 </div>
 
                 <div className="text-center p-3 bg-purple-50 rounded-lg">
                   <div className="text-2xl font-bold text-purple-600">
                     {averageProgress}%
                   </div>
-                  <div className="text-sm text-gray-600">平均进度</div>
+                  <div className="text-sm text-gray-600">Average Progress</div>
                 </div>
               </CardContent>
             </Card>
@@ -376,7 +419,7 @@ export default function NGOProjectDetailPage() {
                 <CardHeader>
                   <CardTitle className="flex items-center space-x-2">
                     <Users className="w-5 h-5 text-blue-600" />
-                    <span>最新参与者</span>
+                    <span>Recent Participants</span>
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
@@ -393,12 +436,12 @@ export default function NGOProjectDetailPage() {
                             {participation.studentName}
                           </p>
                           <p className="text-xs text-gray-500">
-                            进度: {participation.progress}%
+                            Progress: {participation.progress}%
                           </p>
                         </div>
                         <span className={`px-2 py-1 rounded-full text-xs ${getStatusColor(participation.status)}`}>
-                          {participation.status === 'active' ? '进行中' :
-                           participation.status === 'completed' ? '已完成' : '其他'}
+                          {participation.status === 'active' ? 'Active' :
+                           participation.status === 'completed' ? 'Completed' : 'Other'}
                         </span>
                       </div>
                     ))}
@@ -410,16 +453,16 @@ export default function NGOProjectDetailPage() {
             {/* Creation Info */}
             <Card>
               <CardHeader>
-                <CardTitle className="text-sm">创建信息</CardTitle>
+                <CardTitle className="text-sm">Creation Information</CardTitle>
               </CardHeader>
               <CardContent className="text-sm text-gray-600">
                 <div className="flex items-center space-x-2 mb-2">
                   <Calendar className="w-4 h-4" />
-                  <span>创建于: {project.createdAt.toDate().toLocaleDateString()}</span>
+                  <span>Created At: {project.createdAt.toDate().toLocaleDateString()}</span>
                 </div>
                 <div className="flex items-center space-x-2">
                   <Calendar className="w-4 h-4" />
-                  <span>更新于: {project.updatedAt.toDate().toLocaleDateString()}</span>
+                  <span>Updated At: {project.updatedAt.toDate().toLocaleDateString()}</span>
                 </div>
               </CardContent>
             </Card>

@@ -12,9 +12,11 @@ import {
   limit,
   Timestamp,
   writeBatch,
-  increment
+  increment,
+  runTransaction
 } from "firebase/firestore";
-import { db } from "./firebase";
+import { db, storage } from "./firebase";
+import { ref, uploadBytesResumable, getDownloadURL, deleteObject } from "firebase/storage";
 import {
   User,
   Project,
@@ -27,6 +29,7 @@ import {
   TeacherDashboard,
   Certificate
 } from "./types";
+import { calculateEstimatedHours } from './utils';
 
 // User operations
 export async function createUser(userData: Omit<User, 'id' | 'createdAt' | 'updatedAt'>) {
@@ -173,6 +176,22 @@ export async function getParticipations(filters?: {
   return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Participation));
 }
 
+// Get a specific participation by project ID and student ID
+export async function getParticipationByProjectAndStudent(projectId: string, studentId: string): Promise<Participation | null> {
+  const q = query(
+    collection(db, 'participations'),
+    where('projectId', '==', projectId),
+    where('studentId', '==', studentId),
+    limit(1) // Should only be one or none
+  );
+  const snapshot = await getDocs(q);
+  if (!snapshot.empty) {
+    const participationDoc = snapshot.docs[0];
+    return { id: participationDoc.id, ...participationDoc.data() } as Participation;
+  }
+  return null;
+}
+
 export async function updateParticipation(participationId: string, participationData: Partial<Participation>) {
   await updateDoc(doc(db, 'participations', participationId), participationData);
 }
@@ -285,8 +304,8 @@ export async function getStudentDashboard(studentId: string): Promise<StudentDas
   let totalHours = 0;
   for (const participation of participations.filter(p => p.status === 'completed')) {
     const project = await getProject(participation.projectId);
-    if (project?.estimatedHours) {
-      totalHours += project.estimatedHours;
+    if (project) {
+      totalHours += calculateEstimatedHours(project);
     }
   }
   
@@ -335,18 +354,46 @@ export async function getStudentDashboard(studentId: string): Promise<StudentDas
   for (const participation of participations.filter(p => p.status === 'active')) {
     const project = await getProject(participation.projectId);
     if (project) {
-      // Calculate estimated completion date based on remaining progress
-      const remainingProgress = 100 - participation.progress;
-      const estimatedDaysToComplete = Math.ceil((remainingProgress / 100) * (project.estimatedHours || 10) / 2); // 2 hours per day assumption
-      const dueDate = new Date();
-      dueDate.setDate(dueDate.getDate() + estimatedDaysToComplete);
+      // Use project deadline if available, otherwise use estimated calculation
+      let dueDate: Date;
+      let priority: 'high' | 'medium' | 'low';
+      
+      if (project.deadline) {
+        dueDate = project.deadline.toDate();
+        
+        // Calculate priority based on how close the deadline is
+        const today = new Date();
+        const daysUntilDeadline = Math.ceil((dueDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+        
+        if (daysUntilDeadline <= 7) {
+          priority = 'high';
+        } else if (daysUntilDeadline <= 14) {
+          priority = 'medium';
+        } else {
+          priority = 'low';
+        }
+      } else {
+        // Fallback to a simple calculation if no deadline is set
+        const remainingProgress = 100 - participation.progress;
+        
+        // Calculate estimated days based on remaining progress and subtask count
+        // Assume each subtask takes 2-5 days depending on difficulty
+        const subtaskCount = project.subtasks?.length || 1;
+        const difficultyFactor = project.difficulty === 'advanced' ? 5 : 
+                               project.difficulty === 'intermediate' ? 3 : 2;
+        
+        const estimatedDaysToComplete = Math.ceil((remainingProgress / 100) * subtaskCount * difficultyFactor);
+        dueDate = new Date();
+        dueDate.setDate(dueDate.getDate() + estimatedDaysToComplete);
+        priority = (participation.progress < 50 ? 'high' : participation.progress < 80 ? 'medium' : 'low');
+      }
       
       upcomingDeadlines.push({
         id: participation.id,
         title: `Complete ${project.title}`,
         projectTitle: project.title,
         dueDate: Timestamp.fromDate(dueDate),
-        priority: (participation.progress < 50 ? 'high' : participation.progress < 80 ? 'medium' : 'low') as 'high' | 'medium' | 'low'
+        priority
       });
     }
   }
@@ -561,4 +608,380 @@ export async function getCompletedProjectsForNGO(ngoId: string) {
   }
   
   return completedProjects;
+}
+
+// Add a new function to delete a user account and handle associated data
+export async function deleteUserAccount(userId: string) {
+  // Get user data first to determine role and related actions
+  const user = await getUser(userId);
+  if (!user) {
+    throw new Error('User not found');
+  }
+
+  const batch = writeBatch(db);
+  
+  // 1. Handle role-specific cleanup
+  if (user.role === 'student') {
+    // Get all participations for this student
+    const participations = await getParticipations({ studentId: userId });
+    
+    for (const participation of participations) {
+      // For each project, decrement participant count
+      const projectRef = doc(db, 'projects', participation.projectId);
+      batch.update(projectRef, {
+        currentParticipants: increment(-1),
+        updatedAt: Timestamp.now()
+      });
+      
+      // Delete participation document
+      const participationRef = doc(db, 'participations', participation.id);
+      batch.delete(participationRef);
+      
+      // Delete any submissions
+      const submissions = await getSubmissions({ participationId: participation.id });
+      for (const submission of submissions) {
+        const submissionRef = doc(db, 'submissions', submission.id);
+        batch.delete(submissionRef);
+      }
+    }
+    
+    // Delete certificates
+    const certificates = await getCertificates({ studentId: userId });
+    for (const certificate of certificates) {
+      const certificateRef = doc(db, 'certificates', certificate.id);
+      batch.delete(certificateRef);
+    }
+  } 
+  else if (user.role === 'ngo') {
+    // Get all projects created by this NGO
+    const projects = await getProjects({ ngoId: userId });
+    
+    for (const project of projects) {
+      // Handle each project: either delete or transfer ownership
+      const projectRef = doc(db, 'projects', project.id);
+      
+      // If project has participants, change status to archived
+      if (project.currentParticipants > 0) {
+        batch.update(projectRef, {
+          status: 'archived',
+          updatedAt: Timestamp.now()
+        });
+      } else {
+        // If no participants, delete the project
+        batch.delete(projectRef);
+      }
+    }
+  }
+  else if (user.role === 'teacher') {
+    // For teachers, we need to handle submissions they've reviewed
+    const submissions = await getSubmissions({});
+    const reviewedSubmissions = submissions.filter(s => s.reviewedBy === userId);
+    
+    for (const submission of reviewedSubmissions) {
+      const submissionRef = doc(db, 'submissions', submission.id);
+      batch.update(submissionRef, {
+        reviewedBy: null,
+        updatedAt: Timestamp.now()
+      });
+    }
+  }
+  
+  // 2. Delete the user document
+  const userRef = doc(db, 'users', userId);
+  batch.delete(userRef);
+  
+  // 3. Commit all changes
+  await batch.commit();
+}
+
+// Add a function to upload a profile picture and update user avatar
+export async function uploadProfilePicture(userId: string, file: File): Promise<string> {
+  // Create a storage reference
+  const storageRef = ref(storage, `profile_pictures/${userId}`);
+  
+  // Upload file to Firebase Storage
+  const uploadTask = uploadBytesResumable(storageRef, file);
+  
+  // Wait for upload to complete
+  return new Promise((resolve, reject) => {
+    uploadTask.on(
+      'state_changed',
+      (snapshot) => {
+        // Progress tracking if needed
+        const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
+        console.log('Upload is ' + progress + '% done');
+      },
+      (error) => {
+        // Handle errors
+        reject(error);
+      },
+      async () => {
+        // Upload completed successfully, get the download URL
+        try {
+          const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
+          
+          // Update user document with new avatar URL
+          await updateUser(userId, { avatar: downloadURL });
+          
+          resolve(downloadURL);
+        } catch (error) {
+          reject(error);
+        }
+      }
+    );
+  });
+}
+
+// Automatically update project statuses based on deadlines and business rules
+export async function updateProjectStatuses() {
+  try {
+    const now = Timestamp.now();
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+    const thirtyDaysAgoTimestamp = Timestamp.fromDate(thirtyDaysAgo);
+    
+    const batch = writeBatch(db);
+    let statusChanges = {
+      completed: 0,
+      archived: 0,
+      errors: 0
+    };
+    
+    // Get all published projects to check for completion
+    const publishedProjectsQuery = query(
+      collection(db, 'projects'),
+      where('status', '==', 'published')
+    );
+    const publishedProjectsSnapshot = await getDocs(publishedProjectsQuery);
+    
+    for (const doc of publishedProjectsSnapshot.docs) {
+      const project = { id: doc.id, ...doc.data() } as Project;
+      
+      // Check if deadline has passed
+      if (project.deadline && project.deadline.toMillis() < now.toMillis()) {
+        console.log(`Marking project ${project.id} (${project.title}) as completed due to passed deadline`);
+        batch.update(doc.ref, { 
+          status: 'completed',
+          updatedAt: now
+        });
+        statusChanges.completed++;
+      }
+    }
+    
+    // Get all completed projects to check for archiving
+    const completedProjectsQuery = query(
+      collection(db, 'projects'),
+      where('status', '==', 'completed')
+    );
+    const completedProjectsSnapshot = await getDocs(completedProjectsQuery);
+    
+    for (const doc of completedProjectsSnapshot.docs) {
+      const project = { id: doc.id, ...doc.data() } as Project;
+      
+      // Archive completed projects after 30 days
+      if (project.updatedAt && project.updatedAt.toMillis() < thirtyDaysAgoTimestamp.toMillis()) {
+        console.log(`Archiving project ${project.id} (${project.title}) as it's been completed for over 30 days`);
+        batch.update(doc.ref, {
+          status: 'archived',
+          updatedAt: now
+        });
+        statusChanges.archived++;
+      }
+    }
+    
+    // Handle orphaned projects (NGO deleted but project still exists)
+    // Note: We preserve the projects but still follow the normal lifecycle
+    const orphanedProjectsQuery = query(
+      collection(db, 'projects'),
+      where('status', '==', 'published')
+    );
+    const orphanedProjectsSnapshot = await getDocs(orphanedProjectsQuery);
+    
+    for (const doc of orphanedProjectsSnapshot.docs) {
+      const project = { id: doc.id, ...doc.data() } as Project;
+      
+      // Check if the NGO still exists
+      const ngoExists = await getUser(project.ngoId);
+      
+      if (!ngoExists) {
+        // Don't delete the project - just mark it for reference
+        // This ensures students can still complete their work
+        console.log(`Project ${project.id} (${project.title}) is orphaned (NGO deleted)`);
+        
+        // If deadline has passed, still mark as completed
+        if (project.deadline && project.deadline.toMillis() < now.toMillis()) {
+          console.log(`Marking orphaned project ${project.id} as completed due to passed deadline`);
+          batch.update(doc.ref, { 
+            status: 'completed',
+            updatedAt: now
+          });
+          statusChanges.completed++;
+        }
+      }
+    }
+    
+    // Commit all updates
+    if (statusChanges.completed > 0 || statusChanges.archived > 0) {
+      await batch.commit();
+      console.log(`Project status updates completed: ${statusChanges.completed} completed, ${statusChanges.archived} archived`);
+    } else {
+      console.log('No project status updates needed');
+    }
+    
+    return { 
+      success: true, 
+      updatedAt: now.toDate(),
+      changes: statusChanges
+    };
+  } catch (error) {
+    console.error('Error updating project statuses:', error);
+    return { 
+      success: false, 
+      error: error instanceof Error ? error.message : 'Unknown error',
+      updatedAt: new Date()
+    };
+  }
+}
+
+// Modify handleStatusChange to enforce logical project lifecycle rules
+export async function handleStatusChange(projectId: string, newStatus: Project['status'], oldStatus: Project['status']) {
+  // Get the project to check current status
+  const project = await getProject(projectId);
+  
+  if (!project) {
+    throw new Error('Project not found');
+  }
+  
+  // Validate status changes based on business rules
+  if (oldStatus === 'published' && newStatus === 'draft') {
+    throw new Error('Published projects cannot be moved back to draft status');
+  }
+  
+  // Prevent manual completion - projects are completed automatically when deadline is reached
+  if (newStatus === 'completed') {
+    throw new Error('Projects are automatically marked as completed when their deadline is reached. Manual completion is not allowed.');
+  }
+  
+  // Only completed projects can be archived
+  if (newStatus === 'archived' && oldStatus !== 'completed') {
+    throw new Error('Only completed projects can be archived');
+  }
+  
+  // Archived projects cannot change status - it's a final state
+  if (oldStatus === 'archived') {
+    throw new Error('Archived projects cannot be changed to any other status');
+  }
+  
+  // If publishing a draft project, ensure it has the necessary fields
+  if (oldStatus === 'draft' && newStatus === 'published') {
+    if (!project.deadline) {
+      throw new Error('Project must have a deadline before it can be published');
+    }
+    
+    if (!project.subtasks || project.subtasks.length === 0) {
+      throw new Error('Project must have at least one subtask before it can be published');
+    }
+  }
+  
+  // Update the project with the new status
+  await updateProject(projectId, { status: newStatus });
+  
+  return { success: true, status: newStatus };
+}
+
+/**
+ * Saves a prompt quality evaluation to a student's participation record and updates their streak
+ * @param participationId - The ID of the participation record
+ * @param subtaskId - The ID of the subtask
+ * @param evaluation - Object containing evaluation scores and prompt text
+ * @returns Object containing current streak, best streak, and whether the prompt was good
+ */
+export async function savePromptEvaluation(
+  participationId: string,
+  subtaskId: string,
+  evaluation: {
+    goalScore: number;
+    contextScore: number;
+    expectationsScore: number;
+    sourceScore: number;
+    overallScore: number;
+    prompt: string;
+  }
+) {
+  try {
+    // Get reference to the participation document
+    const participationRef = doc(db, 'participations', participationId);
+    
+    // Start a transaction to ensure data consistency
+    return await runTransaction(db, async (transaction) => {
+      const participationDoc = await transaction.get(participationRef);
+      
+      if (!participationDoc.exists()) {
+        throw new Error('Participation document not found');
+      }
+      
+      const participationData = participationDoc.data() as Participation;
+      
+      // Initialize promptEvaluations if it doesn't exist
+      const promptEvaluations = participationData.promptEvaluations || {};
+      const subtaskEvaluations = promptEvaluations[subtaskId] || [];
+      
+      // Determine if this is a good prompt (score >= 70)
+      const isGoodPrompt = evaluation.overallScore >= 70;
+      
+      // Calculate the current streak
+      let currentStreak = 0;
+      let bestStreak = 0;
+      
+      if (subtaskEvaluations.length > 0) {
+        // Get the previous evaluation's streak and best streak
+        const previousEval = subtaskEvaluations[subtaskEvaluations.length - 1];
+        currentStreak = previousEval.streak || 0;
+        bestStreak = previousEval.bestStreak || 0;
+        
+        // Update streak based on current evaluation
+        if (isGoodPrompt) {
+          currentStreak += 1;
+          // Update best streak if current streak is better
+          bestStreak = Math.max(currentStreak, bestStreak);
+        } else {
+          // Reset streak if the prompt wasn't good
+          currentStreak = 0;
+        }
+      } else if (isGoodPrompt) {
+        // First evaluation and it's good
+        currentStreak = 1;
+        bestStreak = 1;
+      }
+      
+      // Create the new evaluation object with timestamp and streak info
+      const newEvaluation = {
+        ...evaluation,
+        timestamp: Timestamp.now(),
+        streak: currentStreak,
+        bestStreak: bestStreak
+      };
+      
+      // Add the new evaluation to the array
+      subtaskEvaluations.push(newEvaluation);
+      
+      // Update the prompt evaluations in the participation document
+      promptEvaluations[subtaskId] = subtaskEvaluations;
+      
+      // Update the document
+      transaction.update(participationRef, {
+        promptEvaluations: promptEvaluations
+      });
+      
+      // Return streak information
+      return {
+        currentStreak,
+        bestStreak,
+        isGoodPrompt
+      };
+    });
+  } catch (error) {
+    console.error('Error saving prompt evaluation:', error);
+    throw error;
+  }
 } 

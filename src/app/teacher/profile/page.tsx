@@ -1,14 +1,17 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useSession } from "next-auth/react";
+import { useEffect, useState, useRef } from "react";
+import { useSession, signOut } from "next-auth/react";
 import { MainLayout } from "@/components/layout/main-layout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Avatar } from "@/components/ui/avatar";
-import { getUser, updateUser, getTeacherDashboard } from "@/lib/firestore";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
+import { getUser, updateUser, getTeacherDashboard, uploadProfilePicture, deleteUserAccount } from "@/lib/firestore";
 import { User, TeacherDashboard } from "@/lib/types";
 import { generateAvatar } from "@/lib/utils";
+import { useToast } from "@/hooks/use-toast";
+import { useRouter } from "next/navigation";
 import { 
   GraduationCap, 
   School, 
@@ -19,15 +22,26 @@ import {
   FileText,
   Award,
   Clock,
-  Target
+  Target,
+  Upload,
+  Trash2,
+  Loader2,
+  X
 } from "lucide-react";
 
 export default function TeacherProfilePage() {
-  const { data: session } = useSession();
+  const { data: session, update } = useSession();
   const [user, setUser] = useState<User | null>(null);
   const [dashboard, setDashboard] = useState<TeacherDashboard | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isEditing, setIsEditing] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const { toast } = useToast();
+  const router = useRouter();
+  
   const [editForm, setEditForm] = useState({
     name: "",
     bio: "",
@@ -83,10 +97,126 @@ export default function TeacherProfilePage() {
         }
       });
       
+      // Update session
+      await update({
+        ...session,
+        user: {
+          ...session?.user,
+          name: editForm.name
+        }
+      });
+      
       await loadUserData();
       setIsEditing(false);
+      
+      toast({
+        title: "Profile Updated",
+        description: "Your profile has been successfully updated.",
+        variant: "default"
+      });
     } catch (error) {
       console.error("Error updating user:", error);
+      
+      toast({
+        title: "Update Failed",
+        description: "There was an error updating your profile.",
+        variant: "destructive"
+      });
+    }
+  };
+  
+  const handleProfilePictureClick = () => {
+    fileInputRef.current?.click();
+  };
+  
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!e.target.files || !e.target.files[0] || !session?.user?.id) return;
+    
+    const file = e.target.files[0];
+    
+    // Validate file size (2MB max)
+    if (file.size > 2 * 1024 * 1024) {
+      toast({
+        title: "File Too Large",
+        description: "Please select an image smaller than 2MB.",
+        variant: "destructive"
+      });
+      return;
+    }
+    
+    // Validate file type
+    if (!file.type.startsWith('image/')) {
+      toast({
+        title: "Invalid File Type",
+        description: "Please select an image file.",
+        variant: "destructive"
+      });
+      return;
+    }
+    
+    setIsUploading(true);
+    
+    try {
+      const avatarUrl = await uploadProfilePicture(session.user.id, file);
+      
+      // Update session
+      await update({
+        ...session,
+        user: {
+          ...session?.user,
+          image: avatarUrl
+        }
+      });
+      
+      // Reload user data
+      await loadUserData();
+      
+      toast({
+        title: "Profile Picture Updated",
+        description: "Your profile picture has been successfully updated.",
+        variant: "default"
+      });
+    } catch (error) {
+      console.error("Error uploading profile picture:", error);
+      toast({
+        title: "Upload Failed",
+        description: "There was an error uploading your profile picture.",
+        variant: "destructive"
+      });
+    } finally {
+      setIsUploading(false);
+    }
+  };
+  
+  const handleDeleteAccount = async () => {
+    if (!session?.user?.id) return;
+    
+    setIsDeleting(true);
+    
+    try {
+      await deleteUserAccount(session.user.id);
+      
+      toast({
+        title: "Account Deleted",
+        description: "Your account has been successfully deleted.",
+        variant: "default"
+      });
+      
+      // Sign out
+      await signOut({ redirect: false });
+      
+      // Redirect to home page
+      router.push('/');
+    } catch (error) {
+      console.error("Error deleting account:", error);
+      setIsDeleting(false);
+      setShowDeleteDialog(false);
+      
+      toast({
+        title: "Deletion Failed",
+        description: "There was an error deleting your account.",
+        variant: "destructive"
+      });
     }
   };
 
@@ -103,6 +233,46 @@ export default function TeacherProfilePage() {
   return (
     <MainLayout>
       <div className="space-y-6">
+        {/* Delete Account Confirmation Dialog */}
+        <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Delete Account</AlertDialogTitle>
+              <AlertDialogDescription className="space-y-2">
+                <p>Are you sure you want to delete your account? This action cannot be undone.</p>
+                <p className="font-medium text-red-600">
+                  This will permanently delete your account, all your supervisions, and any associated data.
+                </p>
+                <p>
+                  • Your active supervisions will be reassigned<br />
+                  • Your reviews and feedback will be removed<br />
+                  • Your personal information will be deleted
+                </p>
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={handleDeleteAccount}
+                disabled={isDeleting}
+                className="bg-red-600 hover:bg-red-700 text-white"
+              >
+                {isDeleting ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    Deleting...
+                  </>
+                ) : (
+                  <>
+                    <Trash2 className="w-4 h-4 mr-2" />
+                    Delete Account
+                  </>
+                )}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+        
         {/* Header */}
         <div className="flex items-center justify-between">
           <div>
@@ -111,11 +281,21 @@ export default function TeacherProfilePage() {
               Manage your teacher information and supervision data 👨‍🏫
             </p>
           </div>
-          {!isEditing && (
+          {!isEditing ? (
             <Button onClick={() => setIsEditing(true)}>
               <Edit className="w-4 h-4 mr-2" />
               Edit Profile
             </Button>
+          ) : (
+            <div className="flex space-x-3">
+              <Button onClick={handleSave}>
+                <Save className="w-4 h-4 mr-2" />
+                Save Changes
+              </Button>
+              <Button variant="outline" onClick={() => setIsEditing(false)}>
+                Cancel
+              </Button>
+            </div>
           )}
         </div>
 
@@ -132,11 +312,32 @@ export default function TeacherProfilePage() {
               <CardContent className="space-y-6">
                 {/* Avatar and Name */}
                 <div className="flex items-center space-x-4">
-                  <Avatar
-                    src={user?.avatar || generateAvatar(user?.email || "")}
-                    alt={user?.name}
-                    size="lg"
-                  />
+                  <div className="relative group">
+                    <Avatar
+                      src={user?.avatar || generateAvatar(user?.email || "")}
+                      alt={user?.name}
+                      size="lg"
+                      className={`cursor-pointer transition-opacity ${isUploading ? 'opacity-50' : 'group-hover:opacity-80'}`}
+                      onClick={handleProfilePictureClick}
+                    />
+                    {isUploading ? (
+                      <div className="absolute inset-0 flex items-center justify-center">
+                        <Loader2 className="w-5 h-5 animate-spin text-gray-700" />
+                      </div>
+                    ) : (
+                      <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                        <Upload className="w-5 h-5 text-white drop-shadow-md" />
+                      </div>
+                    )}
+                    <input
+                      type="file"
+                      ref={fileInputRef}
+                      onChange={handleFileChange}
+                      accept="image/*"
+                      className="hidden"
+                      disabled={isUploading}
+                    />
+                  </div>
                   <div className="flex-1">
                     {isEditing ? (
                       <input
@@ -240,18 +441,21 @@ export default function TeacherProfilePage() {
                   )}
                 </div>
 
-                {/* Action Buttons */}
-                {isEditing && (
-                  <div className="flex space-x-3 pt-4">
-                    <Button onClick={handleSave}>
-                      <Save className="w-4 h-4 mr-2" />
-                      Save Changes
-                    </Button>
-                    <Button variant="outline" onClick={() => setIsEditing(false)}>
-                      Cancel
-                    </Button>
-                  </div>
-                )}
+                {/* Delete Account Button */}
+                <div className="pt-4 border-t border-gray-200">
+                  <Button
+                    variant="destructive"
+                    size="sm"
+                    onClick={() => setShowDeleteDialog(true)}
+                    className="text-sm"
+                  >
+                    <Trash2 className="w-4 h-4 mr-2" />
+                    Delete Account
+                  </Button>
+                  <p className="text-xs text-gray-500 mt-1">
+                    This will permanently delete your account and all associated data.
+                  </p>
+                </div>
               </CardContent>
             </Card>
           </div>
