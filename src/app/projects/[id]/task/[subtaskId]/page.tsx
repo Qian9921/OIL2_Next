@@ -632,6 +632,16 @@ export default function ProjectTaskPage() {
         // Check if we have real scores (not all 50)
         const hasRealScores = [goalScore, contextScore, expectationsScore, sourceScore].some(score => score !== 50);
         
+        // Update promptQualityData with the actual scores from the API
+        promptQualityData = {
+          qualityScore,
+          goalScore,
+          contextScore,
+          expectationsScore,
+          sourceScore,
+          isGoodPrompt
+        };
+        
         let strengths: string[] = [];
         let tips: string[] = [];
         let componentFeedback: {
@@ -658,7 +668,7 @@ export default function ProjectTaskPage() {
               
               // Always save to history if we have participation and subtask IDs
               if (participation?.id && subtask?.id) {
-                console.log("PROMPT FEEDBACK DEBUG - Saving feedback to history");
+                console.log("PROMPT FEEDBACK DEBUG - Saving feedback to history with quality data:", promptQualityData);
                 await savePromptHistory(
                   participation.id,
                   subtask.id,
@@ -751,6 +761,8 @@ export default function ProjectTaskPage() {
                   isGoodPrompt: parsedStreakInfo.isGoodPrompt
                 };
                 
+                console.log("PROMPT QUALITY DEBUG - Updated promptQualityData:", promptQualityData);
+                
                 // Check if it's already in the standardized format
                 let feedbackData = null;
                 
@@ -812,12 +824,12 @@ export default function ProjectTaskPage() {
             if (participation?.id && subtask?.id) {
               // Check if we have any scores or feedback worth saving
               if (hasValidScores || hasValidFeedback || 
-                  (typeof promptQualityData.goalScore === 'number') || 
-                  (typeof promptQualityData.contextScore === 'number') ||
-                  (typeof promptQualityData.expectationsScore === 'number') ||
-                  (typeof promptQualityData.sourceScore === 'number')) {
+                  (typeof promptQualityData.goalScore === 'number' && promptQualityData.goalScore > 0) || 
+                  (typeof promptQualityData.contextScore === 'number' && promptQualityData.contextScore > 0) ||
+                  (typeof promptQualityData.expectationsScore === 'number' && promptQualityData.expectationsScore > 0) ||
+                  (typeof promptQualityData.sourceScore === 'number' && promptQualityData.sourceScore > 0)) {
                 
-                console.log("PROMPT HISTORY DEBUG - Saving prompt with quality data:", promptQualityData);
+                console.log("PROMPT HISTORY DEBUG - Saving prompt with quality data:", JSON.stringify(promptQualityData));
                 try {
                   await savePromptHistory(
                     participation.id,
