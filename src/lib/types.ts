@@ -108,6 +108,18 @@ export interface Participation {
       }
     }>;
   };
+  promptHistory?: {
+    [subtaskId: string]: Array<{
+      timestamp: Timestamp;
+      content: string;
+      qualityScore: number;
+      goalScore?: number;
+      contextScore?: number;
+      expectationsScore?: number;
+      sourceScore?: number;
+      isGoodPrompt?: boolean;
+    }>;
+  };
 }
 
 export interface ChatMessagePart {

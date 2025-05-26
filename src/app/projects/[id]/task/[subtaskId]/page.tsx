@@ -104,6 +104,17 @@ export default function ProjectTaskPage() {
     }
   }> | null>(null);
   const [showHistoryDialog, setShowHistoryDialog] = useState(false);
+  const [promptHistory, setPromptHistory] = useState<Array<{
+    timestamp: Timestamp;
+    content: string;
+    qualityScore: number;
+    goalScore?: number;
+    contextScore?: number;
+    expectationsScore?: number;
+    sourceScore?: number;
+    isGoodPrompt?: boolean;
+  }> | null>(null);
+  const [showPromptHistoryDialog, setShowPromptHistoryDialog] = useState(false);
 
   const MAX_USER_INPUT_LENGTH = 500;
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -226,6 +237,23 @@ export default function ProjectTaskPage() {
     }
   }, [participation, subtask]);
 
+  // Load prompt history when the component mounts
+  useEffect(() => {
+    if (participation && subtask) {
+      // If there's prompt history for this subtask, load it
+      console.log("PROMPT HISTORY DEBUG - Initial check:", {
+        hasPromptHistory: !!participation.promptHistory,
+        subtaskId: subtask.id,
+        allHistoryKeys: participation.promptHistory ? Object.keys(participation.promptHistory) : [],
+        fullPromptHistory: participation.promptHistory
+      });
+      
+      const history = participation.promptHistory?.[subtask.id] || [];
+      console.log(`PROMPT HISTORY DEBUG - Loading for subtask ${subtask.id}:`, history);
+      setPromptHistory(history);
+    }
+  }, [participation, subtask]);
+
   const handleSaveGitHubRepo = async () => {
     if (!participation?.id || !subtask || !project) return;
 
@@ -260,6 +288,155 @@ export default function ProjectTaskPage() {
       showErrorToast(toast, "Error", { description: "Failed to save GitHub repository URL" });
     } finally {
       setIsSavingRepo(false);
+    }
+  };
+
+  // Generic function to update history in Firebase
+  const updateHistoryInFirebase = async <T extends { timestamp: Timestamp }>(
+    participationId: string,
+    subtaskId: string,
+    historyType: 'evaluationHistory' | 'promptHistory',
+    entry: T,
+    currentHistory: T[] | null
+  ): Promise<{ success: boolean; newHistory?: T[]; historyUpdate?: any; error?: any }> => {
+    try {
+      console.log(`HISTORY DEBUG - ${historyType} update starting:`, {
+        participationId,
+        subtaskId,
+        currentHistoryLength: currentHistory?.length || 0,
+        entry
+      });
+      
+      // Create the new history array
+      const newHistory = [...(currentHistory || []), entry];
+      
+      // Log the update for debugging
+      console.log(`HISTORY DEBUG - ${historyType} array created:`, newHistory);
+      
+      // Get the current data from participation
+      const currentData = participation?.[historyType] || {};
+      console.log(`HISTORY DEBUG - Current ${historyType} data:`, currentData);
+      
+      // Prepare the update data
+      const historyUpdate = {
+        ...currentData,
+        [subtaskId]: newHistory
+      };
+      
+      console.log(`HISTORY DEBUG - ${historyType} update prepared:`, historyUpdate);
+      
+      // Update Firebase
+      await updateParticipation(participationId, {
+        [historyType]: historyUpdate
+      });
+      
+      console.log(`HISTORY DEBUG - ${historyType} Firebase update completed`);
+      
+      return { 
+        success: true, 
+        newHistory,
+        historyUpdate
+      };
+    } catch (error) {
+      console.error(`HISTORY DEBUG - Error updating ${historyType}:`, error);
+      return { success: false, error };
+    }
+  };
+
+  // Create a helper function for updating evaluation history
+  const updateEvaluationHistory = async (participationId: string, subtaskId: string, result: any, currentHistory: any[] | null) => {
+    try {
+      // Create the evaluation entry
+      const evaluationResult = {
+        ...result,
+        timestamp: Timestamp.now()
+      };
+      
+      // Update in Firebase and get result
+      const updateResult = await updateHistoryInFirebase<typeof evaluationResult>(
+        participationId,
+        subtaskId,
+        'evaluationHistory',
+        evaluationResult,
+        currentHistory as (typeof evaluationResult)[] | null
+      );
+      
+      if (!updateResult.success) {
+        throw updateResult.error;
+      }
+      
+      // Update the local state
+      if (updateResult.newHistory) {
+        setEvaluationHistory(updateResult.newHistory as any);
+      }
+      
+      return { 
+        success: true, 
+        evaluationHistoryUpdate: updateResult.historyUpdate,
+        latestResult: evaluationResult
+      };
+    } catch (error) {
+      console.error("Error preparing evaluation history:", error);
+      return { success: false, error };
+    }
+  };
+
+  // Helper function to save prompt history
+  const savePromptHistory = async (
+    participationId: string,
+    subtaskId: string,
+    promptContent: string,
+    qualityData: {
+      qualityScore: number;
+      goalScore?: number;
+      contextScore?: number;
+      expectationsScore?: number;
+      sourceScore?: number;
+      isGoodPrompt?: boolean;
+    }
+  ) => {
+    try {
+      console.log("PROMPT HISTORY DEBUG - Starting savePromptHistory with data:", { 
+        participationId, 
+        subtaskId, 
+        promptContent: promptContent.substring(0, 30) + "...", 
+        qualityData,
+        currentHistoryLength: promptHistory?.length || 0
+      });
+      
+      // Create the prompt entry
+      const promptEntry = {
+        timestamp: Timestamp.now(),
+        content: promptContent,
+        ...qualityData
+      };
+      
+      // Define the type for prompt entry
+      type PromptEntryType = typeof promptEntry;
+      
+      // Update in Firebase and get result
+      const updateResult = await updateHistoryInFirebase<PromptEntryType>(
+        participationId,
+        subtaskId,
+        'promptHistory',
+        promptEntry,
+        promptHistory as PromptEntryType[] | null
+      );
+      
+      if (!updateResult.success) {
+        throw updateResult.error;
+      }
+      
+      // Update the local state
+      if (updateResult.newHistory) {
+        console.log("PROMPT HISTORY DEBUG - Setting prompt history state with:", updateResult.newHistory);
+        setPromptHistory(updateResult.newHistory);
+      }
+      
+      return true;
+    } catch (error) {
+      console.error("PROMPT HISTORY DEBUG - Error saving prompt history:", error);
+      return false;
     }
   };
 
@@ -331,6 +508,15 @@ export default function ProjectTaskPage() {
       // Handle prompt quality headers before starting to stream content
       const headers = response.headers;
       let finalPromptStreak = promptStreak;
+      let promptQualityData = {
+        qualityScore: 50, // Default fallback score
+        goalScore: 50,
+        contextScore: 50,
+        expectationsScore: 50,
+        sourceScore: 50,
+        isGoodPrompt: false
+      };
+
       if (headers.get('x-prompt-quality-score')) {
         const qualityScore = parseInt(headers.get('x-prompt-quality-score') || '0');
         const isGoodPrompt = qualityScore >= 60;
@@ -338,6 +524,15 @@ export default function ProjectTaskPage() {
         const contextScore = parseInt(headers.get('x-prompt-context-score') || '0');
         const expectationsScore = parseInt(headers.get('x-prompt-expectations-score') || '0');
         const sourceScore = parseInt(headers.get('x-prompt-source-score') || '0');
+
+        promptQualityData = {
+          qualityScore,
+          goalScore,
+          contextScore,
+          expectationsScore,
+          sourceScore,
+          isGoodPrompt
+        };
 
         const newStreakInfo = isGoodPrompt
           ? { currentStreak: (promptStreak?.currentStreak || 0) + 1, bestStreak: Math.max((promptStreak?.bestStreak || 0), (promptStreak?.currentStreak || 0) + 1), isGoodPrompt }
@@ -360,12 +555,26 @@ export default function ProjectTaskPage() {
             setPromptStreak(parsedStreakInfo);
             finalPromptStreak = parsedStreakInfo;
             const promptEval = headers.get('x-prompt-evaluation');
-            let goalScore = 0, contextScore = 0, expectationsScore = 0, sourceScore = 0;
+            let goalScore = 50, contextScore = 50, expectationsScore = 50, sourceScore = 50;
             if (promptEval) {
               try {
                 const evalData = JSON.parse(decodeURIComponent(promptEval));
-                goalScore = evalData.goalScore || 0; contextScore = evalData.contextScore || 0; expectationsScore = evalData.expectationsScore || 0; sourceScore = evalData.sourceScore || 0;
-              } catch (e) { console.error('Error parsing prompt evaluation:', e); }
+                goalScore = evalData.goalScore || 50; 
+                contextScore = evalData.contextScore || 50; 
+                expectationsScore = evalData.expectationsScore || 50; 
+                sourceScore = evalData.sourceScore || 50;
+                
+                promptQualityData = {
+                  qualityScore: (goalScore + contextScore + expectationsScore + sourceScore) / 4,
+                  goalScore,
+                  contextScore,
+                  expectationsScore,
+                  sourceScore,
+                  isGoodPrompt: parsedStreakInfo.isGoodPrompt
+                };
+              } catch (e) { 
+                console.error('Error parsing prompt evaluation:', e); 
+              }
             }
             if (parsedStreakInfo.isGoodPrompt) {
               showStreakToast(toast, parsedStreakInfo.currentStreak, parsedStreakInfo.bestStreak);
@@ -375,7 +584,24 @@ export default function ProjectTaskPage() {
               showInfoToast(toast, "Prompt Feedback", { description: promptEval ? `Your prompt needs improvement. Scores - Goal: ${goalScore}/100 | Context: ${contextScore}/100 | Expectations: ${expectationsScore}/100 | Source: ${sourceScore}/100` : "Try to be more specific..." });
             }
           }
-        } catch (e) { console.error('Error parsing streak info from header:', e); }
+        } catch (e) { 
+          console.error('Error parsing streak info from header:', e); 
+        }
+      }
+
+      // Always save the prompt to history, even if quality data is default
+      if (participation?.id && subtask?.id) {
+        console.log("PROMPT HISTORY DEBUG - Always saving prompt with quality data:", promptQualityData);
+        try {
+          await savePromptHistory(
+            participation.id,
+            subtask.id,
+            currentInput,
+            promptQualityData
+          );
+        } catch (savingError) {
+          console.error("PROMPT HISTORY DEBUG - Failed to save prompt history:", savingError);
+        }
       }
 
       const reader = response.body.getReader();
@@ -429,7 +655,6 @@ export default function ProjectTaskPage() {
     }
   };
 
-  // Handle task completion
   const handleCompleteTask = async () => {
     if (!participation || !project || !subtask) return;
     
@@ -483,35 +708,31 @@ export default function ProjectTaskPage() {
           }
             
           const result = await response.json();
-          console.log("Evaluation result (full response):", JSON.stringify(result, null, 2)); // Detailed debug log
+          console.log("Evaluation result (full response):", JSON.stringify(result, null, 2));
           setEvaluationFeedback(result);
           
           // Ensure the score is a valid number
           const score = typeof result.score === 'number' ? result.score : 0;
           
-          // Save evaluation result to Firebase regardless of outcome
-          const evaluationResult = {
-            ...result,
-            timestamp: Timestamp.now()
-          };
+          // Save evaluation history
+          const historyUpdate = await updateEvaluationHistory(
+            participation.id, 
+            subtask.id, 
+            result, 
+            evaluationHistory
+          );
           
-          // Update the evaluation history in the state
-          const newHistory = [...(evaluationHistory || []), evaluationResult];
-          setEvaluationHistory(newHistory);
-          
-          // Prepare update data for Firebase
-          const evaluationHistoryUpdate = {
-            ...(participation.evaluationHistory || {}),
-            [subtask.id]: newHistory
-          };
-          
-          // Update Firebase with the new evaluation history
-          await updateParticipation(participation.id, {
-            evaluationHistory: evaluationHistoryUpdate
-          });
+          if (!historyUpdate.success) {
+            throw new Error("Failed to prepare evaluation history update");
+          }
           
           // Check if the score meets the threshold (80%)
           if (!result.score || typeof result.score !== 'number' || score < 80) {
+            // Even if the score is low, save the evaluation history to Firebase
+            await updateParticipation(participation.id, {
+              evaluationHistory: historyUpdate.evaluationHistoryUpdate
+            });
+            
             showErrorToast(toast, "Task Incomplete", { 
               description: `Your work does not meet the required criteria (${score}%).`
             });
@@ -527,18 +748,19 @@ export default function ProjectTaskPage() {
           const totalSubtasks = project.subtasks.length;
           const newProgress = Math.round((newCompletedSubtasks.length / totalSubtasks) * 100);
           
+          // Single Firebase update with all changes
           await updateParticipation(participation.id, {
             completedSubtasks: newCompletedSubtasks,
             progress: newProgress,
-            evaluationHistory: evaluationHistoryUpdate
+            evaluationHistory: historyUpdate.evaluationHistoryUpdate
           });
           
-          // Update participation in the state
+          // Update local state
           setParticipation({
             ...participation,
             completedSubtasks: newCompletedSubtasks,
             progress: newProgress,
-            evaluationHistory: evaluationHistoryUpdate
+            evaluationHistory: historyUpdate.evaluationHistoryUpdate
           });
           
           setIsSubtaskCompletedByStudent(true);
@@ -566,6 +788,34 @@ export default function ProjectTaskPage() {
       setIsEvaluating(false);
       setIsPageDisabled(false);
     }
+  };
+
+  // Function to handle viewing prompt history
+  const handleViewPromptHistory = () => {
+    console.log("PROMPT HISTORY DEBUG - handleViewPromptHistory called, current history:", promptHistory);
+    
+    // Always show the dialog, even if history is empty
+    setShowPromptHistoryDialog(true);
+  };
+
+  // Add a floating "View Prompts" button that's more visible
+  const FloatingPromptHistoryButton = () => {
+    return (
+      <Button
+        variant="outline"
+        size="sm"
+        onClick={handleViewPromptHistory}
+        className="flex items-center gap-2 border-purple-200 bg-purple-50 hover:bg-purple-100 text-purple-700"
+      >
+        <Info className="w-4 h-4" />
+        <span>View Prompts</span>
+        {promptHistory && promptHistory.length > 0 && (
+          <span className="bg-purple-600 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center font-bold">
+            {promptHistory.length}
+          </span>
+        )}
+      </Button>
+    );
   };
 
   // Handle clearing chat history
@@ -656,6 +906,44 @@ export default function ProjectTaskPage() {
     }
   };
 
+  // Custom component for CardDescription with lock status to avoid hydration errors
+  const CardDescriptionWithLock = ({ 
+    project, 
+    isLocked 
+  }: { 
+    project: Project | null;
+    isLocked: boolean;
+  }) => {
+    return (
+      <>
+        <CardDescription>
+          Part of: {project?.title}
+        </CardDescription>
+        {isLocked && (
+          <div className="flex items-center mt-1">
+            <div className="bg-amber-100 text-amber-800 text-xs px-2 py-0.5 rounded-full flex items-center">
+              <Lock className="w-3 h-3 mr-1" />
+              <span>Complete previous tasks first</span>
+            </div>
+          </div>
+        )}
+      </>
+    );
+  };
+
+  // Custom component for AlertDialogDescription to avoid hydration errors
+  const SafeAlertDialogDescription = ({ children }: { children: React.ReactNode }) => {
+    if (typeof children === 'string') {
+      return <AlertDialogDescription>{children}</AlertDialogDescription>;
+    }
+    
+    return (
+      <AlertDialogDescription>
+        <span className="inline-block">{children}</span>
+      </AlertDialogDescription>
+    );
+  };
+
   if (isLoading && !project) {
     return (
       <MainLayout>
@@ -665,7 +953,7 @@ export default function ProjectTaskPage() {
       </MainLayout>
     );
   }
-
+  
   if (!project || !subtask) {
     return (
       <MainLayout>
@@ -737,17 +1025,32 @@ export default function ProjectTaskPage() {
           <div className="flex flex-col h-[calc(100vh-12rem)]">
             <Card className="flex flex-col h-full">
               <CardHeader className="flex-shrink-0 pb-2">
-                <CardTitle className="flex items-center text-xl">
+                <div className="flex items-center justify-between">
+                  <CardTitle className="flex items-center text-xl">
                     <BookOpen className="w-5 h-5 mr-2 text-blue-600" />
-                  {subtask?.title}
-                </CardTitle>
-                <CardDescription>Part of: {project?.title}</CardDescription>
+                    {subtask?.title}
+                  </CardTitle>
+                  {project && (
+                    <div className="flex items-center text-xs text-gray-500 bg-gray-50 px-2 py-1 rounded">
+                      <span className="font-medium">
+                        Task {subtask?.order || '?'} of {project.subtasks.length}
+                      </span>
+                    </div>
+                  )}
+                </div>
+                <CardDescriptionWithLock 
+                  project={project} 
+                  isLocked={!isCurrentSequentially && !isSubtaskCompletedByStudent} 
+                />
               </CardHeader>
               <CardContent className="flex-grow overflow-y-auto py-4 min-h-0">
                 <div className="space-y-4">
                   {subtask?.id === GITHUB_SUBMISSION_SUBTASK_ID ? (
                   <div className="space-y-4 py-4">
-                    <p className="text-gray-700 text-sm leading-normal">{subtask.description}</p>
+                    <div className="bg-blue-50 p-3 rounded-md border border-blue-100 mb-4">
+                      <h3 className="text-sm font-medium text-blue-800 mb-1">About This Task</h3>
+                      <p className="text-gray-700 text-sm leading-normal">{subtask.description}</p>
+                    </div>
                     <div>
                       <label htmlFor="githubRepoUrl" className="block text-sm font-medium text-gray-700 mb-1">
                         GitHub Repository URL:
@@ -790,30 +1093,42 @@ export default function ProjectTaskPage() {
                   </div>
                 ) : (
                   <>
-                    <div>
-                      <h4 className="font-semibold text-sm mb-1">Description:</h4>
-                        <p className="text-gray-700 text-sm leading-normal">{subtask?.description}</p>
+                    <div className="bg-blue-50 p-3 rounded-md border border-blue-100 mb-4">
+                      <h3 className="text-sm font-medium text-blue-800 mb-1">Task Description</h3>
+                      <p className="text-gray-700 text-sm leading-normal">{subtask?.description}</p>
                     </div>
-                      {subtask?.estimatedHours && (
-                      <div>
-                        <h4 className="font-semibold text-sm mb-1">Estimated Time:</h4>
-                          <p className="text-gray-700 text-sm">{subtask?.estimatedHours} hours</p>
+                      
+                    {subtask?.estimatedHours && (
+                      <div className="flex items-center border-b pb-3">
+                        <Clock className="w-4 h-4 text-gray-500 mr-2" />
+                        <h4 className="text-sm font-medium text-gray-700">Estimated Time: <span className="font-normal">{subtask?.estimatedHours} hours</span></h4>
                       </div>
                     )}
-                      {subtask?.resources && subtask?.resources.length > 0 && (
-                      <div>
-                        <h4 className="font-semibold text-sm mb-1">Suggested Resources:</h4>
-                        <ul className="list-disc list-inside text-sm text-gray-700 space-y-0.5">
-                            {subtask?.resources.map((res, i) => <li key={i}>{res}</li>)}
+                      
+                    {subtask?.resources && subtask?.resources.length > 0 && (
+                      <div className="border-b pb-3">
+                        <h4 className="flex items-center text-sm font-medium text-gray-700 mb-2">
+                          <BookOpen className="w-4 h-4 text-gray-500 mr-2" />
+                          Suggested Resources:
+                        </h4>
+                        <ul className="list-disc list-inside text-sm text-gray-700 space-y-1 pl-6">
+                          {subtask?.resources.map((res, i) => <li key={i}>{res}</li>)}
                         </ul>
                       </div>
                     )}
-                      {subtask?.completionCriteria && subtask?.completionCriteria.length > 0 && (
+                      
+                    {subtask?.completionCriteria && subtask?.completionCriteria.length > 0 && (
                       <div>
-                        <h4 className="font-semibold text-sm mb-1">To Complete This Task:</h4>
-                        <ul className="list-disc list-inside text-sm text-gray-700 space-y-0.5">
+                        <h4 className="flex items-center text-sm font-medium text-gray-700 mb-2">
+                          <CheckCircle className="w-4 h-4 text-green-600 mr-2" />
+                          Completion Criteria:
+                        </h4>
+                        <div className="bg-gray-50 p-3 rounded-md border border-gray-200">
+                          <p className="text-sm text-gray-600 mb-2">To complete this task, you must:</p>
+                          <ul className="list-disc list-inside text-sm text-gray-700 space-y-1 pl-6">
                             {subtask?.completionCriteria.map((crit, i) => <li key={i}>{crit}</li>)}
-                        </ul>
+                          </ul>
+                        </div>
                       </div>
                     )}
                     </>
@@ -865,19 +1180,26 @@ export default function ProjectTaskPage() {
                     <Bot className="w-6 h-6 mr-2 text-purple-600" />
                     AI Task Assistant
                   </div>
-                  {chatMessages.some(msg => msg.role === 'user' || msg.role === 'model') && (
-                    <Button 
-                      variant="outline" 
-                      size="sm" 
-                      onClick={handleClearChatIntent}
-                      disabled={isChatLoading || isSubtaskCompletedByStudent}
-                      title="Clear chat history"
-                    >
-                      <Trash2 className="w-4 h-4 mr-1.5" />
-                      Clear Chat
-                    </Button>
-                  )}
+                  <div className="flex items-center gap-2">
+                    {!isSubtaskCompletedByStudent && <FloatingPromptHistoryButton />}
+                    
+                    {chatMessages.some(msg => msg.role === 'user' || msg.role === 'model') && (
+                      <Button 
+                        variant="outline" 
+                        size="sm" 
+                        onClick={handleClearChatIntent}
+                        disabled={isChatLoading || isSubtaskCompletedByStudent}
+                        title="Clear chat history"
+                      >
+                        <Trash2 className="w-4 h-4 mr-1.5" />
+                        Clear Chat
+                      </Button>
+                    )}
+                  </div>
                 </CardTitle>
+                <CardDescription>
+                  Ask questions about this task and get help from our AI assistant
+                </CardDescription>
               </CardHeader>
               
               <CardContent 
@@ -1036,9 +1358,9 @@ export default function ProjectTaskPage() {
           <AlertDialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
             <AlertDialogHeader>
               <AlertDialogTitle>Task Evaluation Results</AlertDialogTitle>
-              <AlertDialogDescription>
+              <SafeAlertDialogDescription>
                 Review your evaluation results below
-              </AlertDialogDescription>
+              </SafeAlertDialogDescription>
             </AlertDialogHeader>
 
             {evaluationFeedback && (
@@ -1140,9 +1462,9 @@ export default function ProjectTaskPage() {
           <AlertDialogContent>
             <AlertDialogHeader>
               <AlertDialogTitle>Clear Chat History</AlertDialogTitle>
-              <AlertDialogDescription>
+              <SafeAlertDialogDescription>
                 Are you sure you want to clear the chat history? This action cannot be undone.
-              </AlertDialogDescription>
+              </SafeAlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
               <AlertDialogCancel>Cancel</AlertDialogCancel>
@@ -1158,9 +1480,9 @@ export default function ProjectTaskPage() {
           <AlertDialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
             <AlertDialogHeader>
               <AlertDialogTitle>Evaluation History</AlertDialogTitle>
-              <AlertDialogDescription>
+              <SafeAlertDialogDescription>
                 Your previous evaluation attempts for this task
-              </AlertDialogDescription>
+              </SafeAlertDialogDescription>
             </AlertDialogHeader>
             
             <div className="py-4 space-y-6">
@@ -1248,6 +1570,166 @@ export default function ProjectTaskPage() {
             
             <AlertDialogFooter>
               <AlertDialogAction onClick={() => setShowHistoryDialog(false)}>
+                Close
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+
+        {/* Prompt History Dialog */}
+        <AlertDialog open={showPromptHistoryDialog} onOpenChange={setShowPromptHistoryDialog}>
+          <AlertDialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+            <AlertDialogHeader>
+              <AlertDialogTitle>Prompt History</AlertDialogTitle>
+              <SafeAlertDialogDescription>
+                Your previous prompts and their quality scores - learn what makes a good prompt!
+              </SafeAlertDialogDescription>
+            </AlertDialogHeader>
+            
+            <div className="py-4 space-y-6">
+              {promptHistory?.length ? (
+                <div className="space-y-6">
+                  {/* Sort prompts by quality score (highest first) */}
+                  {[...promptHistory]
+                    .sort((a, b) => b.qualityScore - a.qualityScore)
+                    .map((prompt, index) => {
+                    const date = prompt.timestamp?.toDate();
+                    const formattedDate = date ? new Intl.DateTimeFormat('en-US', {
+                      dateStyle: 'medium',
+                      timeStyle: 'short'
+                    }).format(date) : 'Unknown Date';
+                    
+                    // Calculate color based on quality score
+                    const getScoreColor = (score: number) => {
+                      if (score >= 90) return 'bg-purple-100 text-purple-800';
+                      if (score >= 80) return 'bg-green-100 text-green-800';
+                      if (score >= 60) return 'bg-blue-100 text-blue-800';
+                      if (score >= 40) return 'bg-yellow-100 text-yellow-800';
+                      return 'bg-red-100 text-red-800';
+                    };
+                    
+                    // Format score with emoji
+                    const formatScore = (score: number) => {
+                      if (score >= 90) return `${score}% 🌟`;
+                      if (score >= 80) return `${score}% ✨`;
+                      if (score >= 60) return `${score}% ✅`;
+                      if (score >= 40) return `${score}% ⚠️`;
+                      return `${score}% ❗`;
+                    };
+                    
+                    return (
+                      <div key={index} className="border rounded-lg overflow-hidden">
+                        <div className="bg-gray-50 p-3 flex justify-between items-center border-b">
+                          <div className="flex items-center">
+                            <span className="font-medium">{prompt.isGoodPrompt ? 'Good Prompt' : 'Needs Improvement'}</span>
+                            <span className="mx-2">•</span>
+                            <span className="text-sm text-gray-500">{formattedDate}</span>
+                          </div>
+                          <span className={`px-2 py-1 text-xs font-medium rounded-full ${getScoreColor(prompt.qualityScore)}`}>
+                            {formatScore(prompt.qualityScore)}
+                          </span>
+                        </div>
+                        
+                        <div className="p-4 space-y-4">
+                          {/* Prompt Content */}
+                          <div>
+                            <h4 className="font-semibold text-sm mb-1">Prompt:</h4>
+                            <div className="bg-gray-50 p-3 rounded-md text-sm border">
+                              {prompt.content}
+                            </div>
+                          </div>
+                          
+                          {/* Component Scores */}
+                          <div>
+                            <h4 className="font-semibold text-sm mb-2">Score Breakdown:</h4>
+                            <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
+                              <div className="bg-blue-50 p-2 rounded-md border border-blue-100">
+                                <p className="text-xs text-gray-600">Goal</p>
+                                <div className="flex justify-between items-center">
+                                  <span className="font-medium text-sm">{prompt.goalScore}/100</span>
+                                  <div className="w-16 bg-gray-200 rounded-full h-1.5">
+                                    <div className="bg-blue-600 h-1.5 rounded-full" style={{ width: `${prompt.goalScore}%` }}></div>
+                                  </div>
+                                </div>
+                              </div>
+                              <div className="bg-green-50 p-2 rounded-md border border-green-100">
+                                <p className="text-xs text-gray-600">Context</p>
+                                <div className="flex justify-between items-center">
+                                  <span className="font-medium text-sm">{prompt.contextScore}/100</span>
+                                  <div className="w-16 bg-gray-200 rounded-full h-1.5">
+                                    <div className="bg-green-600 h-1.5 rounded-full" style={{ width: `${prompt.contextScore}%` }}></div>
+                                  </div>
+                                </div>
+                              </div>
+                              <div className="bg-purple-50 p-2 rounded-md border border-purple-100">
+                                <p className="text-xs text-gray-600">Expectations</p>
+                                <div className="flex justify-between items-center">
+                                  <span className="font-medium text-sm">{prompt.expectationsScore}/100</span>
+                                  <div className="w-16 bg-gray-200 rounded-full h-1.5">
+                                    <div className="bg-purple-600 h-1.5 rounded-full" style={{ width: `${prompt.expectationsScore}%` }}></div>
+                                  </div>
+                                </div>
+                              </div>
+                              <div className="bg-amber-50 p-2 rounded-md border border-amber-100">
+                                <p className="text-xs text-gray-600">Source</p>
+                                <div className="flex justify-between items-center">
+                                  <span className="font-medium text-sm">{prompt.sourceScore}/100</span>
+                                  <div className="w-16 bg-gray-200 rounded-full h-1.5">
+                                    <div className="bg-amber-600 h-1.5 rounded-full" style={{ width: `${prompt.sourceScore}%` }}></div>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                          
+                          {/* Tips based on scores */}
+                          <div>
+                            <h4 className="font-semibold text-sm mb-1">Tips for Improvement:</h4>
+                            <ul className="list-disc pl-5 space-y-1 text-sm">
+                              {(prompt.goalScore !== undefined && prompt.goalScore < 70) && (
+                                <li className="text-gray-700">Be more specific about what you're trying to achieve</li>
+                              )}
+                              {(prompt.contextScore !== undefined && prompt.contextScore < 70) && (
+                                <li className="text-gray-700">Provide more context about your task or problem</li>
+                              )}
+                              {(prompt.expectationsScore !== undefined && prompt.expectationsScore < 70) && (
+                                <li className="text-gray-700">Clarify what kind of response you expect</li>
+                              )}
+                              {(prompt.sourceScore !== undefined && prompt.sourceScore < 70) && (
+                                <li className="text-gray-700">Include references or examples to guide the response</li>
+                              )}
+                              {(prompt.goalScore !== undefined && prompt.contextScore !== undefined && 
+                                prompt.expectationsScore !== undefined && prompt.sourceScore !== undefined &&
+                                prompt.goalScore >= 70 && prompt.contextScore >= 70 && 
+                                prompt.expectationsScore >= 70 && prompt.sourceScore >= 70) && (
+                                <li className="text-green-700">Great prompt! It's clear, specific, and provides good context.</li>
+                              )}
+                            </ul>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  <div className="text-center py-6">
+                    <Info className="w-12 h-12 mx-auto text-purple-500 mb-2" />
+                    <p className="text-gray-600 mb-2">No prompt history found for this task yet.</p>
+                    <p className="text-gray-500 text-sm">Try sending a message in the chat to generate prompt feedback.</p>
+                  </div>
+                  
+                  <div className="bg-amber-50 border border-amber-200 p-4 rounded-md mt-4">
+                    <h3 className="font-medium text-amber-800 mb-2">Debugging Information</h3>
+                    <p className="text-sm text-amber-700 mb-2">Current prompt history state: {promptHistory ? `Array with ${promptHistory.length} items` : 'null'}</p>
+                    <p className="text-sm text-amber-700">Check browser console for detailed logs.</p>
+                  </div>
+                </div>
+              )}
+            </div>
+            
+            <AlertDialogFooter>
+              <AlertDialogAction onClick={() => setShowPromptHistoryDialog(false)}>
                 Close
               </AlertDialogAction>
             </AlertDialogFooter>
