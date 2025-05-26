@@ -19,11 +19,15 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { formatRelativeTime } from "@/lib/utils";
+import { PromptQualitySummary, RecentPromptsCard, PromptTipsCard } from "@/components/task/dashboard-components";
+import { useRouter } from "next/navigation";
 
 export default function StudentDashboardPage() {
   const { data: session } = useSession();
   const [dashboard, setDashboard] = useState<StudentDashboard | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [showAllPrompts, setShowAllPrompts] = useState(false);
+  const router = useRouter();
 
   useEffect(() => {
     if (session?.user?.id) {
@@ -49,6 +53,10 @@ export default function StudentDashboardPage() {
       </MainLayout>
     );
   }
+
+  // Check if prompt metrics are available
+  const hasPromptMetrics = dashboard?.promptQualityMetrics && 
+    dashboard.promptQualityMetrics.totalPrompts > 0;
 
   return (
     <MainLayout>
@@ -99,22 +107,31 @@ export default function StudentDashboardPage() {
             </CardContent>
           </Card>
 
-          <Card className="card-hover">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium text-gray-600">
-                Learning Hours
-              </CardTitle>
-              <Clock className="h-4 w-4 text-purple-600" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-purple-600">
-                {dashboard?.totalHours || 0}
-              </div>
-              <p className="text-xs text-gray-500">
-                Hours invested
-              </p>
-            </CardContent>
-          </Card>
+          {hasPromptMetrics ? (
+            <PromptQualitySummary
+              averageScore={dashboard!.promptQualityMetrics!.averageScore}
+              bestStreak={dashboard!.promptQualityMetrics!.bestStreak}
+              totalPrompts={dashboard!.promptQualityMetrics!.totalPrompts}
+              goodPromptsPercentage={dashboard!.promptQualityMetrics!.goodPromptsPercentage}
+            />
+          ) : (
+            <Card className="card-hover">
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium text-gray-600">
+                  Learning Hours
+                </CardTitle>
+                <Clock className="h-4 w-4 text-purple-600" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold text-purple-600">
+                  {dashboard?.totalHours || 0}
+                </div>
+                <p className="text-xs text-gray-500">
+                  Hours invested
+                </p>
+              </CardContent>
+            </Card>
+          )}
 
           <Card className="card-hover">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -135,82 +152,98 @@ export default function StudentDashboardPage() {
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Recent Activity */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center space-x-2">
-                <TrendingUp className="w-5 h-5 text-blue-600" />
-                <span>Recent Activity</span>
-              </CardTitle>
-              <CardDescription>
-                Your latest learning milestones
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              {dashboard?.recentActivity && dashboard.recentActivity.length > 0 ? (
-                <div className="space-y-4">
-                  {dashboard.recentActivity.map((activity) => (
-                    <div key={activity.id} className="flex items-start space-x-3 p-3 bg-gray-50 rounded-lg">
-                      <div className="w-2 h-2 bg-blue-500 rounded-full mt-2" />
-                      <div className="flex-1">
-                        <p className="font-medium text-gray-900">{activity.title}</p>
-                        <p className="text-sm text-gray-600">{activity.description}</p>
-                        <p className="text-xs text-gray-500 mt-1">
-                          {formatRelativeTime(activity.timestamp.toDate())}
-                        </p>
+          {/* Recent Activity / Prompt History Section */}
+          {hasPromptMetrics ? (
+            <RecentPromptsCard 
+              prompts={dashboard!.promptQualityMetrics!.recentPrompts}
+              onViewAllClick={() => router.push('/student/prompts-history')}
+            />
+          ) : (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center space-x-2">
+                  <TrendingUp className="w-5 h-5 text-blue-600" />
+                  <span>Recent Activity</span>
+                </CardTitle>
+                <CardDescription>
+                  Your latest learning milestones
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                {dashboard?.recentActivity && dashboard.recentActivity.length > 0 ? (
+                  <div className="space-y-4">
+                    {dashboard.recentActivity.map((activity) => (
+                      <div key={activity.id} className="flex items-start space-x-3 p-3 bg-gray-50 rounded-lg">
+                        <div className="w-2 h-2 bg-blue-500 rounded-full mt-2" />
+                        <div className="flex-1">
+                          <p className="font-medium text-gray-900">{activity.title}</p>
+                          <p className="text-sm text-gray-600">{activity.description}</p>
+                          <p className="text-xs text-gray-500 mt-1">
+                            {formatRelativeTime(activity.timestamp.toDate())}
+                          </p>
+                        </div>
                       </div>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="text-center py-8 text-gray-500">
-                  <BookOpen className="w-12 h-12 mx-auto mb-3 text-gray-300" />
-                  <p>No recent activity</p>
-                  <p className="text-sm">Start a project to see your progress here!</p>
-                </div>
-              )}
-            </CardContent>
-          </Card>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-center py-8 text-gray-500">
+                    <BookOpen className="w-12 h-12 mx-auto mb-3 text-gray-300" />
+                    <p>No recent activity</p>
+                    <p className="text-sm">Start a project to see your progress here!</p>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
 
-          {/* Upcoming Deadlines */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center space-x-2">
-                <Calendar className="w-5 h-5 text-purple-600" />
-                <span>Upcoming Deadlines</span>
-              </CardTitle>
-              <CardDescription>
-                Important dates to remember
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              {dashboard?.upcomingDeadlines && dashboard.upcomingDeadlines.length > 0 ? (
-                <div className="space-y-4">
-                  {dashboard.upcomingDeadlines.map((deadline) => (
-                    <div key={deadline.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                      <div className="flex-1">
-                        <p className="font-medium text-gray-900">{deadline.title}</p>
-                        <p className="text-sm text-gray-600">{deadline.projectTitle}</p>
-                        <p className="text-xs text-gray-500">
-                          Due: {deadline.dueDate.toDate().toLocaleDateString()}
-                        </p>
+          {/* Prompt Tips or Deadlines */}
+          {hasPromptMetrics ? (
+            <PromptTipsCard
+              averageGoalScore={dashboard!.promptQualityMetrics!.averageGoalScore}
+              averageContextScore={dashboard!.promptQualityMetrics!.averageContextScore}
+              averageExpectationsScore={dashboard!.promptQualityMetrics!.averageExpectationsScore}
+              averageSourceScore={dashboard!.promptQualityMetrics!.averageSourceScore}
+            />
+          ) : (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center space-x-2">
+                  <Calendar className="w-5 h-5 text-purple-600" />
+                  <span>Upcoming Deadlines</span>
+                </CardTitle>
+                <CardDescription>
+                  Important dates to remember
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                {dashboard?.upcomingDeadlines && dashboard.upcomingDeadlines.length > 0 ? (
+                  <div className="space-y-4">
+                    {dashboard.upcomingDeadlines.map((deadline) => (
+                      <div key={deadline.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                        <div className="flex-1">
+                          <p className="font-medium text-gray-900">{deadline.title}</p>
+                          <p className="text-sm text-gray-600">{deadline.projectTitle}</p>
+                          <p className="text-xs text-gray-500">
+                            Due: {deadline.dueDate.toDate().toLocaleDateString()}
+                          </p>
+                        </div>
+                        <div className={`w-3 h-3 rounded-full ${
+                          deadline.priority === 'high' ? 'bg-red-500' :
+                          deadline.priority === 'medium' ? 'bg-yellow-500' : 'bg-green-500'
+                        }`} />
                       </div>
-                      <div className={`w-3 h-3 rounded-full ${
-                        deadline.priority === 'high' ? 'bg-red-500' :
-                        deadline.priority === 'medium' ? 'bg-yellow-500' : 'bg-green-500'
-                      }`} />
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="text-center py-8 text-gray-500">
-                  <Calendar className="w-12 h-12 mx-auto mb-3 text-gray-300" />
-                  <p>No upcoming deadlines</p>
-                  <p className="text-sm">You're all caught up!</p>
-                </div>
-              )}
-            </CardContent>
-          </Card>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-center py-8 text-gray-500">
+                    <Calendar className="w-12 h-12 mx-auto mb-3 text-gray-300" />
+                    <p>No upcoming deadlines</p>
+                    <p className="text-sm">You're all caught up!</p>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
         </div>
 
         {/* Quick Actions */}

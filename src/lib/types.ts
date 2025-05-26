@@ -118,6 +118,16 @@ export interface Participation {
       expectationsScore?: number;
       sourceScore?: number;
       isGoodPrompt?: boolean;
+      feedback?: {
+        tips: string[];
+        strengths: string[];
+        componentFeedback: {
+          goal?: string;
+          context?: string;
+          expectations?: string;
+          source?: string;
+        }
+      } | null;
     }>;
   };
 }
@@ -182,6 +192,36 @@ export interface StudentDashboard {
   certificates: number;
   recentActivity: Activity[];
   upcomingDeadlines: Deadline[];
+  promptQualityMetrics?: {
+    totalPrompts: number;
+    averageScore: number;
+    goodPromptsPercentage: number;
+    bestStreak: number;
+    averageGoalScore: number;
+    averageContextScore: number;
+    averageExpectationsScore: number;
+    averageSourceScore: number;
+    recentPrompts: Array<{
+      id: string;
+      projectId: string;
+      projectTitle: string;
+      subtaskId: string;
+      taskTitle: string;
+      content: string;
+      qualityScore: number;
+      timestamp: Date;
+      feedback?: {
+        tips: string[];
+        strengths: string[];
+        componentFeedback?: {
+          goal?: string;
+          context?: string;
+          expectations?: string;
+          source?: string;
+        };
+      };
+    }>;
+  };
 }
 
 export interface NGODashboard {

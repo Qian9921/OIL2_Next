@@ -35,6 +35,16 @@ type PromptHistoryEntry = {
   expectationsScore?: number;
   sourceScore?: number;
   isGoodPrompt?: boolean;
+  feedback?: {
+    strengths: string[];
+    tips: string[];
+    componentFeedback?: {
+      goal?: string;
+      context?: string;
+      expectations?: string;
+      source?: string;
+    };
+  };
 };
 
 export const EvaluationHistoryItem = ({ 
@@ -136,6 +146,54 @@ export const PromptHistoryItem = ({
           </div>
         </div>
         
+        {/* Personalized Feedback Section */}
+        {prompt.feedback && (prompt.feedback.strengths.length > 0 || prompt.feedback.tips.length > 0) && (
+          <div className="bg-purple-50 border border-purple-100 rounded-md p-3">
+            <h4 className="font-semibold text-sm text-purple-900 mb-2">Feedback:</h4>
+            
+            {prompt.feedback.strengths.length > 0 && (
+              <div className="mb-2">
+                <p className="text-green-700 text-xs font-medium">Strengths:</p>
+                <ul className="list-disc list-inside text-green-700 text-xs pl-1 space-y-0.5">
+                  {prompt.feedback.strengths.map((strength, i) => (
+                    <li key={i}>{strength}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            
+            {prompt.feedback.tips.length > 0 && (
+              <div>
+                <p className="text-purple-700 text-xs font-medium">Tips for improvement:</p>
+                <ul className="list-disc list-inside text-purple-700 text-xs pl-1 space-y-0.5">
+                  {prompt.feedback.tips.map((tip, i) => (
+                    <li key={i}>{tip}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            
+            {prompt.feedback.componentFeedback && Object.keys(prompt.feedback.componentFeedback).length > 0 && (
+              <div className="mt-2 pt-2 border-t border-purple-100">
+                <p className="text-xs text-purple-700">
+                  {prompt.feedback.componentFeedback.goal && (
+                    <span className="block mb-1">🎯 <b>Goal:</b> {prompt.feedback.componentFeedback.goal}</span>
+                  )}
+                  {prompt.feedback.componentFeedback.context && (
+                    <span className="block mb-1">📝 <b>Context:</b> {prompt.feedback.componentFeedback.context}</span>
+                  )}
+                  {prompt.feedback.componentFeedback.expectations && (
+                    <span className="block mb-1">🔍 <b>Expectations:</b> {prompt.feedback.componentFeedback.expectations}</span>
+                  )}
+                  {prompt.feedback.componentFeedback.source && (
+                    <span className="block mb-1">📚 <b>References:</b> {prompt.feedback.componentFeedback.source}</span>
+                  )}
+                </p>
+              </div>
+            )}
+          </div>
+        )}
+        
         {/* Component Scores */}
         <div>
           <h4 className="font-semibold text-sm mb-2">Score Breakdown:</h4>
@@ -169,31 +227,6 @@ export const PromptHistoryItem = ({
               barColor="bg-amber-600" 
             />
           </div>
-        </div>
-        
-        {/* Tips based on scores */}
-        <div>
-          <h4 className="font-semibold text-sm mb-1">Tips for Improvement:</h4>
-          <ul className="list-disc pl-5 space-y-1 text-sm">
-            {(prompt.goalScore !== undefined && prompt.goalScore < 70) && (
-              <li className="text-gray-700">Be more specific about what you're trying to achieve</li>
-            )}
-            {(prompt.contextScore !== undefined && prompt.contextScore < 70) && (
-              <li className="text-gray-700">Provide more context about your task or problem</li>
-            )}
-            {(prompt.expectationsScore !== undefined && prompt.expectationsScore < 70) && (
-              <li className="text-gray-700">Clarify what kind of response you expect</li>
-            )}
-            {(prompt.sourceScore !== undefined && prompt.sourceScore < 70) && (
-              <li className="text-gray-700">Include references or examples to guide the response</li>
-            )}
-            {(prompt.goalScore !== undefined && prompt.contextScore !== undefined && 
-              prompt.expectationsScore !== undefined && prompt.sourceScore !== undefined &&
-              prompt.goalScore >= 70 && prompt.contextScore >= 70 && 
-              prompt.expectationsScore >= 70 && prompt.sourceScore >= 70) && (
-              <li className="text-green-700">Great prompt! It's clear, specific, and provides good context.</li>
-            )}
-          </ul>
         </div>
       </div>
     </div>

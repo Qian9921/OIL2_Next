@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import { MainLayout } from '@/components/layout/main-layout';
@@ -61,6 +61,16 @@ export default function ProjectTaskPage() {
   const [isProgressCollapsed, setIsProgressCollapsed] = useState(false);
   const [promptStreak, setPromptStreak] = useState<{ currentStreak: number; bestStreak: number; isGoodPrompt: boolean } | null>(null);
   const [isStreakAnimating, setIsStreakAnimating] = useState(false);
+  const [currentPromptFeedback, setCurrentPromptFeedback] = useState<{
+    tips: string[];
+    strengths: string[];
+    componentFeedback: {
+      goal?: string;
+      context?: string;
+      expectations?: string;
+      source?: string;
+    }
+  } | null>(null);
   const [evaluationFeedback, setEvaluationFeedback] = useState<{
     score: number;
     feedback: string;
@@ -396,7 +406,17 @@ export default function ProjectTaskPage() {
       expectationsScore?: number;
       sourceScore?: number;
       isGoodPrompt?: boolean;
-    }
+    },
+    feedback?: {
+      tips: string[];
+      strengths: string[];
+      componentFeedback: {
+        goal?: string;
+        context?: string;
+        expectations?: string;
+        source?: string;
+      }
+    } | null
   ) => {
     try {
       console.log("PROMPT HISTORY DEBUG - Starting savePromptHistory with data:", { 
@@ -411,7 +431,8 @@ export default function ProjectTaskPage() {
       const promptEntry = {
         timestamp: Timestamp.now(),
         content: promptContent,
-        ...qualityData
+        ...qualityData,
+        feedback: feedback || null
       };
       
       // Define the type for prompt entry
@@ -537,6 +558,84 @@ export default function ProjectTaskPage() {
           isGoodPrompt
         };
 
+        // Generate personalized feedback based on component scores
+        const strengths = [];
+        const tips = [];
+        const componentFeedback: {
+          goal?: string;
+          context?: string;
+          expectations?: string;
+          source?: string;
+        } = {};
+
+        // Add strengths for high scores
+        if (goalScore >= 80) strengths.push("Your prompt clearly states what you want to achieve");
+        if (contextScore >= 80) strengths.push("You provided helpful context for your question");
+        if (expectationsScore >= 80) strengths.push("Your expectations are well-defined");
+        if (sourceScore >= 80) strengths.push("Good use of examples or references");
+
+        // Generate specific feedback for each component
+        if (goalScore < 70) {
+          tips.push("Be more specific about what you're trying to accomplish");
+          
+          if (goalScore < 40) {
+            componentFeedback.goal = "Your prompt lacks a clear goal. Try starting with 'I need to...' or 'Help me with...'";
+          } else {
+            componentFeedback.goal = "Your goal could be clearer. Consider explaining why you need this information.";
+          }
+        }
+
+        if (contextScore < 70) {
+          tips.push("Add more background information to your question");
+          
+          if (contextScore < 40) {
+            componentFeedback.context = "Very little context provided. Mention what you've already tried or relevant constraints.";
+          } else {
+            componentFeedback.context = "Some context given, but more details would help (e.g., environment, existing code, etc).";
+          }
+        }
+
+        if (expectationsScore < 70) {
+          tips.push("Specify what kind of response would be most helpful");
+          
+          if (expectationsScore < 40) {
+            componentFeedback.expectations = "It's unclear what type of answer you want. Specify format (code, explanation, steps, etc).";
+          } else {
+            componentFeedback.expectations = "Try indicating how detailed you want the answer to be.";
+          }
+        }
+
+        if (sourceScore < 70) {
+          tips.push("Include examples or references when relevant");
+          
+          if (sourceScore < 40) {
+            componentFeedback.source = "No examples or references provided. Mentioning similar cases helps the AI understand.";
+          } else {
+            componentFeedback.source = "Consider adding code snippets or examples to illustrate your point.";
+          }
+        }
+
+        // Set the current prompt feedback
+        setCurrentPromptFeedback({
+          tips,
+          strengths,
+          componentFeedback
+        });
+
+        // Look for specific patterns in the prompt and add tailored tips
+        const promptLower = currentInput.toLowerCase();
+        if (promptLower.includes("help") && promptLower.length < 15) {
+          tips.push("Your prompt is too vague. Specify exactly what you need help with.");
+        }
+        if (promptLower.includes("doesn't work") || promptLower.includes("not working")) {
+          if (!promptLower.includes("error")) {
+            tips.push("When something isn't working, describe the specific error or unexpected behavior.");
+          }
+        }
+        if (promptLower.match(/how (do|to|can)/i) && promptLower.length < 25) {
+          tips.push("Your 'how to' question needs more detail about your specific situation.");
+        }
+
         const newStreakInfo = isGoodPrompt
           ? { currentStreak: (promptStreak?.currentStreak || 0) + 1, bestStreak: Math.max((promptStreak?.bestStreak || 0), (promptStreak?.currentStreak || 0) + 1), isGoodPrompt }
           : { currentStreak: 0, bestStreak: promptStreak?.bestStreak || 0, isGoodPrompt };
@@ -600,7 +699,8 @@ export default function ProjectTaskPage() {
             participation.id,
             subtask.id,
             currentInput,
-            promptQualityData
+            promptQualityData,
+            currentPromptFeedback
           );
         } catch (savingError) {
           console.error("PROMPT HISTORY DEBUG - Failed to save prompt history:", savingError);
@@ -934,6 +1034,63 @@ export default function ProjectTaskPage() {
     );
   };
 
+  // Add this component to display personalized feedback
+  const PromptFeedbackMessage = ({ feedback }: { feedback: any }) => {
+    if (!feedback || (!feedback.tips.length && !feedback.strengths.length)) return null;
+    
+    return (
+      <div className="bg-purple-50 border border-purple-100 rounded-lg p-3 mb-4 text-sm">
+        <div className="flex items-start">
+          <Info className="h-5 w-5 text-purple-600 mr-2 mt-0.5 flex-shrink-0" />
+          <div className="space-y-2 flex-1">
+            <p className="font-medium text-purple-900">Prompt Quality Feedback</p>
+            
+            {feedback.strengths.length > 0 && (
+              <div>
+                <p className="text-green-700 font-medium">Strengths:</p>
+                <ul className="list-disc list-inside text-green-700 pl-1 space-y-0.5">
+                  {feedback.strengths.map((strength: string, i: number) => (
+                    <li key={i}>{strength}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            
+            {feedback.tips.length > 0 && (
+              <div>
+                <p className="text-purple-700 font-medium">Tips for improvement:</p>
+                <ul className="list-disc list-inside text-purple-700 pl-1 space-y-0.5">
+                  {feedback.tips.map((tip: string, i: number) => (
+                    <li key={i}>{tip}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            
+            {Object.keys(feedback.componentFeedback).length > 0 && (
+              <div className="mt-1 pt-1 border-t border-purple-100">
+                <p className="text-xs text-purple-700 italic">
+                  {feedback.componentFeedback.goal && (
+                    <span className="block mb-1">🎯 <b>Goal:</b> {feedback.componentFeedback.goal}</span>
+                  )}
+                  {feedback.componentFeedback.context && (
+                    <span className="block mb-1">📝 <b>Context:</b> {feedback.componentFeedback.context}</span>
+                  )}
+                  {feedback.componentFeedback.expectations && (
+                    <span className="block mb-1">🔍 <b>Expectations:</b> {feedback.componentFeedback.expectations}</span>
+                  )}
+                  {feedback.componentFeedback.source && (
+                    <span className="block mb-1">📚 <b>References:</b> {feedback.componentFeedback.source}</span>
+                  )}
+                </p>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   if (isLoading && !project) {
     return (
       <MainLayout>
@@ -1198,28 +1355,35 @@ export default function ProjectTaskPage() {
               >
                 <div className="space-y-4">
                   {chatMessages.map((msg, index) => (
-                    <ChatMessageComponent
-                      key={`message-${index}-${msg.id || index}`}
-                      message={msg}
-                      onCopyCode={(code, key) => {
-                        handleCopyCode(code, key);
-                        setCopiedCodeBlockKey(key);
-                      }}
-                      copiedCodeBlockKey={copiedCodeBlockKey}
-                      sessionUserId={session?.user?.id || ''}
-                      sessionUserName={session?.user?.name || ''}
-                    />
-                ))}
-                {isChatLoading && (
-                    <div className="flex items-center space-x-2 py-2 px-4 rounded-lg bg-gray-50 w-fit">
-                      <div className="text-sm text-gray-600">AI is typing</div>
-                      <div className="flex space-x-1">
-                        <div className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
-                        <div className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
-                        <div className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
+                    <React.Fragment key={`message-${index}-${msg.id || index}`}>
+                      <ChatMessageComponent
+                        message={msg}
+                        onCopyCode={(code, key) => {
+                          handleCopyCode(code, key);
+                          setCopiedCodeBlockKey(key);
+                        }}
+                        copiedCodeBlockKey={copiedCodeBlockKey}
+                        sessionUserId={session?.user?.id || ''}
+                        sessionUserName={session?.user?.name || ''}
+                      />
+                      {/* Show feedback after user message, but only for the most recent one */}
+                      {index === chatMessages.length - 2 && 
+                       msg.role === 'user' && 
+                       currentPromptFeedback && (
+                        <PromptFeedbackMessage feedback={currentPromptFeedback} />
+                      )}
+                    </React.Fragment>
+                  ))}
+                  {isChatLoading && (
+                      <div className="flex items-center space-x-2 py-2 px-4 rounded-lg bg-gray-50 w-fit">
+                        <div className="text-sm text-gray-600">AI is typing</div>
+                        <div className="flex space-x-1">
+                          <div className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
+                          <div className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
+                          <div className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
                         </div>
-                    </div>
-                )}
+                      </div>
+                  )}
                 </div>
               </CardContent>
               

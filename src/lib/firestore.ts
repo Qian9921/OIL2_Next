@@ -347,6 +347,124 @@ export async function getStudentDashboard(studentId: string): Promise<StudentDas
     }
   }
   
+  // Collect and analyze prompt history data
+  let totalPrompts = 0;
+  let totalQualityScore = 0;
+  let goodPromptsCount = 0;
+  let bestStreak = 0;
+  let totalGoalScore = 0;
+  let totalContextScore = 0;
+  let totalExpectationsScore = 0;
+  let totalSourceScore = 0;
+  let promptsWithGoalScore = 0;
+  let promptsWithContextScore = 0;
+  let promptsWithExpectationsScore = 0;
+  let promptsWithSourceScore = 0;
+  
+  // Collect recent prompts for display
+  const recentPrompts: Array<{
+    id: string;
+    projectId: string;
+    projectTitle: string;
+    subtaskId: string;
+    taskTitle: string;
+    content: string;
+    qualityScore: number;
+    timestamp: Date;
+    feedback?: {
+      tips: string[];
+      strengths: string[];
+      componentFeedback?: {
+        goal?: string;
+        context?: string;
+        expectations?: string;
+        source?: string;
+      };
+    };
+  }> = [];
+
+  // Process all participations to gather prompt history
+  for (const participation of participations) {
+    const project = await getProject(participation.projectId);
+    if (!project) continue;
+    
+    // Process prompt history for each subtask
+    if (participation.promptHistory) {
+      for (const [subtaskId, prompts] of Object.entries(participation.promptHistory)) {
+        if (!prompts || !prompts.length) continue;
+        
+        // Find the subtask info
+        const subtask = project.subtasks.find(st => st.id === subtaskId);
+        if (!subtask) continue;
+        
+        totalPrompts += prompts.length;
+        
+        // Process each prompt
+        for (const prompt of prompts) {
+          // Add to quality totals
+          totalQualityScore += prompt.qualityScore || 0;
+          if (prompt.isGoodPrompt) goodPromptsCount++;
+          
+          // Track best streak
+          if (prompt.goalScore) {
+            totalGoalScore += prompt.goalScore;
+            promptsWithGoalScore++;
+          }
+          if (prompt.contextScore) {
+            totalContextScore += prompt.contextScore;
+            promptsWithContextScore++;
+          }
+          if (prompt.expectationsScore) {
+            totalExpectationsScore += prompt.expectationsScore;
+            promptsWithExpectationsScore++;
+          }
+          if (prompt.sourceScore) {
+            totalSourceScore += prompt.sourceScore;
+            promptsWithSourceScore++;
+          }
+          
+          // Add to recent prompts array (limit to 20 most recent for processing)
+          if (recentPrompts.length < 20) {
+            recentPrompts.push({
+              id: `${participation.id}-${subtaskId}-${prompt.timestamp.toMillis()}`,
+              projectId: participation.projectId,
+              projectTitle: project.title,
+              subtaskId,
+              taskTitle: subtask.title,
+              content: prompt.content,
+              qualityScore: prompt.qualityScore || 0,
+              timestamp: prompt.timestamp.toDate(),
+              feedback: prompt.feedback || undefined
+            });
+          }
+        }
+      }
+    }
+    
+    // Check for best streak in promptEvaluations (for backward compatibility)
+    if (participation.promptEvaluations) {
+      for (const evaluations of Object.values(participation.promptEvaluations)) {
+        for (const evaluation of evaluations) {
+          if (evaluation.bestStreak && evaluation.bestStreak > bestStreak) {
+            bestStreak = evaluation.bestStreak;
+          }
+        }
+      }
+    }
+  }
+  
+  // Sort recent prompts by timestamp (newest first) and limit to 5
+  recentPrompts.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
+  const finalRecentPrompts = recentPrompts.slice(0, 5);
+  
+  // Calculate averages
+  const averageQualityScore = totalPrompts > 0 ? totalQualityScore / totalPrompts : 0;
+  const goodPromptsPercentage = totalPrompts > 0 ? Math.round((goodPromptsCount / totalPrompts) * 100) : 0;
+  const averageGoalScore = promptsWithGoalScore > 0 ? totalGoalScore / promptsWithGoalScore : 0;
+  const averageContextScore = promptsWithContextScore > 0 ? totalContextScore / promptsWithContextScore : 0;
+  const averageExpectationsScore = promptsWithExpectationsScore > 0 ? totalExpectationsScore / promptsWithExpectationsScore : 0;
+  const averageSourceScore = promptsWithSourceScore > 0 ? totalSourceScore / promptsWithSourceScore : 0;
+  
   // Sort by timestamp and limit to 5 most recent
   recentActivity.sort((a, b) => b.timestamp.toMillis() - a.timestamp.toMillis());
   const finalRecentActivity = recentActivity.slice(0, 5);
@@ -406,7 +524,18 @@ export async function getStudentDashboard(studentId: string): Promise<StudentDas
     totalHours,
     certificates,
     recentActivity: finalRecentActivity,
-    upcomingDeadlines
+    upcomingDeadlines,
+    promptQualityMetrics: {
+      totalPrompts,
+      averageScore: averageQualityScore,
+      goodPromptsPercentage,
+      bestStreak,
+      averageGoalScore,
+      averageContextScore,
+      averageExpectationsScore,
+      averageSourceScore,
+      recentPrompts: finalRecentPrompts
+    }
   };
 }
 
