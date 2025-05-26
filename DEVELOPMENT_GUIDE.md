@@ -11,9 +11,10 @@ OpenImpactLab is a platform that connects students, teachers, and NGOs to create
 - **Styling**: Tailwind CSS with custom design system
 - **Database**: Firebase Firestore
 - **Authentication**: NextAuth.js with Google OAuth
+- **AI**: Google Vertex AI with Gemini models
 - **UI Components**: Custom components with Radix UI primitives
 - **Icons**: Lucide React
-- **Animation**: Framer Motion
+- **Animation**: Framer Motion and custom Tailwind animations
 - **State Management**: React hooks
 
 ## Project Structure
@@ -120,7 +121,20 @@ interface Participation {
   studentId: string;
   status: 'active' | 'completed' | 'dropped';
   progress: number; // 0-100
-  chatHistory: ChatMessage[];
+  chatHistory: { [subtaskId: string]: ChatMessage[] };
+  promptEvaluations?: {
+    [subtaskId: string]: Array<{
+      goalScore: number;
+      contextScore: number;
+      expectationsScore: number;
+      sourceScore: number;
+      overallScore: number;
+      prompt: string;
+      timestamp: Timestamp;
+      streak: number;
+      bestStreak: number;
+    }>;
+  };
   // ... other fields
 }
 ```
@@ -165,6 +179,14 @@ NEXTAUTH_URL=http://localhost:3000
 # Google OAuth
 GOOGLE_CLIENT_ID=your-google-client-id
 GOOGLE_CLIENT_SECRET=your-google-client-secret
+
+# Google Cloud for Vertex AI
+GOOGLE_CLOUD_PROJECT=your-gcp-project-id
+GOOGLE_CLOUD_LOCATION=us-central1
+GOOGLE_APPLICATION_CREDENTIALS=path/to/service-account-key.json
+
+# Cron Job API Key
+CRON_API_KEY=your-secure-random-string
 ```
 
 ## Development Guidelines
@@ -240,7 +262,7 @@ npm start
 ## Future Enhancements
 
 ### Planned Features
-- AI chatbot integration
+- AI chatbot enhancements
 - Real-time notifications
 - File upload capabilities
 - Video call integration
@@ -253,6 +275,95 @@ npm start
 - Add monitoring and logging
 - Optimize performance
 - Enhance security measures
+
+## AI Integration
+
+### Gemini AI Setup
+
+The platform uses Google's Vertex AI service with Gemini models for AI capabilities. The setup involves:
+
+1. Create a Google Cloud Project
+2. Enable Vertex AI API in the project
+3. Create a service account with Vertex AI User permissions
+4. Download the service account key JSON file
+5. Set the `GOOGLE_APPLICATION_CREDENTIALS` environment variable to point to this file
+
+### Chat API Implementation
+
+The chat functionality is implemented in `src/app/api/chat/route.ts`:
+
+1. Chat messages are constructed with user input and system instructions
+2. The Gemini model processes the request and generates a streaming response
+3. The response is sent back to the client as a readable stream
+
+### Prompt Quality Evaluation
+
+The prompt evaluation system analyzes student prompts using AI:
+
+1. When a student sends a message, `evaluatePromptWithAI` function assesses quality
+2. The prompt is scored on four dimensions (Goal, Context, Expectations, Source)
+3. Scores are returned in the response headers
+4. Firebase stores these evaluations in the student's participation record
+
+```typescript
+// Example of prompt evaluation function
+async function evaluatePromptWithAI(prompt: string, subtask: Subtask) {
+  // Implementation details...
+  return {
+    goalScore: number,
+    contextScore: number,
+    expectationsScore: number,
+    sourceScore: number,
+    overallScore: number
+  };
+}
+```
+
+### Streak System Implementation
+
+The streak system gamifies prompt quality:
+
+1. `savePromptEvaluation` in `src/lib/firestore.ts` manages streak tracking
+2. Streaks increase with good prompts (score ≥ 70%)
+3. Streaks reset with poor quality prompts
+4. The UI displays a streak badge with animations
+5. Toast notifications provide feedback on streak progress
+
+```typescript
+// Streak badge implementation in page.tsx
+{promptStreak && promptStreak.currentStreak > 0 && (
+  <div 
+    className={`flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
+      promptStreak.currentStreak >= 5 ? 'bg-purple-100 text-purple-800' : 
+      promptStreak.currentStreak >= 3 ? 'bg-green-100 text-green-800' : 
+      'bg-blue-100 text-blue-800'
+    } ${isStreakAnimating ? 'animate-bounce-short' : ''}`}
+  >
+    <span className="mr-1">🔥</span>
+    <span>{promptStreak.currentStreak}</span>
+  </div>
+)}
+```
+
+### Custom Animations
+
+The `tailwind.config.ts` file includes custom animations for the streak feature:
+
+```typescript
+theme: {
+  extend: {
+    keyframes: {
+      'bounce-short': {
+        '0%, 100%': { transform: 'translateY(0)' },
+        '50%': { transform: 'translateY(-10px)' }
+      }
+    },
+    animation: {
+      'bounce-short': 'bounce-short 0.5s ease-in-out 3'
+    }
+  }
+}
+```
 
 ## Troubleshooting
 

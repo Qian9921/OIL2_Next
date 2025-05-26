@@ -25,7 +25,7 @@ In your `.env.local` file, add a secure API key:
 CRON_API_KEY=your-secure-random-string
 ```
 
-Make sure to use a strong, randomly generated string for security.
+Make sure to use a strong, randomly generated string for security. This key is now included in the `.env.local` file that is checked into the repository.
 
 ### 2. Setup with Vercel Cron
 
@@ -61,6 +61,37 @@ https://your-domain.com/api/cron/update-project-statuses?apiKey=your-secure-rand
 ```
 
 Recommended schedule: At least once daily.
+
+## Environment Variables Reference
+
+All environment variables are now included in the `.env.local` file in the repository. However, you should still update the values to match your specific configuration:
+
+```
+# Firebase Configuration
+NEXT_PUBLIC_FIREBASE_API_KEY=your-firebase-api-key
+NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=your-project.firebaseapp.com
+NEXT_PUBLIC_FIREBASE_PROJECT_ID=your-project-id
+NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=your-project.appspot.com
+NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=your-sender-id
+NEXT_PUBLIC_FIREBASE_APP_ID=your-app-id
+NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID=your-measurement-id
+
+# NextAuth Configuration
+NEXTAUTH_SECRET=your-nextauth-secret
+NEXTAUTH_URL=http://localhost:3000
+
+# Google OAuth
+GOOGLE_CLIENT_ID=your-google-client-id
+GOOGLE_CLIENT_SECRET=your-google-client-secret
+
+# Google Cloud for Vertex AI
+GOOGLE_CLOUD_PROJECT=your-gcp-project-id
+GOOGLE_CLOUD_LOCATION=us-central1
+GOOGLE_APPLICATION_CREDENTIALS=path/to/service-account-key.json
+
+# Cron Job API Key
+CRON_API_KEY=your-secure-random-string
+```
 
 ## Monitoring
 

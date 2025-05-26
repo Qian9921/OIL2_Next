@@ -8,7 +8,8 @@ A platform connecting students, teachers, and NGOs to create positive social imp
 - **Google Authentication**: Secure OAuth login with role selection
 - **Project Management**: NGOs create projects, students join and complete them
 - **Progress Tracking**: Real-time monitoring of student progress
-- **AI Integration Ready**: Designed for future chatbot and LLM features
+- **AI Integration**: Gemini AI-powered chat tutor and prompt quality evaluation
+- **Prompt Engineering Gamification**: Streak tracking for high-quality prompts
 - **Modern UI**: Cute, student-friendly interface with smooth animations
 - **Real-time Data**: Firebase Firestore for live updates
 
@@ -108,7 +109,8 @@ src/
 ### Students
 - Browse and join projects
 - Complete subtasks and track progress
-- Chat with AI assistants (future feature)
+- Chat with AI assistants for guidance
+- Receive prompt quality feedback and build streaks
 - Earn certificates upon completion
 
 ### Teachers
@@ -148,9 +150,10 @@ src/
 - **Styling**: Tailwind CSS
 - **Database**: Firebase Firestore
 - **Authentication**: NextAuth.js with Google OAuth
+- **AI**: Google Vertex AI with Gemini models
 - **UI Components**: Custom components with Radix UI
 - **Icons**: Lucide React
-- **Animation**: Framer Motion (ready)
+- **Animation**: Framer Motion and custom Tailwind animations
 
 ## 📱 Responsive Design
 
@@ -199,6 +202,10 @@ npm start
 | `NEXTAUTH_URL` | Application URL | ✅ |
 | `GOOGLE_CLIENT_ID` | Google OAuth client ID | ✅ |
 | `GOOGLE_CLIENT_SECRET` | Google OAuth client secret | ✅ |
+| `GOOGLE_CLOUD_PROJECT` | Google Cloud project ID for Vertex AI | ✅ |
+| `GOOGLE_CLOUD_LOCATION` | Google Cloud region for Vertex AI | ✅ |
+| `GOOGLE_APPLICATION_CREDENTIALS` | Path to GCP service account key | ✅ |
+| `CRON_API_KEY` | API key for automated tasks | ✅ |
 
 ## 🐛 Troubleshooting
 
@@ -227,6 +234,32 @@ npm start
 ## 📚 Development Guide
 
 See [DEVELOPMENT_GUIDE.md](./DEVELOPMENT_GUIDE.md) for detailed development guidelines, code patterns, and architecture decisions.
+
+## 🎮 AI Features
+
+### Chat with AI Tutor
+- Students can chat with an AI tutor specialized for each subtask
+- The AI provides guidance without giving direct answers
+- Support for text and image inputs
+
+### Prompt Quality Evaluation
+- AI evaluates student prompts on four dimensions:
+  - Goal clarity (0-100)
+  - Context information (0-100)
+  - Expectations specification (0-100)
+  - Source references (0-100)
+- Overall score and detailed feedback shown after each prompt
+- All evaluations saved to Firebase for future analysis
+
+### Prompt Streak System
+- Gamified learning experience with streak tracking
+- Streaks increase with high-quality prompts (70%+ score)
+- Visual streak badge with animations
+- Toast notifications celebrate milestones
+- Increasing enthusiasm for longer streaks
+- Personal best tracking for motivation
+
+For detailed documentation on AI features, see [AI-FEATURES.md](./AI-FEATURES.md).
 
 ## 🤝 Contributing
 
