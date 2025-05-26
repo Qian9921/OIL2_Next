@@ -146,3 +146,16 @@ export function calculateEstimatedHours(project: {
   
   return subtaskCount * hoursPerSubtask;
 }
+
+/**
+ * Format a Firestore timestamp into a human-readable date/time string
+ */
+export const formatTimestamp = (timestamp: Timestamp | undefined): string => {
+  if (!timestamp) return 'Unknown Date';
+  
+  const date = timestamp.toDate();
+  return new Intl.DateTimeFormat('en-US', {
+    dateStyle: 'medium',
+    timeStyle: 'short'
+  }).format(date);
+};

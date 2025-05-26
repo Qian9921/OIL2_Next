@@ -16,7 +16,9 @@ import {
   AlertDialogHeader, 
   AlertDialogTitle,
   AlertDialogTrigger 
-} from "@/components/ui/alert-dialog"; // Uncommented AlertDialog imports
+} from "@/components/ui/alert-dialog";
+import { Textarea } from "@/components/ui/textarea";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { getParticipations, getProject, updateParticipation, createSubmission, deleteParticipation, getSubmissions, handleRejectedProject } from "@/lib/firestore";
 import { Project, Participation, Submission, Subtask } from "@/lib/types";
 import { generateAvatar, getStatusColor, getDifficultyColor, calculateEstimatedHours, formatDeadline } from "@/lib/utils";
@@ -48,12 +50,19 @@ import {
   Github,
   SendHorizonal,
   RefreshCw,
-  BookmarkX
+  BookmarkX,
+  ListChecks,
+  PartyPopper
 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useToast } from "@/hooks/use-toast";
 import { GITHUB_SUBMISSION_SUBTASK_ID } from "@/lib/constants";
+import Confetti from 'react-confetti';
+import { useWindowSize } from '../../../hooks/use-window-size';
+import { SubmitProjectDialog } from '@/components/project/submit-project-dialog';
+import { ProgressBar } from '@/components/ui/progress-bar';
+import { StatusBadge, getSubmissionStatusBadge } from '@/components/ui/status-badge';
 
 interface ProjectWithDetails extends Participation {
   project: Project;
@@ -78,6 +87,9 @@ export default function StudentMyProjectsPage() {
   const [activeFilter, setActiveFilter] = useState<ProjectFilter>("active");
   const [selectedProjectToLeave, setSelectedProjectToLeave] = useState<{id: string, title: string} | null>(null);
   const [selectedRejectedProject, setSelectedRejectedProject] = useState<{id: string, title: string} | null>(null);
+  const [projectToSubmit, setProjectToSubmit] = useState<ProjectWithDetails | null>(null);
+  const [showConfetti, setShowConfetti] = useState(false);
+  const { width, height } = useWindowSize();
 
   useEffect(() => {
     if (session?.user?.id) {
@@ -211,39 +223,8 @@ export default function StudentMyProjectsPage() {
     }
   };
 
-  const handleSubmitProject = async (participation: ProjectWithDetails) => {
-    const content = submissionContent[participation.id];
-    if (!content?.trim()) {
-      toast({ title: "Missing Summary", description: "Please write a submission summary before submitting.", variant: "destructive" });
-      return;
-    }
-
-    setSubmittingProject(participation.id);
-    
-    try {
-      await createSubmission({
-        participationId: participation.id,
-        projectId: participation.projectId,
-        studentId: participation.studentId,
-        studentName: session?.user?.name || 'Student',
-        content: content.trim(),
-        status: 'pending'
-      });
-
-      await updateParticipation(participation.id, {
-        status: 'completed',
-        completedAt: Timestamp.now()
-      });
-
-      await loadMyProjects();
-      setSubmissionContent(prev => ({ ...prev, [participation.id]: '' }));
-      toast({ title: "Project Submitted", description: "Your project has been submitted for review.", variant: "default" });
-    } catch (error) {
-      console.error("Error submitting project:", error);
-      toast({ title: "Submission Error", description: "Failed to submit project. Please try again.", variant: "destructive" });
-    } finally {
-      setSubmittingProject(null);
-    }
+  const openSubmitDialog = (participation: ProjectWithDetails) => {
+    setProjectToSubmit(participation);
   };
 
   const confirmAndLeaveProject = (participationId: string, projectTitle: string) => {
@@ -292,8 +273,11 @@ export default function StudentMyProjectsPage() {
     
     const completedProjectsCount = projectsWithDetails.filter(p => p.status === 'completed' || p.submission?.status === 'approved').length;
     
-    const totalProgress = projectsWithDetails.reduce((sum, p) => sum + p.progress, 0);
-    const averageProgress = projectsWithDetails.length > 0 ? Math.round(totalProgress / projectsWithDetails.length) : 0;
+    // Calculate average progress only for active projects
+    const totalProgressOfActiveProjects = allActiveParticipations.reduce((sum, p) => sum + p.progress, 0);
+    const averageProgress = allActiveParticipations.length > 0 
+      ? Math.round(totalProgressOfActiveProjects / allActiveParticipations.length) 
+      : 0;
 
     return { activeProjects: activeProjectsCount, completedProjects: completedProjectsCount, averageProgress };
   };
@@ -309,28 +293,26 @@ export default function StudentMyProjectsPage() {
     return participation.submission?.status === 'needs_revision';
   };
 
-  const getSubmissionStatusDisplay = (submission?: Submission) => {
-    if (!submission) return { text: 'Not Submitted', color: 'bg-gray-100 text-gray-800', icon: Circle };
-    switch (submission.status) {
-      case 'pending':
-        return { text: 'Under Review', color: 'bg-yellow-100 text-yellow-800', icon: Clock };
-      case 'approved':
-        return { text: 'Approved', color: 'bg-green-100 text-green-800', icon: CheckCircle };
-      case 'rejected':
-        return { text: 'Rejected', color: 'bg-red-100 text-red-800', icon: XCircle };
-      case 'needs_revision':
-        return { text: 'Needs Revision', color: 'bg-orange-100 text-orange-800', icon: AlertCircle };
-      default:
-        return { text: 'Unknown', color: 'bg-gray-100 text-gray-800', icon: Circle };
-    }
-  };
-  
   const handleContinueLearning = (projectWithDetails: ProjectWithDetails) => {
     if (projectWithDetails.status === 'active' && projectWithDetails.nextSubtask) {
       router.push(`/projects/${projectWithDetails.projectId}/task/${projectWithDetails.nextSubtask.id}`);
     } else if (canSubmitProject(projectWithDetails)) {
       toast({ title: "Ready to Submit", description: "Please complete the submission form below.", variant: "default" });
     } else {
+      router.push(`/projects/${projectWithDetails.projectId}`);
+    }
+  };
+
+  // Function to navigate to the task list page
+  const handleViewTasks = (projectWithDetails: ProjectWithDetails) => {
+    if (projectWithDetails.project.subtasks && projectWithDetails.project.subtasks.length > 0) {
+      // Sort subtasks by order to get the first one
+      const sortedSubtasks = [...projectWithDetails.project.subtasks].sort((a, b) => a.order - b.order);
+      const firstSubtask = sortedSubtasks[0];
+      
+      router.push(`/projects/${projectWithDetails.projectId}/task/${firstSubtask.id}`);
+    } else {
+      // Fallback to project page if no subtasks
       router.push(`/projects/${projectWithDetails.projectId}`);
     }
   };
@@ -363,6 +345,17 @@ export default function StudentMyProjectsPage() {
   return (
     <MainLayout>
       <div className="space-y-6">
+        {/* Confetti celebration when project is submitted */}
+        {showConfetti && (
+          <Confetti
+            width={width}
+            height={height}
+            recycle={false}
+            numberOfPieces={800}
+            gravity={0.15}
+          />
+        )}
+        
         {/* AlertDialog for leaving a project */}
         <AlertDialog open={!!selectedProjectToLeave} onOpenChange={(open) => !open && setSelectedProjectToLeave(null)}>
           <AlertDialogContent>
@@ -404,6 +397,29 @@ export default function StudentMyProjectsPage() {
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
+
+        {/* Replace the submission dialog with the reusable component */}
+        <SubmitProjectDialog 
+          project={projectToSubmit?.project || null}
+          participation={projectToSubmit}
+          showDialog={!!projectToSubmit}
+          setShowDialog={(show) => !show && setProjectToSubmit(null)}
+          onSuccess={() => {
+            // Show confetti celebration
+            setShowConfetti(true);
+            setTimeout(() => setShowConfetti(false), 5000);
+            
+            toast({ 
+              title: "🎉 Project Submitted!", 
+              description: "Your project has been submitted for review. Great job!",
+              variant: "default" 
+            });
+            
+            // Reload projects
+            loadMyProjects();
+          }}
+          hideFloatingButton={true}
+        />
 
         {/* Header */}
         <div className="flex items-center justify-between">
@@ -499,89 +515,27 @@ export default function StudentMyProjectsPage() {
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 gap-6">
             {filteredAndSortedProjects.map((projectWithDetails) => {
               const { project, submission } = projectWithDetails;
-              const submissionStatus = getSubmissionStatusDisplay(submission);
-
-              // Create custom actions for the ProjectCard
-              const customActions = (
-                <div className="space-y-2">
-                  {projectWithDetails.status === 'active' && projectWithDetails.nextSubtask && (
-                    <Button 
-                      variant="default" 
-                      size="sm"
-                      onClick={() => handleContinueLearning(projectWithDetails)}
-                      className="w-full bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white transition-all duration-300 ease-in-out transform hover:scale-105 shadow-md"
-                    >
-                      <Play className="w-4 h-4 mr-2" />
-                      Continue Learning
-                    </Button>
-                  )}
-                  
-                  {projectWithDetails.status === 'active' && (
-                    <Button 
-                      variant="outline"
-                      size="sm"
-                      onClick={() => confirmAndLeaveProject(projectWithDetails.id, project.title)}
-                      className="w-full"
-                    >
-                      <LogOut className="w-4 h-4 mr-1.5" />
-                      Leave Project
-                    </Button>
-                  )}
-
-                  {canSubmitProject(projectWithDetails) && (
-                     <Button 
-                        variant="default" 
-                        size="sm"
-                        onClick={() => handleSubmitProject(projectWithDetails)}
-                        className="w-full"
-                      >
-                        <SendHorizonal className="w-4 h-4 mr-1.5" />
-                        {canResubmit(projectWithDetails) ? 'Resubmit Project' : 'Submit Project for Review'}
-                      </Button>
-                  )}
-                </div>
-              );
 
               // Additional info component for ProjectCard
               const additionalInfo = (
                 <>
-                  <div className="mb-3">
-                    <div className="flex justify-between items-center mb-1">
-                      <span className="text-sm font-medium text-gray-700">
-                        Progress: {projectWithDetails.completedSubtasks?.length || 0}/{project.subtasks.length} tasks
-                      </span>
-                      <span className="text-sm font-medium text-gray-700">
-                        {projectWithDetails.progress}%
-                      </span>
-                    </div>
-                    <div className="w-full bg-gray-200 rounded-full h-2">
-                      <div
-                        className="bg-gradient-to-r from-purple-500 to-pink-500 h-2 rounded-full transition-all duration-300"
-                        style={{ width: `${projectWithDetails.progress}%` }}
-                      />
-                    </div>
-                  </div>
+                  <ProgressBar 
+                    progress={projectWithDetails.progress}
+                    completedTasks={projectWithDetails.completedSubtasks?.length || 0}
+                    totalTasks={project.subtasks.length}
+                  />
 
                   <div className="flex flex-wrap gap-2 items-center mb-3">
                     {projectWithDetails.studentGitHubRepo && (
                       <Link href={projectWithDetails.studentGitHubRepo} target="_blank" rel="noopener noreferrer">
-                        <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-slate-700 text-white hover:bg-slate-800 transition-colors">
-                          <Github className="w-3 h-3 mr-1.5" />
-                          GitHub Repo
-                        </span>
+                        <StatusBadge status="github" className="hover:bg-slate-800 transition-colors" />
                       </Link>
                     )}
                     {submission && (
-                      <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${submissionStatus.color}`}>
-                        {React.createElement(submissionStatus.icon, { className: "w-3 h-3 mr-1" })}
-                        {submissionStatus.text}
-                      </span>
+                      getSubmissionStatusBadge(submission)
                     )}
                     {projectWithDetails.status === 'completed' && submission?.status === 'approved' && (
-                      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
-                        <Award className="w-3 h-3 mr-1" />
-                        Certificate Available
-                      </span>
+                      <StatusBadge status="certificate" />
                     )}
                   </div>
 
@@ -602,6 +556,57 @@ export default function StudentMyProjectsPage() {
                     </div>
                   )}
                 </>
+              );
+
+              // Create custom actions for the ProjectCard
+              const customActions = (
+                <div className="space-y-2.5">
+                  {projectWithDetails.status === 'active' && projectWithDetails.nextSubtask && (
+                    <Button 
+                      variant="default" 
+                      size="sm"
+                      onClick={() => handleContinueLearning(projectWithDetails)}
+                      className="w-full bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white transition-all duration-300 ease-in-out transform hover:scale-105 shadow-md"
+                    >
+                      <Play className="w-4 h-4 mr-2" />
+                      Continue Learning
+                    </Button>
+                  )}
+                  
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    onClick={() => handleViewTasks(projectWithDetails)}
+                    className="w-full transition-all duration-200 hover:border-purple-300 hover:bg-purple-50"
+                  >
+                    <ListChecks className="w-4 h-4 mr-1.5" />
+                    View Task Details
+                  </Button>
+                  
+                  {projectWithDetails.status === 'active' && (
+                    <Button 
+                      variant="outline"
+                      size="sm"
+                      onClick={() => confirmAndLeaveProject(projectWithDetails.id, project.title)}
+                      className="w-full text-red-600 hover:text-red-700 hover:border-red-300 hover:bg-red-50 transition-all duration-200"
+                    >
+                      <LogOut className="w-4 h-4 mr-1.5" />
+                      Leave Project
+                    </Button>
+                  )}
+
+                  {canSubmitProject(projectWithDetails) && (
+                     <Button 
+                        variant="default" 
+                        size="sm"
+                        onClick={() => openSubmitDialog(projectWithDetails)}
+                        className="w-full bg-green-600 hover:bg-green-700 text-white transition-all duration-200"
+                      >
+                        <SendHorizonal className="w-4 h-4 mr-1.5" />
+                        {canResubmit(projectWithDetails) ? 'Resubmit Project' : 'Submit Project for Review'}
+                      </Button>
+                  )}
+                </div>
               );
 
               return (

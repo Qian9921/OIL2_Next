@@ -1,8 +1,12 @@
 import React from 'react';
 import { Timestamp } from 'firebase/firestore';
-import { ScoreBadge, MetricScoreCard } from './score-components';
+import { StudentDashboard, Participation } from '@/lib/types'; // Assuming these exist
+import { ScoreBadge, DimensionScoreDisplay } from './score-components';
 import { RequirementCheckpoint } from './dialog-components';
-import { AlertTriangle, Info } from 'lucide-react';
+import { AlertTriangle, Info, ChevronDown } from 'lucide-react';
+import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '@/components/ui/collapsible';
+import { PromptFeedbackDisplay } from './feedback-components';
+import { formatTimestamp } from '@/lib/utils';
 
 type EvaluationHistoryEntry = {
   timestamp: Timestamp;
@@ -26,7 +30,7 @@ type EvaluationHistoryEntry = {
   }
 };
 
-type PromptHistoryEntry = {
+export type PromptHistoryEntry = {
   timestamp: Timestamp;
   content: string;
   qualityScore: number;
@@ -36,15 +40,8 @@ type PromptHistoryEntry = {
   sourceScore?: number;
   isGoodPrompt?: boolean;
   feedback?: {
-    strengths: string[];
-    tips: string[];
-    componentFeedback?: {
-      goal?: string;
-      context?: string;
-      expectations?: string;
-      source?: string;
-    };
-  };
+    feedback?: string;
+  } | null;
 };
 
 export const EvaluationHistoryItem = ({ 
@@ -56,24 +53,25 @@ export const EvaluationHistoryItem = ({
   index: number;
   totalCount: number;
 }) => {
-  const date = evaluation.timestamp?.toDate();
-  const formattedDate = date ? new Intl.DateTimeFormat('en-US', {
-    dateStyle: 'medium',
-    timeStyle: 'short'
-  }).format(date) : 'Unknown Date';
+  const formattedDate = formatTimestamp(evaluation.timestamp);
   
   return (
-    <div className="border rounded-lg overflow-hidden">
-      <div className="bg-gray-50 p-3 flex justify-between items-center border-b">
-        <div className="flex items-center">
-          <span className="font-medium">Attempt {totalCount - index}</span>
-          <span className="mx-2">•</span>
-          <span className="text-sm text-gray-500">{formattedDate}</span>
+    <Collapsible className="border rounded-lg overflow-hidden shadow-sm hover:shadow-md transition-shadow duration-200">
+      <CollapsibleTrigger asChild>
+        <div className="flex justify-between items-center p-3 cursor-pointer bg-gray-50 hover:bg-gray-100 group border-b">
+          <div className="flex items-center">
+            <span className="font-medium">Attempt {totalCount - index}</span>
+            <span className="mx-2">•</span>
+            <span className="text-sm text-gray-500">{formattedDate}</span>
+          </div>
+          <div className="flex items-center">
+            <ScoreBadge score={evaluation.score} />
+            <ChevronDown className="h-5 w-5 text-gray-400 ml-2 transform transition-transform duration-200 group-data-[state=open]:rotate-180" />
+          </div>
         </div>
-        <ScoreBadge score={evaluation.score} />
-      </div>
+      </CollapsibleTrigger>
       
-      <div className="p-4 space-y-4">
+      <CollapsibleContent className="p-4 bg-white space-y-4">
         {/* Summary */}
         {evaluation.result?.rawContent?.summary && (
           <div>
@@ -110,8 +108,8 @@ export const EvaluationHistoryItem = ({
             </ul>
           </div>
         )}
-      </div>
-    </div>
+      </CollapsibleContent>
+    </Collapsible>
   );
 };
 
@@ -120,116 +118,64 @@ export const PromptHistoryItem = ({
 }: { 
   prompt: PromptHistoryEntry;
 }) => {
-  const date = prompt.timestamp?.toDate();
-  const formattedDate = date ? new Intl.DateTimeFormat('en-US', {
-    dateStyle: 'medium',
-    timeStyle: 'short'
-  }).format(date) : 'Unknown Date';
+  const formattedDate = formatTimestamp(prompt.timestamp);
+  
+  // Check if we have ANY scores to display (even if low)
+  const hasAnyScore = prompt.qualityScore !== undefined;
+  const hasAnyDimensionScores = 
+    prompt.goalScore !== undefined &&
+    prompt.contextScore !== undefined &&
+    prompt.expectationsScore !== undefined &&
+    prompt.sourceScore !== undefined;
+  
+  // Check if we have valid feedback
+  const hasValidFeedback = 
+    prompt.feedback && 
+    typeof prompt.feedback.feedback === 'string' && 
+    prompt.feedback.feedback.trim() !== '';
+  
+  // Don't render anything if we have neither scores nor valid feedback
+  if (!hasAnyScore && !hasAnyDimensionScores && !hasValidFeedback) {
+    return null;
+  }
   
   return (
-    <div className="border rounded-lg overflow-hidden">
-      <div className="bg-gray-50 p-3 flex justify-between items-center border-b">
-        <div className="flex items-center">
-          <span className="font-medium">{prompt.isGoodPrompt ? 'Good Prompt' : 'Needs Improvement'}</span>
-          <span className="mx-2">•</span>
-          <span className="text-sm text-gray-500">{formattedDate}</span>
+    <Collapsible className="border rounded-lg overflow-hidden shadow-sm hover:shadow-md transition-shadow duration-200">
+      <CollapsibleTrigger asChild>
+        <div className="flex justify-between items-center p-3 cursor-pointer bg-gray-50 hover:bg-gray-100 group">
+          <div className="flex flex-col">
+            <span className={`text-sm font-semibold ${prompt.isGoodPrompt ? 'text-green-700' : 'text-red-700'}`}>
+              {prompt.isGoodPrompt ? 'Good Prompt' : 'Needs Improvement'}
+            </span>
+            <span className="text-xs text-gray-500">{formattedDate}</span>
+          </div>
+          <div className="flex items-center">
+            {hasAnyScore && <ScoreBadge score={prompt.qualityScore} />}
+            <ChevronDown className="h-5 w-5 text-gray-400 ml-2 transform transition-transform duration-200 group-data-[state=open]:rotate-180" />
+          </div>
         </div>
-        <ScoreBadge score={prompt.qualityScore} />
-      </div>
-      
-      <div className="p-4 space-y-4">
-        {/* Prompt Content */}
-        <div>
-          <h4 className="font-semibold text-sm mb-1">Prompt:</h4>
-          <div className="bg-gray-50 p-3 rounded-md text-sm border">
+      </CollapsibleTrigger>
+      <CollapsibleContent className="p-4 bg-white">
+        {/* Display feedback and scores when available */}
+        <div className="mb-4">
+          <PromptFeedbackDisplay 
+            feedback={hasValidFeedback ? prompt.feedback! : { feedback: undefined }} 
+            score={hasAnyScore ? prompt.qualityScore : undefined}
+            goalScore={hasAnyDimensionScores ? prompt.goalScore : undefined}
+            contextScore={hasAnyDimensionScores ? prompt.contextScore : undefined}
+            expectationsScore={hasAnyDimensionScores ? prompt.expectationsScore : undefined}
+            sourceScore={hasAnyDimensionScores ? prompt.sourceScore : undefined}
+            size="md" 
+          />
+        </div>
+        <div className="mb-4">
+          <h4 className="font-semibold text-sm text-gray-800 mb-1">Your Prompt:</h4>
+          <div className="p-3 bg-gray-50 rounded border text-sm text-gray-700 whitespace-pre-wrap break-words">
             {prompt.content}
           </div>
         </div>
-        
-        {/* Personalized Feedback Section */}
-        {prompt.feedback && (prompt.feedback.strengths.length > 0 || prompt.feedback.tips.length > 0) && (
-          <div className="bg-purple-50 border border-purple-100 rounded-md p-3">
-            <h4 className="font-semibold text-sm text-purple-900 mb-2">Feedback:</h4>
-            
-            {prompt.feedback.strengths.length > 0 && (
-              <div className="mb-2">
-                <p className="text-green-700 text-xs font-medium">Strengths:</p>
-                <ul className="list-disc list-inside text-green-700 text-xs pl-1 space-y-0.5">
-                  {prompt.feedback.strengths.map((strength, i) => (
-                    <li key={i}>{strength}</li>
-                  ))}
-                </ul>
-              </div>
-            )}
-            
-            {prompt.feedback.tips.length > 0 && (
-              <div>
-                <p className="text-purple-700 text-xs font-medium">Tips for improvement:</p>
-                <ul className="list-disc list-inside text-purple-700 text-xs pl-1 space-y-0.5">
-                  {prompt.feedback.tips.map((tip, i) => (
-                    <li key={i}>{tip}</li>
-                  ))}
-                </ul>
-              </div>
-            )}
-            
-            {prompt.feedback.componentFeedback && Object.keys(prompt.feedback.componentFeedback).length > 0 && (
-              <div className="mt-2 pt-2 border-t border-purple-100">
-                <p className="text-xs text-purple-700">
-                  {prompt.feedback.componentFeedback.goal && (
-                    <span className="block mb-1">🎯 <b>Goal:</b> {prompt.feedback.componentFeedback.goal}</span>
-                  )}
-                  {prompt.feedback.componentFeedback.context && (
-                    <span className="block mb-1">📝 <b>Context:</b> {prompt.feedback.componentFeedback.context}</span>
-                  )}
-                  {prompt.feedback.componentFeedback.expectations && (
-                    <span className="block mb-1">🔍 <b>Expectations:</b> {prompt.feedback.componentFeedback.expectations}</span>
-                  )}
-                  {prompt.feedback.componentFeedback.source && (
-                    <span className="block mb-1">📚 <b>References:</b> {prompt.feedback.componentFeedback.source}</span>
-                  )}
-                </p>
-              </div>
-            )}
-          </div>
-        )}
-        
-        {/* Component Scores */}
-        <div>
-          <h4 className="font-semibold text-sm mb-2">Score Breakdown:</h4>
-          <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
-            <MetricScoreCard 
-              label="Goal" 
-              score={prompt.goalScore || 0} 
-              bgColor="bg-blue-50" 
-              borderColor="border-blue-100" 
-              barColor="bg-blue-600" 
-            />
-            <MetricScoreCard 
-              label="Context" 
-              score={prompt.contextScore || 0} 
-              bgColor="bg-green-50" 
-              borderColor="border-green-100" 
-              barColor="bg-green-600" 
-            />
-            <MetricScoreCard 
-              label="Expectations" 
-              score={prompt.expectationsScore || 0} 
-              bgColor="bg-purple-50" 
-              borderColor="border-purple-100" 
-              barColor="bg-purple-600" 
-            />
-            <MetricScoreCard 
-              label="Source" 
-              score={prompt.sourceScore || 0} 
-              bgColor="bg-amber-50" 
-              borderColor="border-amber-100" 
-              barColor="bg-amber-600" 
-            />
-          </div>
-        </div>
-      </div>
-    </div>
+      </CollapsibleContent>
+    </Collapsible>
   );
 };
 
@@ -237,8 +183,8 @@ export const EmptyPromptHistory = () => (
   <div className="space-y-4">
     <div className="text-center py-6">
       <Info className="w-12 h-12 mx-auto text-purple-500 mb-2" />
-      <p className="text-gray-600 mb-2">No prompt history found for this task yet.</p>
-      <p className="text-gray-500 text-sm">Try sending a message in the chat to generate prompt feedback.</p>
+      <p className="text-gray-600 mb-2">No prompt feedback history available for this task yet.</p>
+      <p className="text-gray-500 text-sm">Try sending a message in the chat to receive personalized feedback on your prompt quality.</p>
     </div>
   </div>
 );

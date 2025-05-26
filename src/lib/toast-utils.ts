@@ -106,4 +106,43 @@ export function showStreakToast(
     description: description,
     variant: "default"
   });
-} 
+}
+
+/**
+ * Helper function to display standardized feedback toasts
+ * @param toast - The toast instance from useToast
+ * @param type - The type of toast to display
+ * @param title - The toast title
+ * @param message - The toast message
+ * @param duration - Optional duration in ms
+ * @param currentStreak - Current streak (for streak toasts)
+ * @param bestStreak - Best streak (for streak toasts)
+ */
+export const showFeedbackToast = (
+  toast: any,
+  type: 'success' | 'error' | 'info' | 'streak', 
+  title: string, 
+  message: string, 
+  duration?: number,
+  currentStreak?: number,
+  bestStreak?: number
+) => {
+  switch (type) {
+    case 'success':
+      showSuccessToast(toast, title, { description: message, duration });
+      break;
+    case 'error':
+      showErrorToast(toast, title, { description: message, duration });
+      break;
+    case 'info':
+      showInfoToast(toast, title, { description: message, duration });
+      break;
+    case 'streak':
+      if (currentStreak !== undefined && bestStreak !== undefined) {
+        showStreakToast(toast, currentStreak, bestStreak);
+      } else {
+        showInfoToast(toast, title, { description: message, duration });
+      }
+      break;
+  }
+}; 

@@ -19,7 +19,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { formatRelativeTime } from "@/lib/utils";
-import { PromptQualitySummary, RecentPromptsCard, PromptTipsCard } from "@/components/task/dashboard-components";
+import { PromptQualitySummary, RecentPromptsCard, RecentActivityCard } from "@/components/task/dashboard-components";
 import { useRouter } from "next/navigation";
 
 export default function StudentDashboardPage() {
@@ -93,16 +93,16 @@ export default function StudentDashboardPage() {
           <Card className="card-hover">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium text-gray-600">
-                Completed Projects
+                Learning Hours
               </CardTitle>
-              <Trophy className="h-4 w-4 text-green-600" />
+              <Clock className="h-4 w-4 text-purple-600" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-green-600">
-                {dashboard?.completedProjects || 0}
+              <div className="text-2xl font-bold text-purple-600">
+                {dashboard?.totalHours || 0}
               </div>
               <p className="text-xs text-gray-500">
-                Successfully finished
+                Hours invested
               </p>
             </CardContent>
           </Card>
@@ -118,16 +118,16 @@ export default function StudentDashboardPage() {
             <Card className="card-hover">
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium text-gray-600">
-                  Learning Hours
+                  Completed Projects
                 </CardTitle>
-                <Clock className="h-4 w-4 text-purple-600" />
+                <Trophy className="h-4 w-4 text-green-600" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold text-purple-600">
-                  {dashboard?.totalHours || 0}
+                <div className="text-2xl font-bold text-green-600">
+                  {dashboard?.completedProjects || 0}
                 </div>
                 <p className="text-xs text-gray-500">
-                  Hours invested
+                  Successfully finished
                 </p>
               </CardContent>
             </Card>
@@ -198,11 +198,9 @@ export default function StudentDashboardPage() {
 
           {/* Prompt Tips or Deadlines */}
           {hasPromptMetrics ? (
-            <PromptTipsCard
-              averageGoalScore={dashboard!.promptQualityMetrics!.averageGoalScore}
-              averageContextScore={dashboard!.promptQualityMetrics!.averageContextScore}
-              averageExpectationsScore={dashboard!.promptQualityMetrics!.averageExpectationsScore}
-              averageSourceScore={dashboard!.promptQualityMetrics!.averageSourceScore}
+            <RecentActivityCard
+              activities={dashboard!.recentActivity}
+              onViewAllClick={() => router.push('/student/projects')}
             />
           ) : (
             <Card>

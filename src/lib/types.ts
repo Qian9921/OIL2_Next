@@ -119,14 +119,7 @@ export interface Participation {
       sourceScore?: number;
       isGoodPrompt?: boolean;
       feedback?: {
-        tips: string[];
-        strengths: string[];
-        componentFeedback: {
-          goal?: string;
-          context?: string;
-          expectations?: string;
-          source?: string;
-        }
+        feedback?: string;
       } | null;
     }>;
   };
@@ -211,15 +204,8 @@ export interface StudentDashboard {
       qualityScore: number;
       timestamp: Date;
       feedback?: {
-        tips: string[];
-        strengths: string[];
-        componentFeedback?: {
-          goal?: string;
-          context?: string;
-          expectations?: string;
-          source?: string;
-        };
-      };
+        feedback?: string;
+      } | null;
     }>;
   };
 }

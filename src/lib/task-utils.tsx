@@ -5,6 +5,7 @@ import { Collapsible, CollapsibleContent } from "@/components/ui/collapsible";
 import Link from 'next/link';
 import { Project, Participation, ChatMessage } from '@/lib/types';
 import { updateParticipation } from '@/lib/firestore';
+import { GITHUB_SUBMISSION_SUBTASK_ID } from '@/lib/constants';
 
 /**
  * GitHubInfoButton component - Provides GitHub repository information in a popover
@@ -92,6 +93,25 @@ export const TaskNavigation = ({
   // Find the current subtask index
   const currentIndex = sortedSubtasks.findIndex(task => task.id === currentSubtaskId);
   
+  // Determine if GitHub submission task is present and adjust the task count
+  const hasGitHubTask = sortedSubtasks.some(task => task.id === GITHUB_SUBMISSION_SUBTASK_ID);
+  const isCurrentGitHubTask = currentSubtaskId === GITHUB_SUBMISSION_SUBTASK_ID;
+  
+  // Calculate the actual task count excluding GitHub task
+  const totalRealTasks = hasGitHubTask ? sortedSubtasks.length - 1 : sortedSubtasks.length;
+  
+  // Calculate the current task number (if current is GitHub task, show it as "Setup" instead of a number)
+  let currentTaskNumber;
+  if (isCurrentGitHubTask) {
+    currentTaskNumber = "Setup";
+  } else if (hasGitHubTask) {
+    // If there's a GitHub task, adjust the current index accordingly
+    const gitHubTaskIndex = sortedSubtasks.findIndex(task => task.id === GITHUB_SUBMISSION_SUBTASK_ID);
+    currentTaskNumber = currentIndex > gitHubTaskIndex ? currentIndex : currentIndex + 1;
+  } else {
+    currentTaskNumber = currentIndex + 1;
+  }
+  
   return (
     <div className="flex flex-col" ref={navRef}>
       <Button
@@ -102,7 +122,9 @@ export const TaskNavigation = ({
         aria-label={isProgressExpanded ? "Collapse task progress" : "Expand task progress"}
       >
         <span className="text-sm font-medium mr-2">
-          Task {currentIndex + 1} of {sortedSubtasks.length}
+          {isCurrentGitHubTask ? 
+            `Repository Setup` : 
+            `Task ${currentTaskNumber} of ${totalRealTasks}`}
         </span>
         {isProgressExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
       </Button>
@@ -118,6 +140,12 @@ export const TaskNavigation = ({
                 sortedSubtasks
                   .slice(0, index)
                   .every(t => participation.completedSubtasks?.includes(t.id));
+              
+              // Skip rendering the GitHub task in the task list display
+              const isGitHubTask = task.id === GITHUB_SUBMISSION_SUBTASK_ID;
+              const displayIndex = isGitHubTask ? "Setup" : 
+                (hasGitHubTask && index > sortedSubtasks.findIndex(t => t.id === GITHUB_SUBMISSION_SUBTASK_ID)) ? 
+                  index : index + 1;
               
               return (
                 <Link
@@ -141,7 +169,7 @@ export const TaskNavigation = ({
                       )}
                     </span>
                     <span className="ml-2 truncate">
-                      {index + 1}. {task.title}
+                      {isGitHubTask ? "Setup" : `${displayIndex}. `} {task.title}
                     </span>
                   </div>
                 </Link>

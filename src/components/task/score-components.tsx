@@ -108,6 +108,32 @@ export const MetricScoreCard = ({
 };
 
 /**
+ * Component for displaying a simple dimension score (e.g., Goal: 75%)
+ */
+export const DimensionScoreDisplay = ({
+  label,
+  score,
+  size = 'md'
+}: {
+  label: string;
+  score: number;
+  size?: 'sm' | 'md' | 'lg';
+}) => {
+  const textSizes = {
+    sm: { label: 'text-xs', score: 'text-xs' },
+    md: { label: 'text-sm', score: 'text-sm' },
+    lg: { label: 'text-base', score: 'text-base' },
+  };
+
+  return (
+    <div className="bg-white rounded border border-purple-100 p-2 text-center">
+      <p className={`font-medium ${textSizes[size].label} text-purple-900`}>{label}</p>
+      <p className={`${textSizes[size].score} text-purple-700`}>{score.toFixed(0)}%</p>
+    </div>
+  );
+};
+
+/**
  * Component for displaying a streak badge
  */
 export const StreakBadge = ({

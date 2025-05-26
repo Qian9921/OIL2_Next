@@ -3,32 +3,68 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useSession } from 'next-auth/react';
+import Link from 'next/link';
+import { Timestamp } from 'firebase/firestore';
+
+// UI Components
 import { MainLayout } from '@/components/layout/main-layout';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Avatar } from '@/components/ui/avatar';
-import { getProject, getParticipationByProjectAndStudent, updateParticipation } from '@/lib/firestore';
-import { Project, Subtask, Participation, ChatMessage } from '@/lib/types';
-import { generateAvatar, formatRelativeTime, getRawBase64 } from '@/lib/utils';
-import { fetchData } from '@/lib/fetch-utils';
-import { showSuccessToast, showErrorToast, showStreakToast, showInfoToast } from '@/lib/toast-utils';
-import { ArrowLeft, Send, CheckCircle, BookOpen, AlertTriangle, Bot, UserCircle2, Copy as CopyIcon, Check as CheckIcon, Trash2, Paperclip, X as XIcon, Lock, Loader2, Github, Info, ChevronUp, ChevronDown, ChevronLeft, Circle, Clock } from 'lucide-react';
-import Link from 'next/link';
+import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
-import ReactMarkdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
-import { GITHUB_SUBMISSION_SUBTASK_ID } from '@/lib/constants';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Collapsible, CollapsibleContent } from "@/components/ui/collapsible";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle
+} from "@/components/ui/dialog";
+import { SubmitProjectDialog } from '@/components/project/submit-project-dialog';
+
+// Icons
+import { 
+  ArrowLeft, Send, CheckCircle, BookOpen, AlertTriangle, Bot, 
+  UserCircle2, Trash2, Paperclip, Lock, Loader2, Github, Info, 
+  ChevronUp, ChevronDown, ChevronLeft, Circle, Clock, X as XIcon,
+  MessageCircleQuestion, XCircle, AlertCircle, MessageSquare, Copy, FileText, PlusCircle, Download, SendHorizonal
+} from 'lucide-react';
+
+// Project-specific components
 import { ChatMessage as ChatMessageComponent } from '@/components/chat/chat-message';
 import { LoadingState } from '@/components/ui/loading-state';
-import { GitHubInfoButton, TaskNavigation, saveTaskChatHistory, saveGitHubRepoURL } from '@/lib/task-utils';
-import { Timestamp } from 'firebase/firestore';
 import { ScoreDisplay, ScoreProgressBar, ScoreBadge, MetricScoreCard, StreakBadge } from '@/components/task/score-components';
 import { SafeAlertDialogDescription, EvaluationLoadingState, ConfirmationDialog, RequirementCheckpoint } from '@/components/task/dialog-components';
-import { EvaluationHistoryItem, PromptHistoryItem, EmptyPromptHistory, EmptyEvaluationHistory } from '@/components/task/history-components';
+import { EvaluationHistoryItem, PromptHistoryItem, EmptyPromptHistory, EmptyEvaluationHistory, PromptHistoryEntry } from '@/components/task/history-components';
+import { PromptFeedbackDisplay, PromptFeedbackMessage } from '@/components/task/feedback-components';
+import { DimensionScoreDisplay } from '@/components/task/score-components';
 
+// Utils and data
+import { getProject, getParticipationByProjectAndStudent, updateParticipation } from '@/lib/firestore';
+import { Project, Subtask, Participation, ChatMessage } from '@/lib/types';
+import { showSuccessToast, showErrorToast, showStreakToast, showInfoToast, showFeedbackToast } from '@/lib/toast-utils';
+import { GITHUB_SUBMISSION_SUBTASK_ID } from '@/lib/constants';
+import { GitHubInfoButton, TaskNavigation, saveTaskChatHistory, saveGitHubRepoURL } from '@/lib/task-utils';
+import { generateAvatar, formatRelativeTime, getRawBase64 } from '@/lib/utils';
+import { fetchData } from '@/lib/fetch-utils';
+
+// Markdown
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
+
+/**
+ * Page component for individual project tasks.
+ * 
+ * FEEDBACK FORMAT STANDARDIZATION
+ * We've standardized the feedback format across the app:
+ * 1. API always returns feedback as: { feedback: string }
+ * 2. Frontend components display this single paragraph feedback
+ * 3. Storage in Firebase uses this consistent format
+ * 4. Any old format with arrays is converted to the new format
+ */
 export default function ProjectTaskPage() {
   const params = useParams();
   const router = useRouter();
@@ -62,14 +98,7 @@ export default function ProjectTaskPage() {
   const [promptStreak, setPromptStreak] = useState<{ currentStreak: number; bestStreak: number; isGoodPrompt: boolean } | null>(null);
   const [isStreakAnimating, setIsStreakAnimating] = useState(false);
   const [currentPromptFeedback, setCurrentPromptFeedback] = useState<{
-    tips: string[];
-    strengths: string[];
-    componentFeedback: {
-      goal?: string;
-      context?: string;
-      expectations?: string;
-      source?: string;
-    }
+    feedback?: string;
   } | null>(null);
   const [evaluationFeedback, setEvaluationFeedback] = useState<{
     score: number;
@@ -117,17 +146,9 @@ export default function ProjectTaskPage() {
     }
   }> | null>(null);
   const [showHistoryDialog, setShowHistoryDialog] = useState(false);
-  const [promptHistory, setPromptHistory] = useState<Array<{
-    timestamp: Timestamp;
-    content: string;
-    qualityScore: number;
-    goalScore?: number;
-    contextScore?: number;
-    expectationsScore?: number;
-    sourceScore?: number;
-    isGoodPrompt?: boolean;
-  }> | null>(null);
+  const [promptHistory, setPromptHistory] = useState<PromptHistoryEntry[] | null>(null);
   const [showPromptHistoryDialog, setShowPromptHistoryDialog] = useState(false);
+  const [showSubmitProjectDialog, setShowSubmitProjectDialog] = useState(false);
 
   const MAX_USER_INPUT_LENGTH = 500;
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -394,6 +415,29 @@ export default function ProjectTaskPage() {
     }
   };
 
+  // Function to handle viewing prompt history
+  const handleViewPromptHistory = () => {
+    console.log("PROMPT HISTORY DEBUG - handleViewPromptHistory called, current history:", promptHistory);
+    
+    // Add detailed debugging for feedback
+    if (promptHistory && promptHistory.length > 0) {
+      console.log("PROMPT HISTORY DEBUG - Feedback check:", 
+        promptHistory.map(p => ({
+          id: p.timestamp.toMillis(),
+          qualityScore: p.qualityScore,
+          hasFeedback: !!p.feedback,
+          feedbackDetails: p.feedback ? {
+            hasFeedbackProp: typeof p.feedback.feedback === 'string',
+            feedbackLength: p.feedback.feedback ? p.feedback.feedback.length : 0
+          } : null
+        }))
+      );
+    }
+    
+    // Always show the dialog, even if history is empty
+    setShowPromptHistoryDialog(true);
+  };
+
   // Helper function to save prompt history
   const savePromptHistory = async (
     participationId: string,
@@ -408,59 +452,66 @@ export default function ProjectTaskPage() {
       isGoodPrompt?: boolean;
     },
     feedback?: {
-      tips: string[];
-      strengths: string[];
-      componentFeedback: {
-        goal?: string;
-        context?: string;
-        expectations?: string;
-        source?: string;
-      }
+      feedback?: string;
     } | null
   ) => {
+    console.log("PROMPT HISTORY DEBUG - Starting savePromptHistory with feedback:", feedback);
+    
     try {
-      console.log("PROMPT HISTORY DEBUG - Starting savePromptHistory with data:", { 
-        participationId, 
-        subtaskId, 
-        promptContent: promptContent.substring(0, 30) + "...", 
-        qualityData,
-        currentHistoryLength: promptHistory?.length || 0
-      });
+      // Check if we have valid feedback
+      const hasValidFeedback = feedback && typeof feedback.feedback === 'string' && feedback.feedback.trim() !== '';
       
-      // Create the prompt entry
+      // Skip saving only if we have neither scores nor feedback
+      const hasAnyScore = typeof qualityData.qualityScore === 'number';
+      const hasAnyDimensionScore = 
+        typeof qualityData.goalScore === 'number' || 
+        typeof qualityData.contextScore === 'number' || 
+        typeof qualityData.expectationsScore === 'number' || 
+        typeof qualityData.sourceScore === 'number';
+      
+      if (!hasAnyScore && !hasAnyDimensionScore && !hasValidFeedback) {
+        console.log("PROMPT HISTORY DEBUG - Skipping save due to missing scores and feedback");
+        return { success: false, error: "No scores or feedback available" };
+      }
+      
+      // Create a timestamp for this prompt entry
+      const timestamp = Timestamp.now();
+      
+      // Create the new prompt entry object
       const promptEntry = {
-        timestamp: Timestamp.now(),
+        timestamp,
         content: promptContent,
-        ...qualityData,
-        feedback: feedback || null
+        qualityScore: qualityData.qualityScore,
+        goalScore: qualityData.goalScore,
+        contextScore: qualityData.contextScore,
+        expectationsScore: qualityData.expectationsScore,
+        sourceScore: qualityData.sourceScore,
+        isGoodPrompt: qualityData.isGoodPrompt,
+        feedback: feedback // Use the standardized feedback format
       };
       
-      // Define the type for prompt entry
-      type PromptEntryType = typeof promptEntry;
+      // Log for debugging
+      console.log("PROMPT HISTORY DEBUG - Created new prompt entry:", promptEntry);
       
-      // Update in Firebase and get result
-      const updateResult = await updateHistoryInFirebase<PromptEntryType>(
+      // Use the common function to update history in Firebase
+      const result = await updateHistoryInFirebase(
         participationId,
         subtaskId,
         'promptHistory',
         promptEntry,
-        promptHistory as PromptEntryType[] | null
+        promptHistory
       );
       
-      if (!updateResult.success) {
-        throw updateResult.error;
+      if (result.success && result.newHistory) {
+        setPromptHistory(result.newHistory);
+        return { success: true, entry: promptEntry };
+      } else {
+        console.error("PROMPT HISTORY ERROR - Failed to save prompt history:", result.error);
+        return { success: false, error: result.error };
       }
-      
-      // Update the local state
-      if (updateResult.newHistory) {
-        console.log("PROMPT HISTORY DEBUG - Setting prompt history state with:", updateResult.newHistory);
-        setPromptHistory(updateResult.newHistory);
-      }
-      
-      return true;
     } catch (error) {
-      console.error("PROMPT HISTORY DEBUG - Error saving prompt history:", error);
-      return false;
+      console.error("PROMPT HISTORY ERROR - Exception in savePromptHistory:", error);
+      return { success: false, error };
     }
   };
 
@@ -508,6 +559,18 @@ export default function ProjectTaskPage() {
 
     try {
       const endpoint = `/api/chat`;
+      
+      // Log the API request details
+      console.log("PROMPT QUALITY DEBUG - Sending chat API request with params:", {
+        userId: session.user.id,
+        projectId: currentProjectId,
+        subtaskId: subtask.id,
+        messageLength: currentInput.length,
+        evaluatePromptQuality: true,
+        requestPersonalizedFeedback: true,
+        hasImageData: !!userMessage.imageData
+      });
+      
       const response = await fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -517,6 +580,7 @@ export default function ProjectTaskPage() {
           subtaskId: subtask.id,
           message: currentInput,
           evaluatePromptQuality: true,
+          requestPersonalizedFeedback: true,
           ...(userMessage.imageData && {
             imageData: userMessage.imageData.split(',')[1],
             imageMimeType: userMessage.imageData.split(';')[0].split(':')[1],
@@ -533,13 +597,24 @@ export default function ProjectTaskPage() {
       const headers = response.headers;
       let finalPromptStreak = promptStreak;
       let promptQualityData = {
-        qualityScore: 50, // Default fallback score
-        goalScore: 50,
-        contextScore: 50,
-        expectationsScore: 50,
-        sourceScore: 50,
+        qualityScore: 0, // Default to 0 (invalid) instead of 50
+        goalScore: 0,
+        contextScore: 0,
+        expectationsScore: 0,
+        sourceScore: 0,
         isGoodPrompt: false
       };
+      
+      // Debug log all headers related to prompt quality
+      console.log("PROMPT QUALITY DEBUG - Headers:", {
+        qualityScore: headers.get('x-prompt-quality-score'),
+        goalScore: headers.get('x-prompt-goal-score'),
+        contextScore: headers.get('x-prompt-context-score'),
+        expectationsScore: headers.get('x-prompt-expectations-score'),
+        sourceScore: headers.get('x-prompt-source-score'),
+        streak: headers.get('x-prompt-streak'),
+        evaluation: headers.get('x-prompt-evaluation')
+      });
 
       if (headers.get('x-prompt-quality-score')) {
         const qualityScore = parseInt(headers.get('x-prompt-quality-score') || '0');
@@ -548,106 +623,78 @@ export default function ProjectTaskPage() {
         const contextScore = parseInt(headers.get('x-prompt-context-score') || '0');
         const expectationsScore = parseInt(headers.get('x-prompt-expectations-score') || '0');
         const sourceScore = parseInt(headers.get('x-prompt-source-score') || '0');
-
-        promptQualityData = {
-          qualityScore,
-          goalScore,
-          contextScore,
-          expectationsScore,
-          sourceScore,
-          isGoodPrompt
-        };
-
-        // Generate personalized feedback based on component scores
-        const strengths = [];
-        const tips = [];
-        const componentFeedback: {
+        
+        // Check if we have real scores (not all 50)
+        const hasRealScores = [goalScore, contextScore, expectationsScore, sourceScore].some(score => score !== 50);
+        
+        let strengths: string[] = [];
+        let tips: string[] = [];
+        let componentFeedback: {
           goal?: string;
           context?: string;
           expectations?: string;
           source?: string;
         } = {};
 
-        // Add strengths for high scores
-        if (goalScore >= 80) strengths.push("Your prompt clearly states what you want to achieve");
-        if (contextScore >= 80) strengths.push("You provided helpful context for your question");
-        if (expectationsScore >= 80) strengths.push("Your expectations are well-defined");
-        if (sourceScore >= 80) strengths.push("Good use of examples or references");
-
-        // Generate specific feedback for each component
-        if (goalScore < 70) {
-          tips.push("Be more specific about what you're trying to accomplish");
-          
-          if (goalScore < 40) {
-            componentFeedback.goal = "Your prompt lacks a clear goal. Try starting with 'I need to...' or 'Help me with...'";
-          } else {
-            componentFeedback.goal = "Your goal could be clearer. Consider explaining why you need this information.";
+        // Get personalized feedback from API response headers
+        const personalisedFeedbackHeader = headers.get('x-prompt-feedback');
+        if (personalisedFeedbackHeader) {
+          try {
+            const parsedFeedback = JSON.parse(decodeURIComponent(personalisedFeedbackHeader));
+            console.log("PROMPT FEEDBACK DEBUG - Parsed feedback from headers:", parsedFeedback);
+            
+            // Set standardized feedback format
+            if (typeof parsedFeedback.feedback === 'string') {
+              const feedbackData = {
+                feedback: parsedFeedback.feedback
+              };
+              console.log("PROMPT FEEDBACK DEBUG - Setting feedback state:", feedbackData);
+              setCurrentPromptFeedback(feedbackData);
+              
+              // Always save to history if we have participation and subtask IDs
+              if (participation?.id && subtask?.id) {
+                console.log("PROMPT FEEDBACK DEBUG - Saving feedback to history");
+                await savePromptHistory(
+                  participation.id,
+                  subtask.id,
+                  currentInput,
+                  promptQualityData,
+                  feedbackData
+                );
+              }
+              
+              // Show toast about feedback
+              showFeedbackToast(toast, 'info', "Feedback Available", "Detailed prompt feedback has been saved. Click 'View Prompt Feedback' to see tips and suggestions.", 5000);
+            } else {
+              console.log("PROMPT FEEDBACK DEBUG - No valid feedback string in data");
+              setCurrentPromptFeedback(null);
+            }
+          } catch (e) {
+            console.error("Error parsing personalised feedback:", e);
+            setCurrentPromptFeedback(null);
           }
-        }
-
-        if (contextScore < 70) {
-          tips.push("Add more background information to your question");
-          
-          if (contextScore < 40) {
-            componentFeedback.context = "Very little context provided. Mention what you've already tried or relevant constraints.";
-          } else {
-            componentFeedback.context = "Some context given, but more details would help (e.g., environment, existing code, etc).";
-          }
-        }
-
-        if (expectationsScore < 70) {
-          tips.push("Specify what kind of response would be most helpful");
-          
-          if (expectationsScore < 40) {
-            componentFeedback.expectations = "It's unclear what type of answer you want. Specify format (code, explanation, steps, etc).";
-          } else {
-            componentFeedback.expectations = "Try indicating how detailed you want the answer to be.";
-          }
-        }
-
-        if (sourceScore < 70) {
-          tips.push("Include examples or references when relevant");
-          
-          if (sourceScore < 40) {
-            componentFeedback.source = "No examples or references provided. Mentioning similar cases helps the AI understand.";
-          } else {
-            componentFeedback.source = "Consider adding code snippets or examples to illustrate your point.";
-          }
-        }
-
-        // Set the current prompt feedback
-        setCurrentPromptFeedback({
-          tips,
-          strengths,
-          componentFeedback
-        });
-
-        // Look for specific patterns in the prompt and add tailored tips
-        const promptLower = currentInput.toLowerCase();
-        if (promptLower.includes("help") && promptLower.length < 15) {
-          tips.push("Your prompt is too vague. Specify exactly what you need help with.");
-        }
-        if (promptLower.includes("doesn't work") || promptLower.includes("not working")) {
-          if (!promptLower.includes("error")) {
-            tips.push("When something isn't working, describe the specific error or unexpected behavior.");
-          }
-        }
-        if (promptLower.match(/how (do|to|can)/i) && promptLower.length < 25) {
-          tips.push("Your 'how to' question needs more detail about your specific situation.");
-        }
-
-        const newStreakInfo = isGoodPrompt
-          ? { currentStreak: (promptStreak?.currentStreak || 0) + 1, bestStreak: Math.max((promptStreak?.bestStreak || 0), (promptStreak?.currentStreak || 0) + 1), isGoodPrompt }
-          : { currentStreak: 0, bestStreak: promptStreak?.bestStreak || 0, isGoodPrompt };
-        setPromptStreak(newStreakInfo);
-        finalPromptStreak = newStreakInfo;
-        if (isGoodPrompt) {
-          showStreakToast(toast, newStreakInfo.currentStreak, newStreakInfo.bestStreak);
-          showInfoToast(toast, "Prompt Analysis", { description: `Goal: ${goalScore}/100 | Context: ${contextScore}/100 | Expectations: ${expectationsScore}/100 | Source: ${sourceScore}/100` });
-          setIsStreakAnimating(true);
-          setTimeout(() => setIsStreakAnimating(false), 2000);
         } else {
-          showInfoToast(toast, "Prompt Feedback", { description: `Your prompt needs improvement. Scores - Goal: ${goalScore}/100 | Context: ${contextScore}/100 | Expectations: ${expectationsScore}/100 | Source: ${sourceScore}/100` });
+          console.log("PROMPT FEEDBACK DEBUG - No feedback header found");
+          setCurrentPromptFeedback(null);
+        }
+        
+        // Always update streak and show score toasts
+        if (qualityScore > 0 && goalScore > 0 && contextScore > 0 && expectationsScore > 0 && sourceScore > 0) {
+          const newStreakInfo = isGoodPrompt
+            ? { currentStreak: (promptStreak?.currentStreak || 0) + 1, bestStreak: Math.max((promptStreak?.bestStreak || 0), (promptStreak?.currentStreak || 0) + 1), isGoodPrompt }
+            : { currentStreak: 0, bestStreak: promptStreak?.bestStreak || 0, isGoodPrompt };
+          setPromptStreak(newStreakInfo);
+          finalPromptStreak = newStreakInfo;
+          
+          if (isGoodPrompt) {
+            showFeedbackToast(toast, 'streak', "Prompt Analysis", `Goal: ${goalScore}/100 | Context: ${contextScore}/100 | Expectations: ${expectationsScore}/100 | Source: ${sourceScore}/100`, 2000);
+            setIsStreakAnimating(true);
+            setTimeout(() => setIsStreakAnimating(false), 2000);
+          } else {
+            showFeedbackToast(toast, 'info', "Prompt Feedback", `Your prompt needs improvement. Scores - Goal: ${goalScore}/100 | Context: ${contextScore}/100 | Expectations: ${expectationsScore}/100 | Source: ${sourceScore}/100`, 5000);
+          }
+        } else {
+          console.log("PROMPT QUALITY DEBUG - Not showing score toast due to missing or invalid scores");
         }
       } else if (headers.get('x-prompt-streak')) {
         try {
@@ -657,53 +704,145 @@ export default function ProjectTaskPage() {
             setPromptStreak(parsedStreakInfo);
             finalPromptStreak = parsedStreakInfo;
             const promptEval = headers.get('x-prompt-evaluation');
-            let goalScore = 50, contextScore = 50, expectationsScore = 50, sourceScore = 50;
+            let goalScore = 0, contextScore = 0, expectationsScore = 0, sourceScore = 0;
+            let hasValidScores = false;
+            let hasValidFeedback = false;
+
             if (promptEval) {
               try {
                 const evalData = JSON.parse(decodeURIComponent(promptEval));
-                goalScore = evalData.goalScore || 50; 
-                contextScore = evalData.contextScore || 50; 
-                expectationsScore = evalData.expectationsScore || 50; 
-                sourceScore = evalData.sourceScore || 50;
                 
+                // Always assign scores if they're provided by the API, even if low
+                if (typeof evalData.goalScore === 'number') goalScore = evalData.goalScore;
+                if (typeof evalData.contextScore === 'number') contextScore = evalData.contextScore;
+                if (typeof evalData.expectationsScore === 'number') expectationsScore = evalData.expectationsScore;
+                if (typeof evalData.sourceScore === 'number') sourceScore = evalData.sourceScore;
+                
+                // Check if all dimension scores are available
+                hasValidScores = 
+                  typeof evalData.goalScore === 'number' && 
+                  typeof evalData.contextScore === 'number' && 
+                  typeof evalData.expectationsScore === 'number' && 
+                  typeof evalData.sourceScore === 'number';
+                
+                console.log("PROMPT QUALITY DEBUG - Scores from evaluation header:", {
+                  goalScore,
+                  contextScore,
+                  expectationsScore,
+                  sourceScore,
+                  hasValidScores,
+                  rawEvalData: evalData
+                });
+                
+                // Always create promptQualityData with all available scores
                 promptQualityData = {
-                  qualityScore: (goalScore + contextScore + expectationsScore + sourceScore) / 4,
+                  qualityScore: hasValidScores ? 
+                    (goalScore + contextScore + expectationsScore + sourceScore) / 4 : 
+                    evalData.overallScore || 0,
                   goalScore,
                   contextScore,
                   expectationsScore,
                   sourceScore,
                   isGoodPrompt: parsedStreakInfo.isGoodPrompt
                 };
-              } catch (e) { 
-                console.error('Error parsing prompt evaluation:', e); 
+                
+                // Check if it's already in the standardized format
+                let feedbackData = null;
+                
+                if (evalData.feedback && typeof evalData.feedback === 'object') {
+                  console.log("PROMPT FEEDBACK DEBUG - Found feedback in evaluation data:", evalData.feedback);
+                  
+                  // Check if it's already in the standardized format
+                  if (typeof evalData.feedback.feedback === 'string') {
+                    feedbackData = {
+                      feedback: evalData.feedback.feedback
+                    };
+                  }
+                  // Handle old format if needed (in case we get old format from API)
+                  else if ((evalData.feedback.strengths && Array.isArray(evalData.feedback.strengths)) || 
+                          (evalData.feedback.tips && Array.isArray(evalData.feedback.tips))) {
+                    // Convert old format to new format
+                    const strengths = evalData.feedback.strengths && Array.isArray(evalData.feedback.strengths) 
+                      ? evalData.feedback.strengths.join(' ') 
+                      : '';
+                    const tips = evalData.feedback.tips && Array.isArray(evalData.feedback.tips) 
+                      ? evalData.feedback.tips.join(' ') 
+                      : '';
+                    
+                    feedbackData = {
+                      feedback: `${strengths} ${tips}`.trim()
+                    };
+                  }
+                } else {
+                  console.warn("PROMPT FEEDBACK WARNING: No feedback found in evaluation data");
+                }
+                
+                // Set feedback if we have content
+                if (feedbackData && feedbackData.feedback && feedbackData.feedback.trim() !== '') {
+                  setCurrentPromptFeedback(feedbackData);
+                  hasValidFeedback = true;
+                  
+                  console.log("PROMPT FEEDBACK DEBUG - Using feedback from evaluation:", feedbackData);
+                  
+                  // Show toast about feedback
+                  showFeedbackToast(toast, 'info', "Feedback Available", "Prompt feedback has been saved. Click 'View Prompt Feedback' to see details.", 5000);
+                } else {
+                  // Don't set feedback if not available
+                  setCurrentPromptFeedback(null);
+                  
+                  // Update hasValidFeedback based on currentPromptFeedback
+                  hasValidFeedback = 
+                    !!currentPromptFeedback && 
+                    typeof currentPromptFeedback.feedback === 'string' && 
+                    currentPromptFeedback.feedback.trim() !== '';
+                  
+                  console.log("PROMPT FEEDBACK DEBUG - No valid feedback available");
+                }
+              } catch (e) {
+                console.error('Error parsing prompt evaluation:', e);
               }
             }
-            if (parsedStreakInfo.isGoodPrompt) {
-              showStreakToast(toast, parsedStreakInfo.currentStreak, parsedStreakInfo.bestStreak);
-              if (promptEval) showInfoToast(toast, "Prompt Analysis", { description: `Goal: ${goalScore}/100 | Context: ${contextScore}/100 | Expectations: ${expectationsScore}/100 | Source: ${sourceScore}/100` });
-              setIsStreakAnimating(true); setTimeout(() => setIsStreakAnimating(false), 2000);
+            
+            // Only save the prompt to history if we have valid scores or feedback
+            if (participation?.id && subtask?.id) {
+              // Check if we have any scores or feedback worth saving
+              if (hasValidScores || hasValidFeedback || 
+                  (typeof promptQualityData.goalScore === 'number') || 
+                  (typeof promptQualityData.contextScore === 'number') ||
+                  (typeof promptQualityData.expectationsScore === 'number') ||
+                  (typeof promptQualityData.sourceScore === 'number')) {
+                
+                console.log("PROMPT HISTORY DEBUG - Saving prompt with quality data:", promptQualityData);
+                try {
+                  await savePromptHistory(
+                    participation.id,
+                    subtask.id,
+                    currentInput,
+                    promptQualityData,
+                    currentPromptFeedback
+                  );
+                } catch (savingError) {
+                  console.error("PROMPT HISTORY DEBUG - Failed to save prompt history:", savingError);
+                }
+              } else {
+                console.log("PROMPT HISTORY DEBUG - Not saving to history due to missing scores and feedback");
+              }
+            }
+            
+            // Only display quality score toasts if we have valid scores
+            if (parsedStreakInfo.isGoodPrompt && hasValidScores) {
+              showFeedbackToast(toast, 'streak', "Prompt Analysis", `Goal: ${goalScore}/100 | Context: ${contextScore}/100 | Expectations: ${expectationsScore}/100 | Source: ${sourceScore}/100`, 2000);
+              setIsStreakAnimating(true);
+              setTimeout(() => setIsStreakAnimating(false), 2000);
+            } else if (hasValidScores) {
+              showFeedbackToast(toast, 'info', "Prompt Feedback", `Your prompt needs improvement. Scores - Goal: ${goalScore}/100 | Context: ${contextScore}/100 | Expectations: ${expectationsScore}/100 | Source: ${sourceScore}/100`, 5000);
             } else {
-              showInfoToast(toast, "Prompt Feedback", { description: promptEval ? `Your prompt needs improvement. Scores - Goal: ${goalScore}/100 | Context: ${contextScore}/100 | Expectations: ${expectationsScore}/100 | Source: ${sourceScore}/100` : "Try to be more specific..." });
+              // Don't show score-related toast if scores are invalid
+              console.log("PROMPT QUALITY DEBUG - Not showing toast due to invalid scores");
             }
           }
         } catch (e) { 
           console.error('Error parsing streak info from header:', e); 
-        }
-      }
-
-      // Always save the prompt to history, even if quality data is default
-      if (participation?.id && subtask?.id) {
-        console.log("PROMPT HISTORY DEBUG - Always saving prompt with quality data:", promptQualityData);
-        try {
-          await savePromptHistory(
-            participation.id,
-            subtask.id,
-            currentInput,
-            promptQualityData,
-            currentPromptFeedback
-          );
-        } catch (savingError) {
-          console.error("PROMPT HISTORY DEBUG - Failed to save prompt history:", savingError);
         }
       }
 
@@ -756,6 +895,22 @@ export default function ProjectTaskPage() {
       setChatMessages(prevMessages => prevMessages.filter(msg => msg.id !== aiMessageId));
       setIsChatLoading(false);
     }
+  };
+
+  // Function to check if this is the last task in the project
+  const isLastTask = (project: Project | null, subtask: Subtask | null): boolean => {
+    if (!project || !subtask) return false;
+    
+    const sortedSubtasks = [...project.subtasks].sort((a, b) => a.order - b.order);
+    return sortedSubtasks[sortedSubtasks.length - 1].id === subtask.id;
+  };
+
+  // Function to check if all tasks are completed
+  const areAllTasksCompleted = (project: Project | null, participation: Participation | null): boolean => {
+    if (!project || !participation) return false;
+    
+    const completedSubtasks = participation.completedSubtasks || [];
+    return project.subtasks.every(task => completedSubtasks.includes(task.id));
   };
 
   const handleCompleteTask = async () => {
@@ -867,9 +1022,14 @@ export default function ProjectTaskPage() {
           });
           
           setIsSubtaskCompletedByStudent(true);
-          showSuccessToast(toast, "Task Completed", { 
-            description: `You've completed this task with a score of ${score}%!` 
-          });
+          showSuccessToast(toast, "Task Completed", { description: `You've completed this task with a score of ${score}%!` });
+
+          // New code: Check if this is the last task and show submit dialog
+          if (isLastTask(project, subtask) && newCompletedSubtasks.length === project.subtasks.length) {
+            setTimeout(() => {
+              setShowSubmitProjectDialog(true);
+            }, 1000);
+          }
 
         } catch (apiError) {
           console.error("Error evaluating task:", apiError);
@@ -893,12 +1053,124 @@ export default function ProjectTaskPage() {
     }
   };
 
-  // Function to handle viewing prompt history
-  const handleViewPromptHistory = () => {
-    console.log("PROMPT HISTORY DEBUG - handleViewPromptHistory called, current history:", promptHistory);
+  const handleCompleteSubtaskIntent = () => {
+    if (!isCurrentSequentially) {
+      toast({ title: 'Task Locked', description: 'Please complete previous tasks in sequence before marking this one as complete.', variant: 'destructive' });
+      return;
+    }
     
-    // Always show the dialog, even if history is empty
-    setShowPromptHistoryDialog(true);
+    if (!isSubtaskCompletedByStudent) {
+      // Reset evaluation state when opening dialog
+      setEvaluationFeedback(null);
+      setShowCompleteDialog(true);
+    }
+  };
+
+  // Function to handle viewing evaluation history
+  const handleViewEvaluationHistory = () => {
+    if (evaluationHistory && evaluationHistory.length > 0) {
+      setShowHistoryDialog(true);
+    } else {
+      showFeedbackToast(toast, 'info', "No History", "No evaluation attempts found for this task.", 5000);
+    }
+  };
+
+  // Custom component for CardDescription with lock status to avoid hydration errors
+  const CardDescriptionWithLock = ({ 
+    project, 
+    isLocked 
+  }: { 
+    project: Project | null;
+    isLocked: boolean;
+  }) => {
+    return (
+      <>
+        <CardDescription>
+          Part of: {project?.title}
+        </CardDescription>
+        {isLocked && (
+          <div className="flex items-center mt-1">
+            <div className="bg-amber-100 text-amber-800 text-xs px-2 py-0.5 rounded-full flex items-center">
+              <Lock className="w-3 h-3 mr-1" />
+              <span>Complete previous tasks first</span>
+            </div>
+          </div>
+        )}
+      </>
+    );
+  };
+
+  // Handle admin direct task completion
+  const handleAdminCompleteTask = async () => {
+    if (!participation || !project || !subtask) return;
+    
+    try {
+      // Create mock evaluation result with 100% score
+      const mockEvaluationResult = {
+        score: 100,
+        feedback: "Task completed successfully by admin test account.",
+        success: true,
+        status: "completed",
+        result: {
+          rawContent: {
+            summary: "Task automatically approved for testing purposes.",
+            assessment: 100,
+            checkpoints: [
+              {
+                status: "passed",
+                details: "Automatically approved for testing.",
+                requirement: "Admin test approval"
+              }
+            ]
+          }
+        },
+        timestamp: Timestamp.now()
+      };
+        
+      // Save evaluation history
+      const historyUpdate = await updateEvaluationHistory(
+        participation.id, 
+        subtask.id, 
+        mockEvaluationResult, 
+        evaluationHistory
+      );
+        
+      if (!historyUpdate.success) {
+        throw new Error("Failed to prepare evaluation history update");
+      }
+        
+      // Update completed subtasks
+      const completedSubtasks = participation.completedSubtasks || [];
+      const newCompletedSubtasks = [...completedSubtasks, subtask.id];
+      const totalSubtasks = project.subtasks.length;
+      const newProgress = Math.round((newCompletedSubtasks.length / totalSubtasks) * 100);
+        
+      // Update Firebase
+      await updateParticipation(participation.id, {
+        completedSubtasks: newCompletedSubtasks,
+        progress: newProgress,
+        evaluationHistory: historyUpdate.evaluationHistoryUpdate
+      });
+        
+      // Update local state
+      setParticipation({
+        ...participation,
+        completedSubtasks: newCompletedSubtasks,
+        progress: newProgress,
+        evaluationHistory: historyUpdate.evaluationHistoryUpdate
+      });
+        
+      setIsSubtaskCompletedByStudent(true);
+    
+      // Show success toast
+      showSuccessToast(toast, "Admin Test Complete", { 
+        description: "Task automatically marked as complete with 100% score." 
+      });
+        
+    } catch (error) {
+      console.error('Error in admin complete:', error);
+      showErrorToast(toast, "Error", { description: "Failed to complete task using admin function." });
+    }
   };
 
   // Add a floating "View Prompts" button that's more visible
@@ -909,9 +1181,10 @@ export default function ProjectTaskPage() {
         size="sm"
         onClick={handleViewPromptHistory}
         className="flex items-center gap-2 border-purple-200 bg-purple-50 hover:bg-purple-100 text-purple-700"
+        title="Review your prompts and get quality feedback to improve your prompt writing skills"
       >
         <Info className="w-4 h-4" />
-        <span>View Prompts</span>
+        <span>View Prompt Feedback</span>
         {promptHistory && promptHistory.length > 0 && (
           <span className="bg-purple-600 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center font-bold">
             {promptHistory.length}
@@ -939,7 +1212,7 @@ export default function ProjectTaskPage() {
         chatHistory: updatedChatHistory
       });
       
-      showSuccessToast(toast, "Chat Cleared", { description: "Chat history cleared successfully" });
+      showFeedbackToast(toast, 'success', "Chat Cleared", "Chat history cleared successfully", 5000);
       setShowClearChatDialog(false);
     } catch (error) {
       console.error('Error clearing chat:', error);
@@ -985,110 +1258,6 @@ export default function ProjectTaskPage() {
 
   const handleClearChatIntent = () => {
     setShowClearChatDialog(true);
-  };
-
-  const handleCompleteSubtaskIntent = () => {
-    if (!isCurrentSequentially) {
-      toast({ title: 'Task Locked', description: 'Please complete previous tasks in sequence before marking this one as complete.', variant: 'destructive' });
-      return;
-    }
-
-    if (!isSubtaskCompletedByStudent) {
-      // Reset evaluation state when opening dialog
-      setEvaluationFeedback(null);
-      setShowCompleteDialog(true);
-    }
-  };
-
-  // Function to handle viewing evaluation history
-  const handleViewEvaluationHistory = () => {
-    if (evaluationHistory && evaluationHistory.length > 0) {
-      setShowHistoryDialog(true);
-    } else {
-      showInfoToast(toast, "No History", { description: "No evaluation attempts found for this task." });
-    }
-  };
-
-  // Custom component for CardDescription with lock status to avoid hydration errors
-  const CardDescriptionWithLock = ({ 
-    project, 
-    isLocked 
-  }: { 
-    project: Project | null;
-    isLocked: boolean;
-  }) => {
-    return (
-      <>
-        <CardDescription>
-          Part of: {project?.title}
-        </CardDescription>
-        {isLocked && (
-          <div className="flex items-center mt-1">
-            <div className="bg-amber-100 text-amber-800 text-xs px-2 py-0.5 rounded-full flex items-center">
-              <Lock className="w-3 h-3 mr-1" />
-              <span>Complete previous tasks first</span>
-            </div>
-          </div>
-        )}
-      </>
-    );
-  };
-
-  // Add this component to display personalized feedback
-  const PromptFeedbackMessage = ({ feedback }: { feedback: any }) => {
-    if (!feedback || (!feedback.tips.length && !feedback.strengths.length)) return null;
-    
-    return (
-      <div className="bg-purple-50 border border-purple-100 rounded-lg p-3 mb-4 text-sm">
-        <div className="flex items-start">
-          <Info className="h-5 w-5 text-purple-600 mr-2 mt-0.5 flex-shrink-0" />
-          <div className="space-y-2 flex-1">
-            <p className="font-medium text-purple-900">Prompt Quality Feedback</p>
-            
-            {feedback.strengths.length > 0 && (
-              <div>
-                <p className="text-green-700 font-medium">Strengths:</p>
-                <ul className="list-disc list-inside text-green-700 pl-1 space-y-0.5">
-                  {feedback.strengths.map((strength: string, i: number) => (
-                    <li key={i}>{strength}</li>
-                  ))}
-                </ul>
-              </div>
-            )}
-            
-            {feedback.tips.length > 0 && (
-              <div>
-                <p className="text-purple-700 font-medium">Tips for improvement:</p>
-                <ul className="list-disc list-inside text-purple-700 pl-1 space-y-0.5">
-                  {feedback.tips.map((tip: string, i: number) => (
-                    <li key={i}>{tip}</li>
-                  ))}
-                </ul>
-              </div>
-            )}
-            
-            {Object.keys(feedback.componentFeedback).length > 0 && (
-              <div className="mt-1 pt-1 border-t border-purple-100">
-                <p className="text-xs text-purple-700 italic">
-                  {feedback.componentFeedback.goal && (
-                    <span className="block mb-1">🎯 <b>Goal:</b> {feedback.componentFeedback.goal}</span>
-                  )}
-                  {feedback.componentFeedback.context && (
-                    <span className="block mb-1">📝 <b>Context:</b> {feedback.componentFeedback.context}</span>
-                  )}
-                  {feedback.componentFeedback.expectations && (
-                    <span className="block mb-1">🔍 <b>Expectations:</b> {feedback.componentFeedback.expectations}</span>
-                  )}
-                  {feedback.componentFeedback.source && (
-                    <span className="block mb-1">📚 <b>References:</b> {feedback.componentFeedback.source}</span>
-                  )}
-                </p>
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
-    );
   };
 
   if (isLoading && !project) {
@@ -1180,7 +1349,10 @@ export default function ProjectTaskPage() {
                   {project && (
                     <div className="flex items-center text-xs text-gray-500 bg-gray-50 px-2 py-1 rounded">
                       <span className="font-medium">
-                        Task {subtask?.order || '?'} of {project.subtasks.length}
+                        {subtask?.id === GITHUB_SUBMISSION_SUBTASK_ID ? 
+                          'Repository Setup' :
+                          `Task ${subtask?.order || '?'} of ${project.subtasks.filter(st => st.id !== GITHUB_SUBMISSION_SUBTASK_ID).length}`
+                        }
                       </span>
                     </div>
                   )}
@@ -1302,6 +1474,18 @@ export default function ProjectTaskPage() {
                       )}
                     </Button>
                     
+                    {/* Test Admin Button - Only visible for openimpactlab@gmail.com */}
+                    {session?.user?.email === 'openimpactlab@gmail.com' && !isSubtaskCompletedByStudent && (
+                      <Button 
+                        onClick={handleAdminCompleteTask} 
+                        className="w-full bg-purple-600 hover:bg-purple-700 text-white"
+                        size="sm"
+                      >
+                        <XCircle className="w-4 h-4 mr-2" />
+                        Test Admin Complete (100%)
+                      </Button>
+                    )}
+                    
                     {/* Button to view evaluation history */}
                     <Button
                       onClick={handleViewEvaluationHistory}
@@ -1366,12 +1550,6 @@ export default function ProjectTaskPage() {
                         sessionUserId={session?.user?.id || ''}
                         sessionUserName={session?.user?.name || ''}
                       />
-                      {/* Show feedback after user message, but only for the most recent one */}
-                      {index === chatMessages.length - 2 && 
-                       msg.role === 'user' && 
-                       currentPromptFeedback && (
-                        <PromptFeedbackMessage feedback={currentPromptFeedback} />
-                      )}
                     </React.Fragment>
                   ))}
                   {isChatLoading && (
@@ -1592,7 +1770,9 @@ export default function ProjectTaskPage() {
             <div className="py-4 space-y-6">
               {evaluationHistory?.length ? (
                 <div className="space-y-6">
-                  {evaluationHistory.map((evaluation, index) => (
+                  {[...evaluationHistory]
+                    .sort((a, b) => b.timestamp.toMillis() - a.timestamp.toMillis())
+                    .map((evaluation, index) => (
                     <EvaluationHistoryItem 
                       key={index}
                       evaluation={evaluation}
@@ -1615,37 +1795,42 @@ export default function ProjectTaskPage() {
         </AlertDialog>
 
         {/* Prompt History Dialog */}
-        <AlertDialog open={showPromptHistoryDialog} onOpenChange={setShowPromptHistoryDialog}>
-          <AlertDialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
-            <AlertDialogHeader>
-              <AlertDialogTitle>Prompt History</AlertDialogTitle>
-              <SafeAlertDialogDescription>
-                Your previous prompts and their quality scores - learn what makes a good prompt!
-              </SafeAlertDialogDescription>
-            </AlertDialogHeader>
-            
-            <div className="py-4 space-y-6">
-              {promptHistory?.length ? (
-                <div className="space-y-6">
-                  {/* Sort prompts by quality score (highest first) */}
-                  {[...promptHistory]
-                    .sort((a, b) => b.qualityScore - a.qualityScore)
-                    .map((prompt, index) => (
-                      <PromptHistoryItem key={index} prompt={prompt} />
-                    ))}
-                </div>
+        <Dialog open={showPromptHistoryDialog} onOpenChange={setShowPromptHistoryDialog}>
+          <DialogContent className="max-w-4xl max-h-[80vh] overflow-hidden flex flex-col">
+            <DialogHeader>
+              <DialogTitle>Your Prompt History & Feedback</DialogTitle>
+              <DialogDescription>
+                View your previous prompts and their quality scores for this task.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="flex-1 overflow-y-auto p-1 space-y-4">
+              {promptHistory && promptHistory.length > 0 ? (
+                [...promptHistory]
+                  .sort((a, b) => b.timestamp.toMillis() - a.timestamp.toMillis())
+                  .map((prompt, index) => (
+                  <PromptHistoryItem
+                    key={`prompt-${index}-${prompt.timestamp.toMillis()}`}
+                    prompt={prompt}
+                  />
+                ))
               ) : (
                 <EmptyPromptHistory />
               )}
             </div>
-            
-            <AlertDialogFooter>
-              <AlertDialogAction onClick={() => setShowPromptHistoryDialog(false)}>
-                Close
-              </AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
+            <DialogFooter className="mt-4">
+              <Button variant="outline" onClick={() => setShowPromptHistoryDialog(false)}>Close</Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Project Submission Dialog */}
+        <SubmitProjectDialog 
+          project={project}
+          participation={participation}
+          showDialog={showSubmitProjectDialog}
+          setShowDialog={setShowSubmitProjectDialog}
+          hideFloatingButton={!isSubtaskCompletedByStudent || !areAllTasksCompleted(project, participation)}
+        />
       </div>
     </MainLayout>
   );

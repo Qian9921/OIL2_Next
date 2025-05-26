@@ -14,6 +14,7 @@ import { Input } from '@/components/ui/input';
 import { ScoreBadge, ScoreProgressBar, MetricScoreCard } from '@/components/task/score-components';
 import { PromptTipsCard } from '@/components/task/dashboard-components';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { PromptFeedbackDisplay } from '@/components/task/feedback-components';
 
 export default function PromptHistoryPage() {
   const { data: session } = useSession();
@@ -113,7 +114,15 @@ export default function PromptHistoryPage() {
     }).format(date);
   };
 
-  const metrics = dashboard.promptQualityMetrics;
+  // Safely access metrics with null check
+  const metrics = dashboard?.promptQualityMetrics;
+  if (!metrics) {
+    return (
+      <MainLayout>
+        <LoadingState text="Loading metrics..." />
+      </MainLayout>
+    );
+  }
 
   return (
     <MainLayout>
@@ -260,39 +269,12 @@ export default function PromptHistoryPage() {
                               {prompt.feedback && (
                                 <div className="text-sm mb-3">
                                   <span className="font-medium">Feedback:</span>
-                                  <div className="mt-1 p-3 bg-purple-50 rounded border border-purple-100">
-                                    {prompt.feedback.strengths && prompt.feedback.strengths.length > 0 && (
-                                      <div className="mb-2">
-                                        <p className="text-green-700 font-medium text-xs">Strengths:</p>
-                                        <ul className="list-disc list-inside text-green-700 text-xs pl-1">
-                                          {prompt.feedback.strengths.map((strength, i) => (
-                                            <li key={i}>{strength}</li>
-                                          ))}
-                                        </ul>
-                                      </div>
-                                    )}
-                                    
-                                    {prompt.feedback.tips && prompt.feedback.tips.length > 0 && (
-                                      <div>
-                                        <p className="text-purple-700 font-medium text-xs">Tips:</p>
-                                        <ul className="list-disc list-inside text-purple-700 text-xs pl-1">
-                                          {prompt.feedback.tips.map((tip, i) => (
-                                            <li key={i}>{tip}</li>
-                                          ))}
-                                        </ul>
-                                      </div>
-                                    )}
-                                    
-                                    {prompt.feedback.componentFeedback && Object.keys(prompt.feedback.componentFeedback).length > 0 && (
-                                      <div className="mt-2 pt-2 border-t border-purple-100 text-xs text-purple-800">
-                                        {Object.entries(prompt.feedback.componentFeedback).map(([key, value]) => (
-                                          <div key={key} className="mb-1">
-                                            <span className="font-medium">{key.charAt(0).toUpperCase() + key.slice(1)}:</span> {value}
-                                          </div>
-                                        ))}
-                                      </div>
-                                    )}
-                                  </div>
+                                  <PromptFeedbackDisplay
+                                    feedback={prompt.feedback}
+                                    size="sm"
+                                    showTitle={false}
+                                    className="mt-1"
+                                  />
                                 </div>
                               )}
                               
@@ -323,6 +305,7 @@ export default function PromptHistoryPage() {
                   averageContextScore={metrics.averageContextScore}
                   averageExpectationsScore={metrics.averageExpectationsScore}
                   averageSourceScore={metrics.averageSourceScore}
+                  recentPrompts={filteredPrompts}
                 />
                 
                 <Card className="mt-6">

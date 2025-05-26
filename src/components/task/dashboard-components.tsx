@@ -1,8 +1,10 @@
 import React from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Info, MessageSquare, TrendingUp, Trophy, Brain } from 'lucide-react';
+import { Info, MessageSquare, TrendingUp, Trophy, Brain, Clock, Calendar, BookOpen, Award, FileText, CheckCircle } from 'lucide-react';
 import { ScoreBadge, ScoreProgressBar } from './score-components';
 import Link from 'next/link';
+import { Activity } from '@/lib/types';
+import { formatRelativeTime } from '@/lib/utils';
 
 /**
  * Displays a summary of a student's prompt quality statistics
@@ -31,13 +33,11 @@ export const PromptQualitySummary = ({
           <div className="text-2xl font-bold text-purple-600">
             {averageScore.toFixed(0)}%
           </div>
-          <ScoreBadge score={averageScore} className="ml-auto" />
         </div>
         <ScoreProgressBar score={averageScore} className="mb-2" />
-        <div className="flex justify-between items-center text-xs text-gray-500 mt-2">
-          <span>Best streak: <span className="font-semibold text-purple-600">{bestStreak}🔥</span></span>
-          <span>{goodPromptsPercentage}% good prompts</span>
-          <span>Total: {totalPrompts}</span>
+        <div className="text-xs text-gray-500 mt-2">
+          {bestStreak > 1 && <span className="mr-2">Best streak: <span className="font-semibold text-purple-600">{bestStreak}🔥</span></span>}
+          <span>Total prompts: {totalPrompts}</span>
         </div>
       </CardContent>
     </Card>
@@ -120,119 +120,88 @@ export const RecentPromptsCard = ({
 };
 
 /**
- * Displays prompt improvement tips based on a student's metrics
+ * Displays recent student activities across projects
  */
-export const PromptTipsCard = ({
-  averageGoalScore,
-  averageContextScore,
-  averageExpectationsScore,
-  averageSourceScore,
+export const RecentActivityCard = ({
+  activities,
+  onViewAllClick,
 }: {
-  averageGoalScore: number;
-  averageContextScore: number;
-  averageExpectationsScore: number;
-  averageSourceScore: number;
+  activities: Activity[];
+  onViewAllClick?: () => void;
 }) => {
-  // Determine which areas need improvement (scores below 70)
-  const needsImprovementAreas = [];
-  
-  if (averageGoalScore < 70) {
-    needsImprovementAreas.push({
-      name: 'Goal Clarity',
-      score: averageGoalScore,
-      tips: [
-        'Clearly state what you want to achieve',
-        'Be specific about your desired outcome',
-        'Start with action verbs like "create", "explain", or "solve"'
-      ]
-    });
-  }
-  
-  if (averageContextScore < 70) {
-    needsImprovementAreas.push({
-      name: 'Context',
-      score: averageContextScore,
-      tips: [
-        'Provide relevant background information',
-        'Explain what you\'ve already tried',
-        'Share constraints or requirements'
-      ]
-    });
-  }
-  
-  if (averageExpectationsScore < 70) {
-    needsImprovementAreas.push({
-      name: 'Expectations',
-      score: averageExpectationsScore,
-      tips: [
-        'Specify the format you want the response in',
-        'Indicate the level of detail needed',
-        'Mention if you need step-by-step guidance'
-      ]
-    });
-  }
-  
-  if (averageSourceScore < 70) {
-    needsImprovementAreas.push({
-      name: 'Source Material',
-      score: averageSourceScore,
-      tips: [
-        'Reference specific examples or resources',
-        'Include relevant code snippets when applicable',
-        'Mention related concepts you\'re familiar with'
-      ]
-    });
-  }
+  // Helper function to get icon by activity type
+  const getActivityIcon = (type: Activity['type']) => {
+    switch (type) {
+      case 'project_joined':
+        return <BookOpen className="w-4 h-4 text-blue-500" />;
+      case 'subtask_completed':
+        return <CheckCircle className="w-4 h-4 text-green-500" />;
+      case 'submission_made':
+        return <FileText className="w-4 h-4 text-purple-500" />;
+      case 'certificate_earned':
+        return <Award className="w-4 h-4 text-yellow-500" />;
+      default:
+        return <Clock className="w-4 h-4 text-gray-500" />;
+    }
+  };
 
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="flex items-center space-x-2">
-          <TrendingUp className="w-5 h-5 text-blue-600" />
-          <span>Prompt Improvement Tips</span>
-        </CardTitle>
+        <div className="flex items-center justify-between">
+          <CardTitle className="flex items-center space-x-2">
+            <TrendingUp className="w-5 h-5 text-blue-600" />
+            <span>Recent Activity</span>
+          </CardTitle>
+          {onViewAllClick && (
+            <button 
+              onClick={onViewAllClick}
+              className="text-xs text-blue-600 hover:text-blue-800 hover:underline"
+            >
+              View all
+            </button>
+          )}
+        </div>
         <CardDescription>
-          {needsImprovementAreas.length > 0 
-            ? 'Focus on these areas to improve your AI interactions' 
-            : 'Great job! Your prompts are well-crafted'}
+          Your latest learning milestones and achievements
         </CardDescription>
       </CardHeader>
       <CardContent>
-        {needsImprovementAreas.length > 0 ? (
-          <div className="space-y-4">
-            {needsImprovementAreas.map((area) => (
-              <div key={area.name} className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <h3 className="text-sm font-medium">{area.name}</h3>
-                  <ScoreBadge score={area.score} />
+        {activities.length > 0 ? (
+          <div className="space-y-3">
+            {activities.map((activity) => (
+              <div key={activity.id} className="p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
+                <div className="flex items-start">
+                  <div className="flex-shrink-0 mt-0.5 mr-3">
+                    {getActivityIcon(activity.type)}
+                  </div>
+                  <div className="flex-1">
+                    <div className="flex justify-between items-start">
+                      <p className="text-sm font-medium text-gray-900">{activity.title}</p>
+                      <span className="text-xs text-gray-500">{formatRelativeTime(activity.timestamp.toDate())}</span>
+                    </div>
+                    <p className="text-xs text-gray-600 mt-1">{activity.description}</p>
+                  </div>
                 </div>
-                <ul className="text-sm text-gray-600 space-y-1 pl-5 list-disc">
-                  {area.tips.map((tip, index) => (
-                    <li key={index}>{tip}</li>
-                  ))}
-                </ul>
               </div>
             ))}
           </div>
         ) : (
-          <div className="flex items-center p-4 bg-green-50 text-green-800 rounded-lg">
-            <Trophy className="w-5 h-5 mr-3 flex-shrink-0" />
-            <div>
-              <p className="font-medium">Excellent prompt skills!</p>
-              <p className="text-sm">Your prompts are well-structured with clear goals, context, expectations, and references.</p>
-            </div>
+          <div className="text-center py-6 text-gray-500">
+            <Clock className="w-10 h-10 mx-auto text-gray-300 mb-2" />
+            <p>No recent activity</p>
+            <p className="text-sm">Start working on projects to see your activity here!</p>
           </div>
         )}
-        
-        <div className="bg-purple-50 p-3 rounded-lg mt-4 text-sm text-purple-800">
-          <div className="flex items-start">
-            <Info className="w-4 h-4 mt-0.5 mr-2 flex-shrink-0" />
-            <p>High-quality prompts lead to better AI responses and can save you time on projects.</p>
-          </div>
-        </div>
       </CardContent>
     </Card>
   );
+};
+
+// For backwards compatibility - keep the PromptTipsCard export but implement it as empty
+export const PromptTipsCard = () => {
+  // This component is kept for backwards compatibility but doesn't render anything
+  return null;
 };
 
 // Helper function to format date
@@ -247,14 +216,12 @@ const formatDate = (date: Date): string => {
     return date.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
   }
   
-  // If date is within last 7 days, show day name
-  const diffTime = Math.abs(today.getTime() - date.getTime());
-  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-  
-  if (diffDays <= 7) {
-    return date.toLocaleDateString(undefined, { weekday: 'short' });
+  // If date is in the last 7 days, show day name
+  const daysDiff = Math.floor((today.getTime() - date.getTime()) / (1000 * 60 * 60 * 24));
+  if (daysDiff < 7) {
+    return date.toLocaleDateString(undefined, { weekday: 'long' });
   }
   
   // Otherwise show date
-  return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+  return date.toLocaleDateString();
 }; 

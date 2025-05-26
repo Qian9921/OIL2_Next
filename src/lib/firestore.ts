@@ -302,12 +302,22 @@ export async function getStudentDashboard(studentId: string): Promise<StudentDas
   const activeProjects = participations.filter(p => p.status === 'active').length;
   const completedProjects = participations.filter(p => p.status === 'completed').length;
   
-  // Calculate total hours (estimated from completed projects)
+  // Calculate total hours (from completed tasks, not just completed projects)
   let totalHours = 0;
-  for (const participation of participations.filter(p => p.status === 'completed')) {
+  
+  // Process all participations to sum up hours from completed tasks
+  for (const participation of participations) {
     const project = await getProject(participation.projectId);
-    if (project) {
-      totalHours += calculateEstimatedHours(project);
+    if (!project || !project.subtasks) continue;
+    
+    // Get completed subtasks for this participation
+    const completedSubtasks = participation.completedSubtasks || [];
+    
+    // Sum hours only for completed subtasks
+    for (const subtask of project.subtasks) {
+      if (completedSubtasks.includes(subtask.id) && subtask.estimatedHours) {
+        totalHours += subtask.estimatedHours;
+      }
     }
   }
   
@@ -317,13 +327,15 @@ export async function getStudentDashboard(studentId: string): Promise<StudentDas
   );
   const certificates = certificatesSnapshot.size;
   
-  // Get recent activity from real participation data
+  // Get recent activity from various sources
   const recentActivity = [];
+
+  // 1. Add activities from project joins
   for (const participation of participations.slice(0, 5)) {
     const project = await getProject(participation.projectId);
     if (project) {
       recentActivity.push({
-        id: participation.id,
+        id: `join-${participation.id}`,
         type: 'project_joined' as const,
         title: `Joined ${project.title}`,
         description: `You joined a project by ${project.ngoName}`,
@@ -331,21 +343,77 @@ export async function getStudentDashboard(studentId: string): Promise<StudentDas
       });
     }
   }
-  
-  // Get recent submissions as activity
-  const submissions = await getSubmissions({ studentId });
-  for (const submission of submissions.slice(0, 3)) {
+
+  // 2. Add activities from completed subtasks
+  for (const participation of participations) {
+    const project = await getProject(participation.projectId);
+    if (!project || !project.subtasks) continue;
+    
+    // Get completed subtasks for this participation
+    const completedSubtasks = participation.completedSubtasks || [];
+    
+    // Add activities for recently completed subtasks (last 5)
+    if (participation.evaluationHistory) {
+      for (const [subtaskId, evaluations] of Object.entries(participation.evaluationHistory)) {
+        if (!evaluations || !evaluations.length) continue;
+        
+        // Sort evaluations by timestamp (newest first)
+        const sortedEvals = [...evaluations].sort((a, b) => 
+          b.timestamp.toMillis() - a.timestamp.toMillis()
+        );
+        
+        // Get only the latest evaluation with score >= 80 (successful)
+        const latestSuccessful = sortedEvals.find(evaluation => evaluation.score >= 80);
+        
+        if (latestSuccessful && completedSubtasks.includes(subtaskId)) {
+          const subtask = project.subtasks.find(st => st.id === subtaskId);
+          if (subtask) {
+            recentActivity.push({
+              id: `complete-${participation.id}-${subtaskId}`,
+              type: 'subtask_completed' as const,
+              title: `Completed "${subtask.title}"`,
+              description: `You completed a task in ${project.title} with a score of ${latestSuccessful.score}%`,
+              timestamp: latestSuccessful.timestamp
+            });
+          }
+        }
+      }
+    }
+  }
+
+  // 3. Add activities from submissions
+  const studentSubmissions = await getSubmissions({ studentId });
+  for (const submission of studentSubmissions.slice(0, 5)) {
     const project = await getProject(submission.projectId);
     if (project) {
       recentActivity.push({
         id: `submission-${submission.id}`,
         type: 'submission_made' as const,
-        title: `Submitted ${project.title}`,
-        description: `You submitted your work for teacher review`,
+        title: `Submitted work for ${project.title}`,
+        description: submission.status === 'pending' 
+          ? `Your submission is awaiting review` 
+          : `Your submission was ${submission.status}`,
         timestamp: submission.submittedAt
       });
     }
   }
+
+  // 4. Add activities from certificates
+  const studentCertificates = await getCertificates({ studentId });
+  for (const certificate of studentCertificates.slice(0, 3)) {
+    recentActivity.push({
+      id: `certificate-${certificate.id}`,
+      type: 'certificate_earned' as const,
+      title: `Earned Certificate for ${certificate.projectTitle}`,
+      description: `You received a certificate for completing the project`,
+      timestamp: certificate.issuedAt
+    });
+  }
+  
+  // Remove previously added activities since we now get them from other sources
+  // Sort by timestamp and limit to 5 most recent
+  recentActivity.sort((a, b) => b.timestamp.toMillis() - a.timestamp.toMillis());
+  const finalRecentActivity = recentActivity.slice(0, 5);
   
   // Collect and analyze prompt history data
   let totalPrompts = 0;
@@ -372,14 +440,7 @@ export async function getStudentDashboard(studentId: string): Promise<StudentDas
     qualityScore: number;
     timestamp: Date;
     feedback?: {
-      tips: string[];
-      strengths: string[];
-      componentFeedback?: {
-        goal?: string;
-        context?: string;
-        expectations?: string;
-        source?: string;
-      };
+      feedback?: string;
     };
   }> = [];
 
@@ -425,6 +486,34 @@ export async function getStudentDashboard(studentId: string): Promise<StudentDas
           
           // Add to recent prompts array (limit to 20 most recent for processing)
           if (recentPrompts.length < 20) {
+            // Convert old feedback format to new format if needed
+            let feedbackForDisplay: { feedback?: string } | undefined = undefined;
+            if (prompt.feedback) {
+              // Check if it's the new format already (has a feedback property)
+              if ('feedback' in prompt.feedback && typeof prompt.feedback.feedback === 'string') {
+                // New format - just pass it through
+                feedbackForDisplay = {
+                  feedback: prompt.feedback.feedback
+                };
+              } else if ('strengths' in prompt.feedback || 'tips' in prompt.feedback) {
+                // Old format - combine strengths and tips into a single paragraph
+                const strengths = 'strengths' in prompt.feedback && Array.isArray(prompt.feedback.strengths) 
+                  ? prompt.feedback.strengths.join(' ') 
+                  : '';
+                const tips = 'tips' in prompt.feedback && Array.isArray(prompt.feedback.tips) 
+                  ? prompt.feedback.tips.join(' ') 
+                  : '';
+                feedbackForDisplay = {
+                  feedback: `${strengths} ${tips}`.trim()
+                };
+              } else {
+                // Unknown format, set an empty feedback object
+                feedbackForDisplay = {
+                  feedback: "Feedback available but in an unsupported format."
+                };
+              }
+            }
+            
             recentPrompts.push({
               id: `${participation.id}-${subtaskId}-${prompt.timestamp.toMillis()}`,
               projectId: participation.projectId,
@@ -434,7 +523,7 @@ export async function getStudentDashboard(studentId: string): Promise<StudentDas
               content: prompt.content,
               qualityScore: prompt.qualityScore || 0,
               timestamp: prompt.timestamp.toDate(),
-              feedback: prompt.feedback || undefined
+              feedback: feedbackForDisplay
             });
           }
         }
@@ -464,10 +553,6 @@ export async function getStudentDashboard(studentId: string): Promise<StudentDas
   const averageContextScore = promptsWithContextScore > 0 ? totalContextScore / promptsWithContextScore : 0;
   const averageExpectationsScore = promptsWithExpectationsScore > 0 ? totalExpectationsScore / promptsWithExpectationsScore : 0;
   const averageSourceScore = promptsWithSourceScore > 0 ? totalSourceScore / promptsWithSourceScore : 0;
-  
-  // Sort by timestamp and limit to 5 most recent
-  recentActivity.sort((a, b) => b.timestamp.toMillis() - a.timestamp.toMillis());
-  const finalRecentActivity = recentActivity.slice(0, 5);
   
   // Generate upcoming deadlines from active projects
   const upcomingDeadlines = [];
@@ -1025,6 +1110,7 @@ export async function handleStatusChange(projectId: string, newStatus: Project['
  * @param participationId - The ID of the participation record
  * @param subtaskId - The ID of the subtask
  * @param evaluation - Object containing evaluation scores and prompt text
+ * @param feedback - Optional object containing personalized feedback
  * @returns Object containing current streak, best streak, and whether the prompt was good
  */
 export async function savePromptEvaluation(
@@ -1037,6 +1123,9 @@ export async function savePromptEvaluation(
     sourceScore: number;
     overallScore: number;
     prompt: string;
+  },
+  feedback?: {
+    feedback?: string;
   }
 ) {
   try {
@@ -1090,7 +1179,8 @@ export async function savePromptEvaluation(
         ...evaluation,
         timestamp: Timestamp.now(),
         streak: currentStreak,
-        bestStreak: bestStreak
+        bestStreak: bestStreak,
+        feedback: feedback || null // Include personalized feedback if provided
       };
       
       // Add the new evaluation to the array
