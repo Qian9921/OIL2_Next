@@ -21,6 +21,7 @@ import {
   Calendar
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { LoadingState } from "@/components/ui/loading-state";
 
 interface ReportData {
   totalStudents: number;
@@ -175,9 +176,7 @@ export default function TeacherReportsPage() {
   if (isLoading) {
     return (
       <MainLayout>
-        <div className="flex items-center justify-center h-64">
-          <div className="loading-spinner" />
-        </div>
+        <LoadingState text="Loading reports data..." />
       </MainLayout>
     );
   }

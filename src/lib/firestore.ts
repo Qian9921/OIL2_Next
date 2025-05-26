@@ -122,7 +122,7 @@ export async function deleteProject(projectId: string) {
 }
 
 // Participation operations
-export async function createParticipation(participationData: Omit<Participation, 'id' | 'joinedAt' | 'chatHistory' | 'submissions'>) {
+export async function createParticipation(participationData: Omit<Participation, 'id' | 'joinedAt' | 'chatHistory' | 'submissions' | 'createdAt' | 'updatedAt'>) {
   const batch = writeBatch(db);
   
   // Create participation
@@ -131,7 +131,9 @@ export async function createParticipation(participationData: Omit<Participation,
     ...participationData,
     joinedAt: Timestamp.now(),
     chatHistory: [],
-    submissions: []
+    submissions: [],
+    createdAt: Timestamp.now(),
+    updatedAt: Timestamp.now()
   });
   
   // Update project participant count

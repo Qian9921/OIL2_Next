@@ -21,6 +21,7 @@ import { getParticipations, getProject, updateParticipation, createSubmission, d
 import { Project, Participation, Submission, Subtask } from "@/lib/types";
 import { generateAvatar, getStatusColor, getDifficultyColor, calculateEstimatedHours, formatDeadline } from "@/lib/utils";
 import { Timestamp } from "firebase/firestore";
+import { LoadingState } from "@/components/ui/loading-state";
 import { 
   BookOpen, 
   Users, 
@@ -298,9 +299,7 @@ export default function StudentMyProjectsPage() {
   if (isLoading) {
     return (
       <MainLayout>
-        <div className="flex items-center justify-center h-[calc(100vh-var(--header-height,4rem))]">
-          <Loader2 className="w-12 h-12 text-purple-600 animate-spin" />
-        </div>
+        <LoadingState text="Loading projects data..." />
       </MainLayout>
     );
   }

@@ -5,26 +5,20 @@ import { useSession } from "next-auth/react";
 import { MainLayout } from "@/components/layout/main-layout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Avatar } from "@/components/ui/avatar";
 import { getProjects, createParticipation, getParticipations } from "@/lib/firestore";
 import { Project } from "@/lib/types";
-import { generateAvatar, getDifficultyColor, calculateEstimatedHours, formatDeadline } from "@/lib/utils";
 import { 
   BookOpen, 
   Users, 
-  Clock, 
-  Tag,
   Search,
   Filter,
-  TrendingUp,
-  MapPin,
-  CheckCircle,
-  Target,
-  Calendar
 } from "lucide-react";
 import Link from "next/link";
 import { useToast } from "@/hooks/use-toast";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
+import { ProjectCard } from "@/components/project/project-card";
+import { LoadingState } from "@/components/ui/loading-state";
+import { Timestamp } from "firebase/firestore";
 
 export default function StudentProjectsPage() {
   const { data: session } = useSession();
@@ -103,7 +97,7 @@ export default function StudentProjectsPage() {
   };
 
   const handleJoinProject = async () => {
-    if (!projectToJoin || !session?.user?.id) {
+    if (!projectToJoin || !session?.user?.id || !session?.user?.name) {
       setProjectToJoin(null);
       return;
     }
@@ -114,10 +108,10 @@ export default function StudentProjectsPage() {
       await createParticipation({
         projectId: projectToJoin.id,
         studentId: session.user.id,
-        studentName: session.user.name || 'Student',
+        studentName: session.user.name,
         status: 'active',
-        completedSubtasks: [],
-        progress: 0
+        progress: 0,
+        completedSubtasks: []
       });
 
       // Reload data
@@ -161,9 +155,7 @@ export default function StudentProjectsPage() {
   if (isLoading) {
     return (
       <MainLayout>
-        <div className="flex items-center justify-center h-64">
-          <div className="loading-spinner" />
-        </div>
+        <LoadingState text="Loading projects..." />
       </MainLayout>
     );
   }
@@ -261,128 +253,15 @@ export default function StudentProjectsPage() {
         {filteredProjects.length > 0 ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {filteredProjects.map((project) => (
-              <Card key={project.id} className="card-hover h-full flex flex-col">
-                <CardHeader>
-                  <div className="flex items-start justify-between mb-2">
-                    <div className="flex-1">
-                      <CardTitle className="text-lg line-clamp-2">{project.title}</CardTitle>
-                      <div className="flex items-center space-x-2 mt-2">
-                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${getDifficultyColor(project.difficulty)}`}>
-                          {project.difficulty === 'beginner' ? 'Beginner' :
-                           project.difficulty === 'intermediate' ? 'Intermediate' : 'Advanced'}
-                        </span>
-                        {isProjectFull(project) && (
-                          <span className="px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800">
-                            Full
-                          </span>
-                        )}
-                        {isProjectJoined(project.id) && (
-                          <span className="px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                            Joined
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                    <Avatar
-                      src={generateAvatar(project.ngoId)}
-                      alt={project.ngoName}
-                      size="sm"
-                    />
-                  </div>
-                  <p className="text-sm text-gray-600">
-                    by {project.ngoName}
-                  </p>
-                </CardHeader>
-
-                <CardContent className="flex-1 flex flex-col space-y-4">
-                  {/* Description */}
-                  <p className="text-gray-700 text-sm line-clamp-3 flex-1">
-                    {project.shortDescription || project.description}
-                  </p>
-
-                  {/* Project Stats */}
-                  <div className="grid grid-cols-2 gap-2 text-xs text-gray-600">
-                    <div className="flex items-center space-x-1">
-                      <Users className="w-3 h-3" />
-                      <span>{project.currentParticipants}/{project.maxParticipants || '∞'}</span>
-                    </div>
-                    <div className="flex items-center space-x-1">
-                      <Clock className="w-3 h-3" />
-                      <span>
-                        {calculateEstimatedHours(project) > 0 
-                          ? `${calculateEstimatedHours(project)} hours (est.)`
-                          : 'TBD hours'
-                        }
-                      </span>
-                    </div>
-                    <div className="flex items-center space-x-1">
-                      <Target className="w-3 h-3" />
-                      <span>{project.subtasks?.length || 0} tasks</span>
-                    </div>
-                    <div className="flex items-center space-x-1">
-                      <Calendar className="w-3 h-3" />
-                      <span>
-                        {project.deadline ? 
-                          `Due ${formatDeadline(project.deadline)}` 
-                          : 'No deadline'
-                        }
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* Tags */}
-                  {project.tags && project.tags.length > 0 && (
-                    <div className="flex flex-wrap gap-1">
-                      {project.tags.slice(0, 3).map((tag) => (
-                        <span
-                          key={tag}
-                          className="px-2 py-1 bg-gray-100 text-gray-700 rounded-full text-xs"
-                        >
-                          {tag}
-                        </span>
-                      ))}
-                      {project.tags.length > 3 && (
-                        <span className="px-2 py-1 bg-gray-100 text-gray-700 rounded-full text-xs">
-                          +{project.tags.length - 3}
-                        </span>
-                      )}
-                    </div>
-                  )}
-
-                  {/* Action Buttons */}
-                  <div className="flex space-x-2 pt-2">
-                    <Link href={`/projects/${project.id}`} className="flex-1">
-                      <Button variant="outline" className="w-full">
-                        <BookOpen className="w-4 h-4 mr-2" />
-                        View Details
-                      </Button>
-                    </Link>
-                    {isProjectJoined(project.id) ? (
-                      <Link href="/student/my-projects" className="flex-1">
-                        <Button className="w-full">
-                          <Target className="w-4 h-4 mr-2" />
-                          Continue
-                        </Button>
-                      </Link>
-                    ) : (
-                      <Button
-                        onClick={() => handleJoinProjectIntent(project)}
-                        disabled={isProjectFull(project) || joiningProject === project.id}
-                        className="flex-1"
-                      >
-                        {joiningProject === project.id ? (
-                          <div className="loading-spinner" />
-                        ) : (
-                          <>
-                            <CheckCircle className="w-4 h-4 mr-2" />
-                            Join
-                          </>
-                        )}
-                      </Button>
-                    )}
-                  </div>
-                </CardContent>
-              </Card>
+              <ProjectCard
+                key={project.id}
+                project={project}
+                showJoinButton={true}
+                isJoined={isProjectJoined(project.id)}
+                isFull={isProjectFull(project) ? true : false}
+                isJoining={joiningProject === project.id}
+                onJoinClick={handleJoinProjectIntent}
+              />
             ))}
           </div>
         ) : (

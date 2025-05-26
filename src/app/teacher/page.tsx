@@ -9,6 +9,7 @@ import { Avatar } from "@/components/ui/avatar";
 import { getTeacherDashboard, getParticipations, getProject } from "@/lib/firestore";
 import { TeacherDashboard, Participation, Project } from "@/lib/types";
 import { generateAvatar, getStatusColor } from "@/lib/utils";
+import { LoadingState } from "@/components/ui/loading-state";
 import { 
   Users, 
   BookOpen, 
@@ -92,9 +93,7 @@ export default function TeacherDashboardPage() {
   if (isLoading) {
     return (
       <MainLayout>
-        <div className="flex items-center justify-center h-64">
-          <div className="loading-spinner" />
-        </div>
+        <LoadingState text="Loading dashboard..." />
       </MainLayout>
     );
   }

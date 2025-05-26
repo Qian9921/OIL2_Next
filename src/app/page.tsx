@@ -7,6 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Heart, Users, GraduationCap, Building, ArrowRight } from "lucide-react";
 import Link from "next/link";
+import { LoadingState } from "@/components/ui/loading-state";
 
 export default function Home() {
   const { data: session, status } = useSession();
@@ -27,7 +28,7 @@ export default function Home() {
   if (status === "loading") {
     return (
       <div className="min-h-screen bg-gradient-to-br from-purple-50 via-pink-50 to-cyan-50 flex items-center justify-center">
-        <div className="loading-spinner" />
+        <LoadingState text="Loading..." />
       </div>
     );
   }
@@ -36,7 +37,7 @@ export default function Home() {
   if (status === "authenticated" && session?.user?.role) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-purple-50 via-pink-50 to-cyan-50 flex items-center justify-center">
-        <div className="loading-spinner" />
+        <LoadingState text="Redirecting to dashboard..." />
       </div>
     );
   }

@@ -12,6 +12,7 @@ import { User, StudentDashboard } from "@/lib/types";
 import { generateAvatar } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { useRouter } from "next/navigation";
+import { LoadingState } from "@/components/ui/loading-state";
 import { 
   User as UserIcon, 
   School, 
@@ -239,9 +240,7 @@ export default function StudentProfilePage() {
   if (isLoading) {
     return (
       <MainLayout>
-        <div className="flex items-center justify-center h-64">
-          <div className="loading-spinner" />
-        </div>
+        <LoadingState text="Loading profile data..." />
       </MainLayout>
     );
   }

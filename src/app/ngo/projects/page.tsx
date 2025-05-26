@@ -10,6 +10,7 @@ import { getProjects, updateProject, deleteProject, handleStatusChange as update
 import { Project } from "@/lib/types";
 import { getStatusColor, getDifficultyColor, formatDeadline } from "@/lib/utils";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
+import { LoadingState } from "@/components/ui/loading-state";
 import { 
   Plus, 
   Users, 
@@ -161,9 +162,7 @@ export default function NGOProjectsPage() {
   if (isLoading) {
     return (
       <MainLayout>
-        <div className="flex items-center justify-center h-64">
-          <div className="loading-spinner" />
-        </div>
+        <LoadingState text="Loading projects..." />
       </MainLayout>
     );
   }

@@ -9,6 +9,7 @@ import { Avatar } from "@/components/ui/avatar";
 import { getParticipations, getProject, getUser, getUsersByRole } from "@/lib/firestore";
 import { Participation, Project, User } from "@/lib/types";
 import { generateAvatar, getStatusColor } from "@/lib/utils";
+import { LoadingState } from "@/components/ui/loading-state";
 import { 
   Users, 
   Search, 
@@ -133,9 +134,7 @@ export default function TeacherStudentsPage() {
   if (isLoading) {
     return (
       <MainLayout>
-        <div className="flex items-center justify-center h-64">
-          <div className="loading-spinner" />
-        </div>
+        <LoadingState text="Loading students data..." />
       </MainLayout>
     );
   }

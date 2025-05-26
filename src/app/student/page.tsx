@@ -7,6 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { getStudentDashboard } from "@/lib/firestore";
 import { StudentDashboard } from "@/lib/types";
+import { LoadingState } from "@/components/ui/loading-state";
 import { 
   BookOpen, 
   Trophy, 
@@ -44,9 +45,7 @@ export default function StudentDashboardPage() {
   if (isLoading) {
     return (
       <MainLayout>
-        <div className="flex items-center justify-center h-64">
-          <div className="loading-spinner" />
-        </div>
+        <LoadingState text="Loading dashboard..." />
       </MainLayout>
     );
   }

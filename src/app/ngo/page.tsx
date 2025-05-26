@@ -17,6 +17,7 @@ import {
   BarChart3
 } from "lucide-react";
 import Link from "next/link";
+import { LoadingState } from "@/components/ui/loading-state";
 
 export default function NGODashboardPage() {
   const { data: session } = useSession();
@@ -43,9 +44,7 @@ export default function NGODashboardPage() {
   if (isLoading) {
     return (
       <MainLayout>
-        <div className="flex items-center justify-center h-64">
-          <div className="loading-spinner" />
-        </div>
+        <LoadingState text="Loading dashboard data..." />
       </MainLayout>
     );
   }

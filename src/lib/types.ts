@@ -59,10 +59,13 @@ export interface Participation {
   id: string;
   projectId: string;
   studentId: string;
+  studentName?: string;
   createdAt: Timestamp;
   updatedAt: Timestamp;
+  joinedAt: Timestamp;
   startTime?: Timestamp;
   endTime?: Timestamp;
+  completedAt?: Timestamp;
   status: 'active' | 'completed' | 'dropped';
   progress: number;
   currentSubtaskId?: string;

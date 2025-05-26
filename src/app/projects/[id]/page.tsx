@@ -38,6 +38,8 @@ import {
   AlertDialogHeader, 
   AlertDialogTitle 
 } from "@/components/ui/alert-dialog";
+import { LoadingState } from "@/components/ui/loading-state";
+import { Timestamp } from "firebase/firestore";
 
 export default function ProjectDetailPage() {
   const params = useParams();
@@ -161,9 +163,7 @@ export default function ProjectDetailPage() {
   if (isLoading) {
     return (
       <MainLayout>
-        <div className="flex items-center justify-center h-64">
-          <div className="loading-spinner" />
-        </div>
+        <LoadingState text="Loading project details..." />
       </MainLayout>
     );
   }

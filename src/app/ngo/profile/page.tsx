@@ -12,6 +12,7 @@ import { User, NGODashboard } from "@/lib/types";
 import { generateAvatar } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { useRouter } from "next/navigation";
+import { LoadingState } from "@/components/ui/loading-state";
 import { 
   Building, 
   Globe, 
@@ -241,9 +242,7 @@ export default function NGOProfilePage() {
   if (isLoading) {
     return (
       <MainLayout>
-        <div className="flex items-center justify-center h-64">
-          <div className="loading-spinner" />
-        </div>
+        <LoadingState text="Loading profile data..." />
       </MainLayout>
     );
   }
