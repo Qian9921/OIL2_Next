@@ -204,14 +204,18 @@ export default function TeacherDashboardPage() {
                         {submission.content}
                       </p>
                       <div className="flex space-x-2">
-                        <Button size="sm" variant="outline">
-                          <Eye className="w-3 h-3 mr-1" />
-                          Review
-                        </Button>
-                        <Button size="sm" variant="outline">
-                          <MessageSquare className="w-3 h-3 mr-1" />
-                          Comment
-                        </Button>
+                        <Link href="/teacher/submissions">
+                          <Button size="sm" variant="outline">
+                            <Eye className="w-3 h-3 mr-1" />
+                            Review
+                          </Button>
+                        </Link>
+                        <Link href="/teacher/submissions">
+                          <Button size="sm" variant="outline">
+                            <MessageSquare className="w-3 h-3 mr-1" />
+                            Comment
+                          </Button>
+                        </Link>
                       </div>
                     </div>
                   ))

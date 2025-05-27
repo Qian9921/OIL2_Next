@@ -8,8 +8,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Avatar } from "@/components/ui/avatar";
-import { getSubmissions, updateSubmission, updateParticipation } from "@/lib/firestore";
-import { Submission } from "@/lib/types";
+import { getSubmissions, updateSubmission, updateParticipation, getProject, getParticipation } from "@/lib/firestore";
+import { Submission, Project, Participation } from "@/lib/types";
 import { generateAvatar, getStatusColor } from "@/lib/utils";
 import { showSuccessToast, showErrorToast } from "@/lib/toast-utils";
 import { 
@@ -24,17 +24,31 @@ import {
   MessageSquare,
   Star,
   Send,
-  Download
+  Download,
+  ExternalLink,
+  Target,
+  Github,
+  User,
+  BarChart3
 } from "lucide-react";
 import { Timestamp } from "firebase/firestore";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
 import { LoadingState } from "@/components/ui/loading-state";
+import Link from "next/link";
+
+// Enhanced submission type with additional details
+interface EnhancedSubmission extends Submission {
+  projectTitle?: string;
+  subtaskTitle?: string;
+  participationProgress?: number;
+  githubRepo?: string;
+}
 
 export default function TeacherSubmissionsPage() {
   const { data: session } = useSession();
   const { toast } = useToast();
-  const [submissions, setSubmissions] = useState<Submission[]>([]);
+  const [submissions, setSubmissions] = useState<EnhancedSubmission[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
@@ -43,9 +57,9 @@ export default function TeacherSubmissionsPage() {
   const [reviewComment, setReviewComment] = useState("");
   const [reviewRating, setReviewRating] = useState(5);
   const [processingSubmission, setProcessingSubmission] = useState<string | null>(null);
-  const [submissionToQuickApprove, setSubmissionToQuickApprove] = useState<Submission | null>(null);
-  const [submissionToReject, setSubmissionToReject] = useState<Submission | null>(null);
-  const [submissionToNeedsRevision, setSubmissionToNeedsRevision] = useState<Submission | null>(null);
+  const [submissionToQuickApprove, setSubmissionToQuickApprove] = useState<EnhancedSubmission | null>(null);
+  const [submissionToReject, setSubmissionToReject] = useState<EnhancedSubmission | null>(null);
+  const [submissionToNeedsRevision, setSubmissionToNeedsRevision] = useState<EnhancedSubmission | null>(null);
 
   useEffect(() => {
     loadSubmissions();
@@ -53,11 +67,41 @@ export default function TeacherSubmissionsPage() {
 
   const loadSubmissions = async () => {
     try {
-      // Get all submissions using the new function
+      // Get all submissions
       const submissionsData = await getSubmissions({});
-      setSubmissions(submissionsData);
+      
+      // Enhance submissions with project and participation details
+      const enhancedSubmissions: EnhancedSubmission[] = [];
+      
+      for (const submission of submissionsData) {
+        try {
+          // Get project details
+          const project = await getProject(submission.projectId);
+          const participation = await getParticipation(submission.participationId);
+          
+          const enhanced: EnhancedSubmission = {
+            ...submission,
+            projectTitle: project?.title || "Unknown Project",
+            participationProgress: participation?.progress || 0,
+            githubRepo: participation?.studentGitHubRepo,
+          };
+          
+          enhancedSubmissions.push(enhanced);
+        } catch (error) {
+          console.error(`Error enhancing submission ${submission.id}:`, error);
+          // Add submission without enhancement if there's an error
+          enhancedSubmissions.push(submission as EnhancedSubmission);
+        }
+      }
+      
+      setSubmissions(enhancedSubmissions);
     } catch (error) {
       console.error("Error loading submissions:", error);
+      toast({
+        title: "Error",
+        description: "Failed to load submissions. Please try again.",
+        variant: "destructive"
+      });
     } finally {
       setIsLoading(false);
     }
@@ -69,7 +113,9 @@ export default function TeacherSubmissionsPage() {
     try {
       const updateData: any = {
         status,
-        reviewComment: comment
+        reviewComment: comment,
+        reviewedBy: session?.user?.id,
+        reviewedAt: Timestamp.now()
       };
       
       // Only include rating for approved submissions
@@ -108,173 +154,79 @@ export default function TeacherSubmissionsPage() {
     }
   };
 
-  const handleQuickApprovalIntent = (submission: Submission) => {
+  const handleQuickApprovalIntent = (submission: EnhancedSubmission) => {
     setSubmissionToQuickApprove(submission);
   };
 
-  const handleRejectIntent = (submission: Submission) => {
+  const handleRejectIntent = (submission: EnhancedSubmission) => {
     setSubmissionToReject(submission);
   };
 
-  const handleNeedsRevisionIntent = (submission: Submission) => {
+  const handleNeedsRevisionIntent = (submission: EnhancedSubmission) => {
     setSubmissionToNeedsRevision(submission);
   };
 
   const handleQuickApproval = async (submissionId: string) => {
-    setProcessingSubmission(submissionId);
-    
-    try {
-      const updateData = {
-        status: 'approved' as const,
-        reviewedBy: session?.user?.id,
-        reviewComment: 'Quick approval',
-        rating: 5
-      };
-
-      await updateSubmission(submissionId, updateData);
-      
-      // Update participation status to completed
-      const submission = submissions.find(s => s.id === submissionId);
-      if (submission) {
-        await updateParticipation(submission.participationId, {
-          status: 'completed',
-          completedAt: Timestamp.now()
-        });
-      }
-      
-      // Update local state
-      setSubmissions(prev => prev.map(sub => 
-        sub.id === submissionId 
-          ? { ...sub, ...updateData }
-          : sub
-      ));
-      
-      showSuccessToast(toast, "Approval Success", {
-        description: "Submission approved successfully!"
-      });
-    } catch (error) {
-      console.error("Error approving submission:", error);
-      showErrorToast(toast, "Approval Failed", {
-        description: "Failed to approve submission. Please try again."
-      });
-    } finally {
-      setProcessingSubmission(null);
-      setSubmissionToQuickApprove(null);
-      setReviewComment("");
-      setReviewRating(5);
-      setReviewingSubmission(null);
-    }
+    await handleReviewSubmission(submissionId, 'approved', 5, 'Quick approval - good work!');
+    setSubmissionToQuickApprove(null);
   };
 
   const handleReject = async (submissionId: string, comment?: string) => {
-    setProcessingSubmission(submissionId);
-    
-    try {
-      const updateData = {
-        status: 'rejected' as const,
-        reviewedBy: session?.user?.id,
-        reviewComment: comment || 'Submission rejected'
-      };
-
-      await updateSubmission(submissionId, updateData);
-      
-      // Update local state
-      setSubmissions(prev => prev.map(sub => 
-        sub.id === submissionId 
-          ? { ...sub, ...updateData }
-          : sub
-      ));
-      
-      showSuccessToast(toast, "Rejection Complete", {
-        description: "Submission rejected successfully!"
-      });
-    } catch (error) {
-      console.error("Error rejecting submission:", error);
-      showErrorToast(toast, "Rejection Failed", {
-        description: "Failed to reject submission. Please try again."
-      });
-    } finally {
-      setProcessingSubmission(null);
-      setSubmissionToReject(null);
-      setReviewComment("");
-      setReviewRating(5);
-      setReviewingSubmission(null);
-    }
+    await handleReviewSubmission(submissionId, 'rejected', undefined, comment || 'Submission rejected');
+    setSubmissionToReject(null);
   };
 
   const handleNeedsRevision = async (submissionId: string, comment?: string) => {
-    setProcessingSubmission(submissionId);
-    
-    try {
-      const updateData = {
-        status: 'needs_revision' as const,
-        reviewedBy: session?.user?.id,
-        reviewComment: comment || 'Revision required'
-      };
-
-      await updateSubmission(submissionId, updateData);
-      
-      // Update local state
-      setSubmissions(prev => prev.map(sub => 
-        sub.id === submissionId 
-          ? { ...sub, ...updateData }
-          : sub
-      ));
-      
-      showSuccessToast(toast, "Revision Requested", {
-        description: "Revision requested successfully!"
-      });
-    } catch (error) {
-      console.error("Error requesting revision:", error);
-      showErrorToast(toast, "Request Failed", {
-        description: "Failed to request revision. Please try again."
-      });
-    } finally {
-      setProcessingSubmission(null);
-      setSubmissionToNeedsRevision(null);
-      setReviewComment("");
-      setReviewRating(5);
-      setReviewingSubmission(null);
-    }
+    await handleReviewSubmission(submissionId, 'needs_revision', undefined, comment || 'Revision needed');
+    setSubmissionToNeedsRevision(null);
   };
 
+  // Filter and sort submissions
   const filteredSubmissions = submissions.filter(submission => {
-    const matchesSearch = submission.content.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         (submission.studentName && submission.studentName.toLowerCase().includes(searchTerm.toLowerCase()));
+    const matchesSearch = !searchTerm || 
+      submission.content.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      submission.studentName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      submission.projectTitle?.toLowerCase().includes(searchTerm.toLowerCase());
     
-    if (statusFilter === "all") return matchesSearch;
-    return matchesSearch && submission.status === statusFilter;
-  }).sort((a, b) => {
+    const matchesStatus = statusFilter === "all" || submission.status === statusFilter;
+    
+    return matchesSearch && matchesStatus;
+  });
+
+  const sortedSubmissions = [...filteredSubmissions].sort((a, b) => {
     if (sortBy === "newest") {
       return b.submittedAt.toDate().getTime() - a.submittedAt.toDate().getTime();
-    } else if (sortBy === "oldest") {
+    } else {
       return a.submittedAt.toDate().getTime() - b.submittedAt.toDate().getTime();
     }
-    return 0;
   });
 
   const formatTimeAgo = (timestamp: any) => {
-    if (!timestamp) return 'Unknown';
-    const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
-    const hours = Math.floor((Date.now() - date.getTime()) / (1000 * 60 * 60));
+    const now = new Date();
+    const date = timestamp.toDate();
+    const diffInHours = Math.abs(now.getTime() - date.getTime()) / (1000 * 60 * 60);
     
-    if (hours < 1) return 'Less than 1 hour ago';
-    if (hours === 1) return '1 hour ago';
-    if (hours < 24) return `${hours} hours ago`;
-    
-    const days = Math.floor(hours / 24);
-    if (days === 1) return '1 day ago';
-    if (days < 7) return `${days} days ago`;
-    return `${Math.floor(days / 7)} weeks ago`;
+    if (diffInHours < 1) {
+      return 'Just now';
+    } else if (diffInHours < 24) {
+      return `${Math.floor(diffInHours)} hours ago`;
+    } else {
+      return `${Math.floor(diffInHours / 24)} days ago`;
+    }
   };
 
   const getStatusIcon = (status: string) => {
     switch (status) {
-      case 'pending': return <Clock className="w-4 h-4 text-yellow-600" />;
-      case 'approved': return <CheckCircle className="w-4 h-4 text-green-600" />;
-      case 'rejected': return <XCircle className="w-4 h-4 text-red-600" />;
-      case 'needs_revision': return <AlertCircle className="w-4 h-4 text-orange-600" />;
-      default: return <FileText className="w-4 h-4 text-gray-600" />;
+      case 'pending':
+        return <Clock className="w-3 h-3" />;
+      case 'approved':
+        return <CheckCircle className="w-3 h-3" />;
+      case 'rejected':
+        return <XCircle className="w-3 h-3" />;
+      case 'needs_revision':
+        return <AlertCircle className="w-3 h-3" />;
+      default:
+        return <Clock className="w-3 h-3" />;
     }
   };
 
@@ -295,7 +247,7 @@ export default function TeacherSubmissionsPage() {
             <AlertDialogHeader>
               <AlertDialogTitle>Quick Approve Submission</AlertDialogTitle>
               <AlertDialogDescription>
-                Are you sure you want to approve this submission from {submissionToQuickApprove?.studentName}? This will automatically give the student a 5-star rating.
+                Are you sure you want to approve this submission from {submissionToQuickApprove?.studentName}? This will mark the student's project as completed.
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
@@ -303,6 +255,7 @@ export default function TeacherSubmissionsPage() {
               <AlertDialogAction 
                 onClick={() => submissionToQuickApprove && handleQuickApproval(submissionToQuickApprove.id)}
                 className="bg-green-600 hover:bg-green-700 text-white"
+                disabled={!!processingSubmission}
               >
                 {processingSubmission ? 'Approving...' : 'Approve Submission'}
               </AlertDialogAction>
@@ -315,8 +268,20 @@ export default function TeacherSubmissionsPage() {
           <AlertDialogContent>
             <AlertDialogHeader>
               <AlertDialogTitle>Reject Submission</AlertDialogTitle>
-              <AlertDialogDescription>
-                Are you sure you want to reject this submission from {submissionToReject?.studentName}? This will remove the student from the project.
+              <AlertDialogDescription className="space-y-3">
+                <p>Are you sure you want to reject this submission from {submissionToReject?.studentName}?</p>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Rejection Reason (optional)
+                  </label>
+                  <textarea
+                    value={reviewComment}
+                    onChange={(e) => setReviewComment(e.target.value)}
+                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                    rows={3}
+                    placeholder="Explain why this submission is being rejected..."
+                  />
+                </div>
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
@@ -324,6 +289,7 @@ export default function TeacherSubmissionsPage() {
               <AlertDialogAction 
                 onClick={() => submissionToReject && handleReject(submissionToReject.id, reviewComment)}
                 className="bg-red-600 hover:bg-red-700 text-white"
+                disabled={!!processingSubmission}
               >
                 {processingSubmission ? 'Rejecting...' : 'Reject Submission'}
               </AlertDialogAction>
@@ -336,8 +302,20 @@ export default function TeacherSubmissionsPage() {
           <AlertDialogContent>
             <AlertDialogHeader>
               <AlertDialogTitle>Request Revision</AlertDialogTitle>
-              <AlertDialogDescription>
-                Are you sure you want to request revisions for this submission from {submissionToNeedsRevision?.studentName}? The student will need to resubmit their work.
+              <AlertDialogDescription className="space-y-3">
+                <p>Request revisions for this submission from {submissionToNeedsRevision?.studentName}. The student will need to resubmit their work.</p>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Revision Instructions
+                  </label>
+                  <textarea
+                    value={reviewComment}
+                    onChange={(e) => setReviewComment(e.target.value)}
+                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                    rows={3}
+                    placeholder="Explain what needs to be revised..."
+                  />
+                </div>
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
@@ -345,6 +323,7 @@ export default function TeacherSubmissionsPage() {
               <AlertDialogAction 
                 onClick={() => submissionToNeedsRevision && handleNeedsRevision(submissionToNeedsRevision.id, reviewComment)}
                 className="bg-orange-600 hover:bg-orange-700 text-white"
+                disabled={!!processingSubmission}
               >
                 {processingSubmission ? 'Processing...' : 'Request Revision'}
               </AlertDialogAction>
@@ -362,7 +341,7 @@ export default function TeacherSubmissionsPage() {
           </div>
           <div className="flex items-center space-x-2">
             <span className="text-sm text-gray-600">
-              {filteredSubmissions.length} submissions
+              {sortedSubmissions.length} submissions
             </span>
           </div>
         </div>
@@ -430,32 +409,42 @@ export default function TeacherSubmissionsPage() {
               {/* Stats */}
               <div className="flex items-center text-sm text-gray-600">
                 <Filter className="w-4 h-4 mr-2" />
-                Showing {filteredSubmissions.length} of {submissions.length}
+                Showing {sortedSubmissions.length} of {submissions.length}
               </div>
             </div>
           </CardContent>
         </Card>
 
         {/* Submissions List */}
-        {filteredSubmissions.length > 0 ? (
+        {sortedSubmissions.length > 0 ? (
           <div className="space-y-4">
-            {filteredSubmissions.map((submission) => (
+            {sortedSubmissions.map((submission) => (
               <Card key={submission.id} className="card-hover">
                 <CardHeader>
                   <div className="flex items-start justify-between">
                     <div className="flex items-center space-x-3">
                       <Avatar
                         src={generateAvatar(submission.studentId)}
-                        alt="Student"
+                        alt={submission.studentName || "Student"}
                         size="md"
                       />
-                      <div>
-                        <h3 className="font-semibold text-gray-900">
-                          Student Submission
-                        </h3>
-                        <p className="text-sm text-gray-600 flex items-center">
+                      <div className="flex-1">
+                        <div className="flex items-center space-x-2 mb-1">
+                          <h3 className="font-semibold text-gray-900">
+                            {submission.studentName || "Anonymous Student"}
+                          </h3>
+                          <Link 
+                            href={`/projects/${submission.projectId}`}
+                            className="text-blue-600 hover:text-blue-800 text-sm underline flex items-center"
+                          >
+                            View Project
+                            <ExternalLink className="w-3 h-3 ml-1" />
+                          </Link>
+                        </div>
+                        <p className="text-sm text-gray-600 font-medium">{submission.projectTitle}</p>
+                        <p className="text-xs text-gray-500 flex items-center mt-1">
                           <Calendar className="w-3 h-3 mr-1" />
-                          {formatTimeAgo(submission.submittedAt)}
+                          Submitted {formatTimeAgo(submission.submittedAt)}
                         </p>
                       </div>
                     </div>
@@ -469,12 +458,53 @@ export default function TeacherSubmissionsPage() {
                 </CardHeader>
 
                 <CardContent className="space-y-4">
+                  {/* Project Progress Info */}
+                  {submission.participationProgress !== undefined && (
+                    <div className="p-3 bg-gray-50 rounded-lg">
+                      <div className="flex items-center justify-between text-sm mb-2">
+                        <span className="text-gray-600 flex items-center">
+                          <BarChart3 className="w-4 h-4 mr-1" />
+                          Student Progress:
+                        </span>
+                        <span className="font-medium text-gray-900">{submission.participationProgress}% Complete</span>
+                      </div>
+                      <div className="w-full bg-gray-200 rounded-full h-2">
+                        <div 
+                          className="bg-blue-600 h-2 rounded-full transition-all duration-300" 
+                          style={{ width: `${submission.participationProgress}%` }}
+                        />
+                      </div>
+                    </div>
+                  )}
+
                   {/* Submission Content */}
                   <div className="p-4 bg-gray-50 rounded-lg">
-                    <p className="text-gray-800 leading-relaxed">
-                      {submission.content}
-                    </p>
+                    <h4 className="font-medium text-gray-900 mb-2">Submission Content</h4>
+                    <div className="max-h-40 overflow-y-auto">
+                      <p className="text-gray-800 leading-relaxed whitespace-pre-wrap">
+                        {submission.content}
+                      </p>
+                    </div>
                   </div>
+
+                  {/* GitHub Repository Link */}
+                  {submission.githubRepo && (
+                    <div className="p-3 bg-blue-50 rounded-lg">
+                      <h4 className="font-medium text-blue-900 mb-2 flex items-center">
+                        <Github className="w-4 h-4 mr-2" />
+                        GitHub Repository
+                      </h4>
+                      <Link 
+                        href={submission.githubRepo}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-blue-600 hover:text-blue-800 underline text-sm flex items-center"
+                      >
+                        {submission.githubRepo}
+                        <ExternalLink className="w-3 h-3 ml-1" />
+                      </Link>
+                    </div>
+                  )}
 
                   {/* Previous Review */}
                   {submission.reviewComment && (
@@ -516,7 +546,7 @@ export default function TeacherSubmissionsPage() {
                         disabled={processingSubmission === submission.id}
                       >
                         {processingSubmission === submission.id ? (
-                          <LoadingState size="sm" className="w-3 h-3 mr-1" fullHeight={false} />
+                          <Clock className="w-3 h-3 mr-1 animate-spin" />
                         ) : (
                           <CheckCircle className="w-3 h-3 mr-1" />
                         )}
@@ -572,7 +602,7 @@ export default function TeacherSubmissionsPage() {
                           disabled={processingSubmission === submission.id}
                         >
                           {processingSubmission === submission.id ? (
-                            <LoadingState size="sm" className="w-4 h-4 mr-2" fullHeight={false} />
+                            <Clock className="w-4 h-4 mr-2 animate-spin" />
                           ) : (
                             <CheckCircle className="w-4 h-4 mr-2" />
                           )}

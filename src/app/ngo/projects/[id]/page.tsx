@@ -227,7 +227,11 @@ export default function NGOProjectDetailPage() {
                     <Calendar className="w-6 h-6 text-amber-600 mx-auto mb-1" />
                     <div className="text-lg font-bold text-amber-600">
                       {project.deadline 
-                        ? project.deadline.toDate().toLocaleDateString() 
+                        ? project.deadline.toDate().toLocaleDateString('en-US', { 
+                            year: 'numeric', 
+                            month: 'short', 
+                            day: 'numeric' 
+                          }) 
                         : 'No deadline'}
                     </div>
                     <div className="text-xs text-gray-600">Deadline</div>
@@ -457,11 +461,19 @@ export default function NGOProjectDetailPage() {
               <CardContent className="text-sm text-gray-600">
                 <div className="flex items-center space-x-2 mb-2">
                   <Calendar className="w-4 h-4" />
-                  <span>Created At: {project.createdAt.toDate().toLocaleDateString()}</span>
+                  <span>Created At: {project.createdAt.toDate().toLocaleDateString('en-US', { 
+                    year: 'numeric', 
+                    month: 'short', 
+                    day: 'numeric' 
+                  })}</span>
                 </div>
                 <div className="flex items-center space-x-2">
                   <Calendar className="w-4 h-4" />
-                  <span>Updated At: {project.updatedAt.toDate().toLocaleDateString()}</span>
+                  <span>Updated At: {project.updatedAt.toDate().toLocaleDateString('en-US', { 
+                    year: 'numeric', 
+                    month: 'short', 
+                    day: 'numeric' 
+                  })}</span>
                 </div>
               </CardContent>
             </Card>

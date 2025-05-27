@@ -239,15 +239,19 @@ const formatDate = (date: Date): string => {
                  date.getFullYear() === today.getFullYear();
   
   if (isToday) {
-    return date.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+    return date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
   }
   
   // If date is in the last 7 days, show day name
   const daysDiff = Math.floor((today.getTime() - date.getTime()) / (1000 * 60 * 60 * 24));
   if (daysDiff < 7) {
-    return date.toLocaleDateString(undefined, { weekday: 'long' });
+    return date.toLocaleDateString('en-US', { weekday: 'long' });
   }
   
   // Otherwise show date
-  return date.toLocaleDateString();
+  return date.toLocaleDateString('en-US', { 
+    year: 'numeric', 
+    month: 'short', 
+    day: 'numeric' 
+  });
 }; 

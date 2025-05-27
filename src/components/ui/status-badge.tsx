@@ -11,7 +11,8 @@ export type StatusType =
   | 'completed' 
   | 'dropped' 
   | 'github'
-  | 'certificate';
+  | 'certificate'
+  | 'certificate_pending';
 
 interface StatusConfig {
   text: string;
@@ -34,7 +35,8 @@ const statusConfigs: Record<StatusType, StatusConfig> = {
   completed: { text: 'Completed', color: 'bg-green-100 text-green-800', icon: CheckCircle },
   dropped: { text: 'Dropped', color: 'bg-gray-100 text-gray-800', icon: XCircle },
   github: { text: 'GitHub Repo', color: 'bg-slate-700 text-white', icon: Github },
-  certificate: { text: 'Certificate Available', color: 'bg-yellow-100 text-yellow-800', icon: Award }
+  certificate: { text: 'Certificate Available', color: 'bg-yellow-100 text-yellow-800', icon: Award },
+  certificate_pending: { text: 'Awaiting Certificate', color: 'bg-orange-100 text-orange-700', icon: Clock }
 };
 
 export function StatusBadge({ status, text, className = '' }: StatusBadgeProps) {

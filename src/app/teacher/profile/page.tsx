@@ -528,7 +528,11 @@ export default function TeacherProfilePage() {
                         </span>
                       </div>
                       <p className="text-xs text-gray-600">
-                        {submission.submittedAt.toDate().toLocaleDateString()}
+                        {submission.submittedAt.toDate().toLocaleDateString('en-US', { 
+                          year: 'numeric', 
+                          month: 'short', 
+                          day: 'numeric' 
+                        })}
                       </p>
                     </div>
                   ))}

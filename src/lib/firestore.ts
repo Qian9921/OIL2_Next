@@ -227,10 +227,17 @@ export async function handleRejectedProject(participationId: string) {
   if (participationDoc.exists()) {
     const participation = participationDoc.data() as Participation;
     
-    // Update participation status to dropped
-    batch.update(doc(db, 'participations', participationId), {
-      status: 'dropped',
-      droppedAt: Timestamp.now()
+    // Delete the participation completely
+    batch.delete(doc(db, 'participations', participationId));
+    
+    // Also delete any submissions related to this participation
+    const submissionsQuery = query(
+      collection(db, 'submissions'),
+      where('participationId', '==', participationId)
+    );
+    const submissionsSnapshot = await getDocs(submissionsQuery);
+    submissionsSnapshot.docs.forEach(submissionDoc => {
+      batch.delete(submissionDoc.ref);
     });
     
     // Update project participant count

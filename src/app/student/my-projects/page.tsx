@@ -19,8 +19,8 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
-import { getParticipations, getProject, updateParticipation, createSubmission, deleteParticipation, getSubmissions, handleRejectedProject } from "@/lib/firestore";
-import { Project, Participation, Submission, Subtask } from "@/lib/types";
+import { getParticipations, getProject, updateParticipation, createSubmission, deleteParticipation, getSubmissions, handleRejectedProject, getCertificates } from "@/lib/firestore";
+import { Project, Participation, Submission, Subtask, Certificate } from "@/lib/types";
 import { generateAvatar, getStatusColor, getDifficultyColor, calculateEstimatedHours, formatDeadline } from "@/lib/utils";
 import { Timestamp } from "firebase/firestore";
 import { LoadingState } from "@/components/ui/loading-state";
@@ -52,7 +52,9 @@ import {
   RefreshCw,
   BookmarkX,
   ListChecks,
-  PartyPopper
+  PartyPopper,
+  Eye,
+  Download
 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -71,7 +73,7 @@ interface ProjectWithDetails extends Participation {
   studentGitHubRepo?: string;
 }
 
-type ProjectFilter = "active" | "completed" | "action_required";
+type ProjectFilter = "active" | "completed" | "action_required" | "rejected";
 
 export default function StudentMyProjectsPage() {
   const { data: session } = useSession();
@@ -79,6 +81,7 @@ export default function StudentMyProjectsPage() {
   const { toast } = useToast();
   
   const [projectsWithDetails, setProjectsWithDetails] = useState<ProjectWithDetails[]>([]);
+  const [certificates, setCertificates] = useState<Certificate[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [updatingSubtask, setUpdatingSubtask] = useState<string | null>(null);
   const [submissionContent, setSubmissionContent] = useState<{[key: string]: string}>({});
@@ -123,6 +126,10 @@ export default function StudentMyProjectsPage() {
           });
         }
       }
+      
+      // Load certificates
+      const studentCertificates = await getCertificates({ studentId: session!.user!.id });
+      setCertificates(studentCertificates);
       
       setProjectsWithDetails(loadedProjects);
     } catch (error) {
@@ -325,7 +332,9 @@ export default function StudentMyProjectsPage() {
         case "completed":
           return p.status === 'completed' || p.submission?.status === 'approved';
         case "action_required":
-          return p.submission?.status === 'rejected' || p.submission?.status === 'needs_revision';
+          return p.submission?.status === 'needs_revision';
+        case "rejected":
+          return p.submission?.status === 'rejected';
         default:
           return true;
       }
@@ -429,16 +438,24 @@ export default function StudentMyProjectsPage() {
               Track your learning progress and project completion 📚
             </p>
           </div>
-          <Link href="/student/projects">
-            <Button>
-              <BookOpen className="w-4 h-4 mr-2" />
-              Browse More Projects
-            </Button>
-          </Link>
+          <div className="flex space-x-3">
+            <Link href="/student/certificates">
+              <Button variant="outline">
+                <Award className="w-4 h-4 mr-2" />
+                My Certificates ({certificates.length})
+              </Button>
+            </Link>
+            <Link href="/student/projects">
+              <Button>
+                <BookOpen className="w-4 h-4 mr-2" />
+                Browse More Projects
+              </Button>
+            </Link>
+          </div>
         </div>
 
         {/* Statistics Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
           <Card>
             <CardContent className="p-6">
               <div className="flex items-center space-x-4">
@@ -467,6 +484,22 @@ export default function StudentMyProjectsPage() {
             </CardContent>
           </Card>
 
+          <Link href="/student/certificates">
+            <Card className="cursor-pointer hover:shadow-lg transition-shadow">
+              <CardContent className="p-6">
+                <div className="flex items-center space-x-4">
+                  <div className="p-3 bg-yellow-100 rounded-full">
+                    <Award className="w-6 h-6 text-yellow-600" />
+                  </div>
+                  <div>
+                    <p className="text-2xl font-bold text-gray-900">{certificates.length}</p>
+                    <p className="text-sm text-gray-600">Earned Certificates</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </Link>
+
           <Card>
             <CardContent className="p-6">
               <div className="flex items-center space-x-4">
@@ -484,13 +517,17 @@ export default function StudentMyProjectsPage() {
 
         {/* Filter Tabs */}
         <div className="flex space-x-1 bg-gray-100 rounded-lg p-1">
-          {(['active', 'completed', 'action_required'] as ProjectFilter[]).map((filterKey) => {
-            const filterLabel = filterKey === "active" ? "Active" : filterKey === "completed" ? "Completed" : "Action Required";
+          {(['active', 'completed', 'action_required', 'rejected'] as ProjectFilter[]).map((filterKey) => {
+            const filterLabel = filterKey === "active" ? "Active" : 
+                               filterKey === "completed" ? "Completed" : 
+                               filterKey === "action_required" ? "Needs Action" :
+                               "Rejected";
             const count = projectsWithDetails.filter(p => {
                 switch (filterKey) {
                     case "active": return p.status === 'active' && p.submission?.status !== 'rejected' && p.submission?.status !== 'needs_revision';
                     case "completed": return p.status === 'completed' || p.submission?.status === 'approved';
-                    case "action_required": return p.submission?.status === 'rejected' || p.submission?.status === 'needs_revision';
+                    case "action_required": return p.submission?.status === 'needs_revision';
+                    case "rejected": return p.submission?.status === 'rejected';
                     default: return false;
                 }
             }).length;
@@ -515,6 +552,12 @@ export default function StudentMyProjectsPage() {
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 gap-6">
             {filteredAndSortedProjects.map((projectWithDetails) => {
               const { project, submission } = projectWithDetails;
+              
+              // Check if this project has a certificate
+              const projectCertificate = certificates.find(cert => 
+                cert.participationId === projectWithDetails.id || 
+                cert.projectId === projectWithDetails.projectId
+              );
 
               // Additional info component for ProjectCard
               const additionalInfo = (
@@ -535,7 +578,13 @@ export default function StudentMyProjectsPage() {
                       getSubmissionStatusBadge(submission)
                     )}
                     {projectWithDetails.status === 'completed' && submission?.status === 'approved' && (
-                      <StatusBadge status="certificate" />
+                      projectCertificate ? (
+                        <Link href="/student/certificates">
+                          <StatusBadge status="certificate" className="cursor-pointer hover:bg-yellow-600 transition-colors" />
+                        </Link>
+                      ) : (
+                        <StatusBadge status="certificate_pending" />
+                      )
                     )}
                   </div>
 
@@ -556,7 +605,7 @@ export default function StudentMyProjectsPage() {
                     </div>
                   )}
                 </>
-              );
+                              );
 
               // Create custom actions for the ProjectCard
               const customActions = (
@@ -582,6 +631,30 @@ export default function StudentMyProjectsPage() {
                     <ListChecks className="w-4 h-4 mr-1.5" />
                     View Task Details
                   </Button>
+
+                  {/* Certificate Actions for Completed Projects */}
+                  {projectCertificate && (
+                    <div className="space-y-2">
+                      <Button 
+                        variant="outline" 
+                        size="sm"
+                        onClick={() => router.push('/student/certificates')}
+                        className="w-full border-yellow-300 text-yellow-700 hover:bg-yellow-50 transition-all duration-200"
+                      >
+                        <Eye className="w-4 h-4 mr-1.5" />
+                        View Certificate
+                      </Button>
+                      <Button 
+                        variant="outline" 
+                        size="sm"
+                        onClick={() => router.push('/student/certificates')}
+                        className="w-full border-green-300 text-green-700 hover:bg-green-50 transition-all duration-200"
+                      >
+                        <Download className="w-4 h-4 mr-1.5" />
+                        Download Certificate
+                      </Button>
+                    </div>
+                  )}
                   
                   {projectWithDetails.status === 'active' && (
                     <Button 
@@ -592,6 +665,18 @@ export default function StudentMyProjectsPage() {
                     >
                       <LogOut className="w-4 h-4 mr-1.5" />
                       Leave Project
+                    </Button>
+                  )}
+
+                  {submission?.status === 'rejected' && (
+                    <Button 
+                      variant="destructive"
+                      size="sm"
+                      onClick={() => confirmAndHandleRejectedProjectExit(projectWithDetails.id, project.title)}
+                      className="w-full transition-all duration-200"
+                    >
+                      <XCircle className="w-4 h-4 mr-1.5" />
+                      Accept Rejection & Leave
                     </Button>
                   )}
 

@@ -6,7 +6,25 @@ import { MainLayout } from "@/components/layout/main-layout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Avatar } from "@/components/ui/avatar";
-import { getCompletedProjectsForNGO, getUser } from "@/lib/firestore";
+import { 
+  Dialog, 
+  DialogContent, 
+  DialogHeader, 
+  DialogTitle, 
+  DialogFooter,
+  DialogDescription 
+} from "@/components/ui/dialog";
+import { 
+  AlertDialog, 
+  AlertDialogAction, 
+  AlertDialogCancel, 
+  AlertDialogContent, 
+  AlertDialogDescription, 
+  AlertDialogFooter, 
+  AlertDialogHeader, 
+  AlertDialogTitle 
+} from "@/components/ui/alert-dialog";
+import { getCompletedProjectsForNGO, getUser, createCertificate } from "@/lib/firestore";
 import { generateAvatar } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { 
@@ -17,7 +35,9 @@ import {
   Clock,
   FileText,
   AlertTriangle,
-  Loader2
+  Loader2,
+  Eye,
+  Send
 } from "lucide-react";
 
 interface CompletedProject {
@@ -29,6 +49,14 @@ interface CompletedProject {
   certificate: any;
 }
 
+interface CertificatePreview {
+  studentName: string;
+  ngoSignature: string;
+  ngoName: string;
+  contents: string;
+  date: string;
+}
+
 export default function NGOCertificatesPage() {
   const { data: session } = useSession();
   const { toast } = useToast();
@@ -37,6 +65,11 @@ export default function NGOCertificatesPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [generatingCertificate, setGeneratingCertificate] = useState<string | null>(null);
   const [ngoSignature, setNgoSignature] = useState("");
+  const [showPreviewDialog, setShowPreviewDialog] = useState(false);
+  const [showConfirmDialog, setShowConfirmDialog] = useState(false);
+  const [selectedProject, setSelectedProject] = useState<CompletedProject | null>(null);
+  const [certificatePreview, setCertificatePreview] = useState<CertificatePreview | null>(null);
+  const [previewPdfUrl, setPreviewPdfUrl] = useState<string | null>(null);
 
   useEffect(() => {
     if (session?.user?.id) {
@@ -67,7 +100,7 @@ export default function NGOCertificatesPage() {
     }
   };
 
-  const handleGenerateCertificate = async (completedProject: CompletedProject) => {
+  const handlePreviewCertificate = async (completedProject: CompletedProject) => {
     if (!ngoSignature.trim()) {
       toast({
         title: "Signature Required",
@@ -76,6 +109,100 @@ export default function NGOCertificatesPage() {
       });
       return;
     }
+
+    setSelectedProject(completedProject);
+    
+    // Format completion date
+    const completionDate = completedProject.participation.completedAt?.toDate 
+      ? completedProject.participation.completedAt.toDate() 
+      : new Date(completedProject.participation.completedAt);
+    
+    const formattedDate = completionDate.toISOString().split('T')[0];
+
+    const preview: CertificatePreview = {
+      studentName: completedProject.student.name,
+      ngoSignature: ngoSignature,
+      ngoName: session!.user!.name || 'NGO',
+      contents: completedProject.project.title,
+      date: formattedDate
+    };
+
+    setCertificatePreview(preview);
+    setShowPreviewDialog(true);
+
+    try {
+      // Generate preview PDF
+      const response = await fetch('https://auto-cert-py-827682634474.us-central1.run.app/generate-certificate', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(preview)
+      });
+
+      if (response.ok) {
+        const blob = await response.blob();
+        const url = URL.createObjectURL(blob);
+        setPreviewPdfUrl(url);
+      }
+    } catch (error) {
+      console.error("Error generating preview:", error);
+    }
+  };
+
+  const handleConfirmAward = () => {
+    setShowPreviewDialog(false);
+    setShowConfirmDialog(true);
+  };
+
+  const handleAwardCertificate = async () => {
+    if (!selectedProject || !certificatePreview) return;
+
+    setGeneratingCertificate(selectedProject.participation.id);
+    setShowConfirmDialog(false);
+    
+    try {
+      // Create certificate record in database
+      const certificateResult = await createCertificate({
+        studentId: selectedProject.student.id,
+        studentName: selectedProject.student.name,
+        ngoId: session!.user!.id,
+        ngoName: session!.user!.name || 'NGO',
+        projectId: selectedProject.project.id,
+        projectTitle: selectedProject.project.title,
+        participationId: selectedProject.participation.id,
+        completionDate: selectedProject.participation.completedAt
+      });
+
+      // Reload data to reflect the new certificate
+      await loadData();
+
+      toast({ 
+        title: "Certificate Awarded!", 
+        description: `Certificate ${certificateResult.certificateNumber} has been awarded to ${selectedProject.student.name}. They can now view and download it from their dashboard.`, 
+        variant: "default" 
+      });
+
+    } catch (error) {
+      console.error("Error awarding certificate:", error);
+      toast({ 
+        title: "Award Failed", 
+        description: "Failed to award certificate. Please try again.", 
+        variant: "destructive" 
+      });
+    } finally {
+      setGeneratingCertificate(null);
+      setSelectedProject(null);
+      setCertificatePreview(null);
+      if (previewPdfUrl) {
+        URL.revokeObjectURL(previewPdfUrl);
+        setPreviewPdfUrl(null);
+      }
+    }
+  };
+
+  const handleDownloadCertificate = async (completedProject: CompletedProject) => {
+    if (!completedProject.certificate) return;
 
     setGeneratingCertificate(completedProject.participation.id);
     
@@ -87,7 +214,6 @@ export default function NGOCertificatesPage() {
       
       const formattedDate = completionDate.toISOString().split('T')[0];
 
-      // Prepare API request data
       const certificateData = {
         studentName: completedProject.student.name,
         ngoSignature: ngoSignature,
@@ -120,16 +246,16 @@ export default function NGOCertificatesPage() {
       URL.revokeObjectURL(link.href);
 
       toast({ 
-        title: "Certificate Generated", 
-        description: "Certificate has been generated and downloaded successfully!", 
+        title: "Certificate Downloaded", 
+        description: "Certificate has been downloaded successfully!", 
         variant: "default" 
       });
 
     } catch (error) {
-      console.error("Error generating certificate:", error);
+      console.error("Error downloading certificate:", error);
       toast({ 
-        title: "Generation Failed", 
-        description: "Failed to generate certificate. Please try again.", 
+        title: "Download Failed", 
+        description: "Failed to download certificate. Please try again.", 
         variant: "destructive" 
       });
     } finally {
@@ -171,12 +297,91 @@ export default function NGOCertificatesPage() {
   return (
     <MainLayout>
       <div className="space-y-6">
+        {/* Certificate Preview Dialog */}
+        <Dialog open={showPreviewDialog} onOpenChange={setShowPreviewDialog}>
+          <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle>Certificate Preview</DialogTitle>
+              <DialogDescription>
+                Preview the certificate before awarding it to {selectedProject?.student.name}
+              </DialogDescription>
+            </DialogHeader>
+            
+            {certificatePreview && (
+              <div className="space-y-4">
+                {/* Certificate Details */}
+                <div className="grid grid-cols-2 gap-4 p-4 bg-gray-50 rounded-lg">
+                  <div>
+                    <label className="text-sm font-medium text-gray-600">Student Name</label>
+                    <p className="text-gray-900">{certificatePreview.studentName}</p>
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium text-gray-600">Project Title</label>
+                    <p className="text-gray-900">{certificatePreview.contents}</p>
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium text-gray-600">Completion Date</label>
+                    <p className="text-gray-900">{new Date(certificatePreview.date).toLocaleDateString()}</p>
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium text-gray-600">Your Signature</label>
+                    <p className="text-gray-900">{certificatePreview.ngoSignature}</p>
+                  </div>
+                </div>
+
+                {/* PDF Preview */}
+                {previewPdfUrl && (
+                  <div className="border rounded-lg overflow-hidden">
+                    <iframe
+                      src={previewPdfUrl}
+                      className="w-full h-96"
+                      title="Certificate Preview"
+                    />
+                  </div>
+                )}
+              </div>
+            )}
+
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setShowPreviewDialog(false)}>
+                Cancel
+              </Button>
+              <Button onClick={handleConfirmAward} className="bg-green-600 hover:bg-green-700">
+                <Send className="w-4 h-4 mr-2" />
+                Award Certificate
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Confirmation Dialog */}
+        <AlertDialog open={showConfirmDialog} onOpenChange={setShowConfirmDialog}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Award Certificate</AlertDialogTitle>
+              <AlertDialogDescription>
+                Are you sure you want to award this certificate to {selectedProject?.student.name}? 
+                Once awarded, they will be able to view and download it from their dashboard.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction 
+                onClick={handleAwardCertificate}
+                className="bg-green-600 hover:bg-green-700"
+              >
+                Award Certificate
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+
         {/* Header */}
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-3xl font-bold text-gray-900">Certificate Management</h1>
             <p className="text-gray-600 mt-2">
-              Generate and download certificates for students who completed your projects 🏆
+              Award and manage certificates for students who completed your projects 🏆
             </p>
           </div>
         </div>
@@ -230,7 +435,7 @@ export default function NGOCertificatesPage() {
                 </div>
                 <div>
                   <p className="text-2xl font-bold text-gray-900">{stats.certificatesGenerated}</p>
-                  <p className="text-sm text-gray-600">Certificates Generated</p>
+                  <p className="text-sm text-gray-600">Certificates Awarded</p>
                 </div>
               </div>
             </CardContent>
@@ -244,7 +449,7 @@ export default function NGOCertificatesPage() {
                 </div>
                 <div>
                   <p className="text-2xl font-bold text-gray-900">{stats.pendingCertificates}</p>
-                  <p className="text-sm text-gray-600">Available for Generation</p>
+                  <p className="text-sm text-gray-600">Ready for Award</p>
                 </div>
               </div>
             </CardContent>
@@ -272,18 +477,23 @@ export default function NGOCertificatesPage() {
                         <p className="text-sm text-gray-500">
                           Completed on {formatDate(completedProject.participation.completedAt)}
                         </p>
+                        {completedProject.certificate && (
+                          <p className="text-xs text-green-600 font-medium">
+                            Certificate: {completedProject.certificate.certificateNumber}
+                          </p>
+                        )}
                       </div>
                     </div>
                     <div className="flex items-center space-x-2">
                       {completedProject.hasCertificate ? (
                         <span className="px-3 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
                           <Award className="w-3 h-3 mr-1 inline" />
-                          Certificate Available
+                          Certificate Awarded
                         </span>
                       ) : (
                         <span className="px-3 py-1 rounded-full text-xs font-medium bg-orange-100 text-orange-800">
                           <Clock className="w-3 h-3 mr-1 inline" />
-                          Ready for Certificate
+                          Ready for Award
                         </span>
                       )}
                     </div>
@@ -318,13 +528,18 @@ export default function NGOCertificatesPage() {
                     )}
                   </div>
 
-                  {/* Certificate Generation */}
+                  {/* Certificate Actions */}
                   <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
                     <div className="flex items-center justify-between">
                       <div>
-                        <h4 className="font-medium text-blue-900">Generate Certificate</h4>
+                        <h4 className="font-medium text-blue-900">
+                          {completedProject.hasCertificate ? 'Certificate Management' : 'Award Certificate'}
+                        </h4>
                         <p className="text-sm text-blue-700">
-                          Download a PDF certificate for this student's completion
+                          {completedProject.hasCertificate 
+                            ? 'Download the awarded certificate'
+                            : 'Preview and award a certificate for this student'
+                          }
                         </p>
                         {ngoSignature && (
                           <p className="text-xs text-blue-600 mt-1">
@@ -332,23 +547,46 @@ export default function NGOCertificatesPage() {
                           </p>
                         )}
                       </div>
-                      <Button
-                        onClick={() => handleGenerateCertificate(completedProject)}
-                        disabled={generatingCertificate === completedProject.participation.id || !ngoSignature}
-                        className="bg-blue-600 hover:bg-blue-700"
-                      >
-                        {generatingCertificate === completedProject.participation.id ? (
-                          <>
-                            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                            Generating...
-                          </>
+                      <div className="flex space-x-2">
+                        {completedProject.hasCertificate ? (
+                          <Button
+                            onClick={() => handleDownloadCertificate(completedProject)}
+                            disabled={generatingCertificate === completedProject.participation.id}
+                            variant="outline"
+                            className="border-blue-300 text-blue-700 hover:bg-blue-50"
+                          >
+                            {generatingCertificate === completedProject.participation.id ? (
+                              <>
+                                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                                Downloading...
+                              </>
+                            ) : (
+                              <>
+                                <Download className="w-4 h-4 mr-2" />
+                                Download
+                              </>
+                            )}
+                          </Button>
                         ) : (
-                          <>
-                            <Download className="w-4 h-4 mr-2" />
-                            Generate Certificate
-                          </>
+                          <Button
+                            onClick={() => handlePreviewCertificate(completedProject)}
+                            disabled={generatingCertificate === completedProject.participation.id || !ngoSignature}
+                            className="bg-blue-600 hover:bg-blue-700"
+                          >
+                            {generatingCertificate === completedProject.participation.id ? (
+                              <>
+                                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                                Processing...
+                              </>
+                            ) : (
+                              <>
+                                <Eye className="w-4 h-4 mr-2" />
+                                Preview & Award
+                              </>
+                            )}
+                          </Button>
                         )}
-                      </Button>
+                      </div>
                     </div>
                   </div>
                 </CardContent>
@@ -363,7 +601,7 @@ export default function NGOCertificatesPage() {
                 No Completed Projects Yet
               </h3>
               <p className="text-gray-600 mb-6">
-                Students who complete your projects and receive teacher approval will appear here for certificate generation.
+                Students who complete your projects and receive teacher approval will appear here for certificate awarding.
               </p>
             </CardContent>
           </Card>

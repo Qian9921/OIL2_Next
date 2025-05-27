@@ -133,22 +133,24 @@ export default function StudentDashboardPage() {
             </Card>
           )}
 
-          <Card className="card-hover">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium text-gray-600">
-                Certificates
-              </CardTitle>
-              <Award className="h-4 w-4 text-yellow-600" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-yellow-600">
-                {dashboard?.certificates || 0}
-              </div>
-              <p className="text-xs text-gray-500">
-                Earned certificates
-              </p>
-            </CardContent>
-          </Card>
+          <Link href="/student/certificates">
+            <Card className="card-hover cursor-pointer transition-all hover:shadow-lg hover:shadow-yellow-200 border-yellow-200">
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium text-yellow-700">
+                  My Certificates 🏆
+                </CardTitle>
+                <Award className="h-4 w-4 text-yellow-600" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold text-yellow-600">
+                  {dashboard?.certificates || 0}
+                </div>
+                <p className="text-xs text-yellow-600">
+                  {dashboard?.certificates ? 'View & Download →' : 'None earned yet'}
+                </p>
+              </CardContent>
+            </Card>
+          </Link>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -222,7 +224,11 @@ export default function StudentDashboardPage() {
                           <p className="font-medium text-gray-900">{deadline.title}</p>
                           <p className="text-sm text-gray-600">{deadline.projectTitle}</p>
                           <p className="text-xs text-gray-500">
-                            Due: {deadline.dueDate.toDate().toLocaleDateString()}
+                            Due: {deadline.dueDate.toDate().toLocaleDateString('en-US', { 
+                              year: 'numeric', 
+                              month: 'short', 
+                              day: 'numeric' 
+                            })}
                           </p>
                         </div>
                         <div className={`w-3 h-3 rounded-full ${
@@ -253,7 +259,7 @@ export default function StudentDashboardPage() {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
               <Link href="/student/projects">
                 <Button variant="outline" className="w-full h-20 flex flex-col items-center justify-center space-y-2 hover:bg-blue-50">
                   <BookOpen className="w-6 h-6 text-blue-600" />
@@ -265,6 +271,13 @@ export default function StudentDashboardPage() {
                 <Button variant="outline" className="w-full h-20 flex flex-col items-center justify-center space-y-2 hover:bg-green-50">
                   <Trophy className="w-6 h-6 text-green-600" />
                   <span>My Projects</span>
+                </Button>
+              </Link>
+              
+              <Link href="/student/certificates">
+                <Button variant="outline" className="w-full h-20 flex flex-col items-center justify-center space-y-2 hover:bg-yellow-50">
+                  <Award className="w-6 h-6 text-yellow-600" />
+                  <span>My Certificates</span>
                 </Button>
               </Link>
               

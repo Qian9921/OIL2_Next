@@ -114,7 +114,7 @@ export function formatDeadline(deadline: Date | Timestamp | undefined | null, fa
   if (!deadline) return fallbackText;
   
   const dateObj = deadline instanceof Date ? deadline : deadline.toDate();
-  return dateObj.toLocaleDateString(undefined, { 
+  return dateObj.toLocaleDateString('en-US', { 
     year: 'numeric', 
     month: 'short', 
     day: 'numeric' 

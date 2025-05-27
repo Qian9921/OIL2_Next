@@ -7,8 +7,8 @@ import { MainLayout } from "@/components/layout/main-layout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Avatar } from "@/components/ui/avatar";
-import { getProject, getParticipations, createParticipation } from "@/lib/firestore";
-import { Project, Participation } from "@/lib/types";
+import { getProject, getParticipations, createParticipation, getCertificates } from "@/lib/firestore";
+import { Project, Participation, Certificate } from "@/lib/types";
 import { generateAvatar, getDifficultyColor, formatDeadline } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { 
@@ -49,6 +49,7 @@ export default function ProjectDetailPage() {
   const [project, setProject] = useState<Project | null>(null);
   const [participations, setParticipations] = useState<Participation[]>([]);
   const [myParticipation, setMyParticipation] = useState<Participation | null>(null);
+  const [myCertificate, setMyCertificate] = useState<Certificate | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isJoining, setIsJoining] = useState(false);
   const [showJoinDialog, setShowJoinDialog] = useState(false);
@@ -69,10 +70,26 @@ export default function ProjectDetailPage() {
       setProject(projectData);
       setParticipations(participationData);
       
-      // Check if current user has already joined
+      // Check if current user has already joined (only consider active participations)
       if (session?.user?.id) {
-        const userParticipation = participationData.find(p => p.studentId === session.user.id);
+        const userParticipation = participationData.find(p => 
+          p.studentId === session.user.id && 
+          (p.status === 'active' || p.status === 'completed')
+        );
         setMyParticipation(userParticipation || null);
+        
+        // Check if user has a certificate for this project
+        if (userParticipation) {
+          try {
+            const certificates = await getCertificates({ 
+              studentId: session.user.id,
+              projectId: params.id as string 
+            });
+            setMyCertificate(certificates.length > 0 ? certificates[0] : null);
+          } catch (error) {
+            console.error("Error loading certificate:", error);
+          }
+        }
       }
     } catch (error) {
       console.error("Error loading project data:", error);
@@ -174,7 +191,12 @@ export default function ProjectDetailPage() {
         <div className="text-center py-12">
           <h1 className="text-2xl font-bold text-gray-900 mb-4">Project Not Found</h1>
           <p className="text-gray-600 mb-6">Please check if the project ID is correct</p>
-          <Link href="/student/projects">
+          <Link href={
+            session?.user?.role === 'student' ? "/student/projects" : 
+            session?.user?.role === 'teacher' ? "/teacher/submissions" :
+            session?.user?.role === 'ngo' ? "/ngo/projects" : 
+            "/student/projects"
+          }>
             <Button>Back to Project List</Button>
           </Link>
         </div>
@@ -206,7 +228,12 @@ export default function ProjectDetailPage() {
         {/* Header */}
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-4">
-            <Link href={session?.user?.role === 'student' ? "/student/projects" : "/ngo/projects"}>
+            <Link href={
+              session?.user?.role === 'student' ? "/student/projects" : 
+              session?.user?.role === 'teacher' ? "/teacher/submissions" :
+              session?.user?.role === 'ngo' ? "/ngo/projects" : 
+              "/student/projects"
+            }>
               <Button variant="ghost" size="sm">
                 <ArrowLeft className="w-4 h-4 mr-2" />
                 Back
@@ -384,24 +411,48 @@ export default function ProjectDetailPage() {
 
           {/* Sidebar */}
           <div className="space-y-6">
-            {/* Join Project Card */}
+            {/* Join Project Card / My Participation Card */}
             <Card>
               <CardHeader>
-                <CardTitle className="text-lg">Join Project</CardTitle>
+                <CardTitle className="text-lg">
+                  {myParticipation ? "My Participation" : "Join Project"}
+                </CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
                 {myParticipation ? (
                   <div className="text-center">
-                    <CheckCircle className="w-12 h-12 text-green-600 mx-auto mb-3" />
-                    <p className="text-green-800 font-medium mb-2">You have joined this project</p>
-                    <p className="text-sm text-gray-600 mb-4">
-                      Current Progress: {myParticipation.progress}%
-                    </p>
-                    <Link href="/student/my-projects">
-                      <Button className="w-full">
-                        View My Projects
-                      </Button>
-                    </Link>
+                    {myCertificate ? (
+                      <>
+                        <Award className="w-12 h-12 text-yellow-600 mx-auto mb-3" />
+                        <p className="text-yellow-800 font-medium mb-2">Project Completed!</p>
+                        <p className="text-sm text-gray-600 mb-4">
+                          Certificate Earned: {myCertificate.certificateNumber}
+                        </p>
+                        <div className="space-y-2">
+                          <Link href="/student/my-projects">
+                            <Button className="w-full">
+                              View My Projects
+                            </Button>
+                          </Link>
+                          <p className="text-xs text-green-600">
+                            🎉 Congratulations! You've successfully completed this project.
+                          </p>
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <CheckCircle className="w-12 h-12 text-green-600 mx-auto mb-3" />
+                        <p className="text-green-800 font-medium mb-2">You have joined this project</p>
+                        <p className="text-sm text-gray-600 mb-4">
+                          Current Progress: {myParticipation.progress}%
+                        </p>
+                        <Link href="/student/my-projects">
+                          <Button className="w-full">
+                            View My Projects
+                          </Button>
+                        </Link>
+                      </>
+                    )}
                   </div>
                 ) : canJoinProject() ? (
                   <div className="text-center">
