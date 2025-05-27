@@ -3,19 +3,21 @@
 import { useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
 import { MainLayout } from "@/components/layout/main-layout";
-import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Avatar } from "@/components/ui/avatar";
-import { getCompletedProjectsForNGO, createCertificate } from "@/lib/firestore";
+import { getCompletedProjectsForNGO, getUser } from "@/lib/firestore";
 import { generateAvatar } from "@/lib/utils";
+import { useToast } from "@/hooks/use-toast";
 import { 
   Award,
   Star,
   Download,
-  Send,
   CheckCircle,
   Clock,
-  FileText
+  FileText,
+  AlertTriangle,
+  Loader2
 } from "lucide-react";
 
 interface CompletedProject {
@@ -29,77 +31,128 @@ interface CompletedProject {
 
 export default function NGOCertificatesPage() {
   const { data: session } = useSession();
+  const { toast } = useToast();
+  
   const [completedProjects, setCompletedProjects] = useState<CompletedProject[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [issuingCertificate, setIssuingCertificate] = useState<string | null>(null);
-  const [feedback, setFeedback] = useState<{message: string, type: 'success' | 'error'} | null>(null);
+  const [generatingCertificate, setGeneratingCertificate] = useState<string | null>(null);
+  const [ngoSignature, setNgoSignature] = useState("");
 
   useEffect(() => {
     if (session?.user?.id) {
-      loadCompletedProjects();
+      loadData();
     }
   }, [session]);
 
-  useEffect(() => {
-    if (feedback) {
-      const timer = setTimeout(() => {
-        setFeedback(null);
-      }, 5000);
-      
-      return () => clearTimeout(timer);
-    }
-  }, [feedback]);
-
-  const loadCompletedProjects = async () => {
+  const loadData = async () => {
     try {
+      // Load completed projects
       const data = await getCompletedProjectsForNGO(session!.user!.id);
       setCompletedProjects(data);
+      
+      // Load NGO signature from profile
+      const ngoUser = await getUser(session!.user!.id);
+      if (ngoUser?.profile?.signature) {
+        setNgoSignature(ngoUser.profile.signature);
+      }
     } catch (error) {
-      console.error("Error loading completed projects:", error);
-      setFeedback({ message: "Error loading completed projects", type: 'error' });
+      console.error("Error loading data:", error);
+      toast({ 
+        title: "Loading Error", 
+        description: "Failed to load certificate data", 
+        variant: "destructive" 
+      });
     } finally {
       setIsLoading(false);
     }
   };
 
-  const handleIssueCertificate = async (completedProject: CompletedProject) => {
-    setIssuingCertificate(completedProject.participation.id);
+  const handleGenerateCertificate = async (completedProject: CompletedProject) => {
+    if (!ngoSignature.trim()) {
+      toast({
+        title: "Signature Required",
+        description: "Please set your signature in your profile before generating certificates",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    setGeneratingCertificate(completedProject.participation.id);
     
     try {
-      await createCertificate({
-        studentId: completedProject.student.id,
+      // Format completion date
+      const completionDate = completedProject.participation.completedAt?.toDate 
+        ? completedProject.participation.completedAt.toDate() 
+        : new Date(completedProject.participation.completedAt);
+      
+      const formattedDate = completionDate.toISOString().split('T')[0];
+
+      // Prepare API request data
+      const certificateData = {
         studentName: completedProject.student.name,
-        projectId: completedProject.project.id,
-        projectTitle: completedProject.project.title,
-        ngoId: session!.user!.id,
+        ngoSignature: ngoSignature,
         ngoName: session!.user!.name || 'NGO',
-        participationId: completedProject.participation.id,
-        completionDate: completedProject.participation.completedAt,
-        rating: completedProject.submission.rating
+        contents: completedProject.project.title,
+        date: formattedDate
+      };
+
+      // Call the certificate generation API
+      const response = await fetch('https://auto-cert-py-827682634474.us-central1.run.app/generate-certificate', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(certificateData)
       });
 
-      await loadCompletedProjects();
-      setFeedback({ message: "Certificate issued successfully!", type: 'success' });
+      if (!response.ok) {
+        throw new Error(`Certificate generation failed: ${response.status}`);
+      }
+
+      // Handle the PDF blob response
+      const blob = await response.blob();
+      const link = document.createElement('a');
+      link.href = URL.createObjectURL(blob);
+      link.download = `certificate_${completedProject.student.name.replace(/\s+/g, '_')}_${completedProject.project.title.replace(/\s+/g, '_')}.pdf`;
+      link.click();
+
+      // Clean up the URL object
+      URL.revokeObjectURL(link.href);
+
+      toast({ 
+        title: "Certificate Generated", 
+        description: "Certificate has been generated and downloaded successfully!", 
+        variant: "default" 
+      });
+
     } catch (error) {
-      console.error("Error issuing certificate:", error);
-      setFeedback({ message: "Error issuing certificate. Please try again.", type: 'error' });
+      console.error("Error generating certificate:", error);
+      toast({ 
+        title: "Generation Failed", 
+        description: "Failed to generate certificate. Please try again.", 
+        variant: "destructive" 
+      });
     } finally {
-      setIssuingCertificate(null);
+      setGeneratingCertificate(null);
     }
   };
 
   const formatDate = (timestamp: any) => {
     if (!timestamp) return 'Unknown';
     const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
-    return date.toLocaleDateString();
+    return date.toLocaleDateString('en-US', { 
+      year: 'numeric', 
+      month: 'long', 
+      day: 'numeric' 
+    });
   };
 
   const getStats = () => {
     const totalCompleted = completedProjects.length;
-    const certificatesIssued = completedProjects.filter(p => p.hasCertificate).length;
-    const pendingCertificates = totalCompleted - certificatesIssued;
+    const certificatesGenerated = completedProjects.filter(p => p.hasCertificate).length;
+    const pendingCertificates = totalCompleted - certificatesGenerated;
     
-    return { totalCompleted, certificatesIssued, pendingCertificates };
+    return { totalCompleted, certificatesGenerated, pendingCertificates };
   };
 
   const stats = getStats();
@@ -108,7 +161,8 @@ export default function NGOCertificatesPage() {
     return (
       <MainLayout>
         <div className="flex items-center justify-center h-64">
-          <div className="loading-spinner" />
+          <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
+          <span className="ml-2 text-gray-600">Loading certificate data...</span>
         </div>
       </MainLayout>
     );
@@ -122,27 +176,34 @@ export default function NGOCertificatesPage() {
           <div>
             <h1 className="text-3xl font-bold text-gray-900">Certificate Management</h1>
             <p className="text-gray-600 mt-2">
-              Issue certificates to students who completed your projects 🏆
+              Generate and download certificates for students who completed your projects 🏆
             </p>
           </div>
         </div>
 
-        {/* Feedback Message */}
-        {feedback && (
-          <div className={`p-4 rounded-lg border ${
-            feedback.type === 'success' 
-              ? 'bg-green-50 border-green-200 text-green-800' 
-              : 'bg-red-50 border-red-200 text-red-800'
-          }`}>
-            <div className="flex items-center">
-              {feedback.type === 'success' ? (
-                <CheckCircle className="w-5 h-5 mr-2" />
-              ) : (
-                <Clock className="w-5 h-5 mr-2" />
-              )}
-              {feedback.message}
-            </div>
-          </div>
+        {/* Signature Warning */}
+        {!ngoSignature && (
+          <Card className="border-orange-200 bg-orange-50">
+            <CardContent className="p-4">
+              <div className="flex items-center">
+                <AlertTriangle className="w-5 h-5 text-orange-600 mr-2" />
+                <div>
+                  <h4 className="font-medium text-orange-900">Signature Required</h4>
+                  <p className="text-sm text-orange-700">
+                    Please set your signature in your profile to generate certificates.
+                  </p>
+                </div>
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  className="ml-auto"
+                  onClick={() => window.open('/ngo/profile', '_blank')}
+                >
+                  Go to Profile
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
         )}
 
         {/* Stats Cards */}
@@ -168,8 +229,8 @@ export default function NGOCertificatesPage() {
                   <Award className="w-6 h-6 text-green-600" />
                 </div>
                 <div>
-                  <p className="text-2xl font-bold text-gray-900">{stats.certificatesIssued}</p>
-                  <p className="text-sm text-gray-600">Certificates Issued</p>
+                  <p className="text-2xl font-bold text-gray-900">{stats.certificatesGenerated}</p>
+                  <p className="text-sm text-gray-600">Certificates Generated</p>
                 </div>
               </div>
             </CardContent>
@@ -183,7 +244,7 @@ export default function NGOCertificatesPage() {
                 </div>
                 <div>
                   <p className="text-2xl font-bold text-gray-900">{stats.pendingCertificates}</p>
-                  <p className="text-sm text-gray-600">Pending Certificates</p>
+                  <p className="text-sm text-gray-600">Available for Generation</p>
                 </div>
               </div>
             </CardContent>
@@ -217,12 +278,12 @@ export default function NGOCertificatesPage() {
                       {completedProject.hasCertificate ? (
                         <span className="px-3 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
                           <Award className="w-3 h-3 mr-1 inline" />
-                          Certificate Issued
+                          Certificate Available
                         </span>
                       ) : (
                         <span className="px-3 py-1 rounded-full text-xs font-medium bg-orange-100 text-orange-800">
                           <Clock className="w-3 h-3 mr-1 inline" />
-                          Pending Certificate
+                          Ready for Certificate
                         </span>
                       )}
                     </div>
@@ -257,49 +318,39 @@ export default function NGOCertificatesPage() {
                     )}
                   </div>
 
-                  {/* Certificate Info or Action */}
-                  {completedProject.hasCertificate ? (
-                    <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <h4 className="font-medium text-green-900">Certificate Issued</h4>
-                          <p className="text-sm text-green-700">
-                            Certificate #{completedProject.certificate.certificateNumber}
+                  {/* Certificate Generation */}
+                  <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <h4 className="font-medium text-blue-900">Generate Certificate</h4>
+                        <p className="text-sm text-blue-700">
+                          Download a PDF certificate for this student's completion
+                        </p>
+                        {ngoSignature && (
+                          <p className="text-xs text-blue-600 mt-1">
+                            Signature: {ngoSignature}
                           </p>
-                          <p className="text-xs text-green-600">
-                            Issued on {formatDate(completedProject.certificate.issuedAt)}
-                          </p>
-                        </div>
-                        <Button variant="outline" size="sm">
-                          <Download className="w-4 h-4 mr-2" />
-                          Download
-                        </Button>
+                        )}
                       </div>
+                      <Button
+                        onClick={() => handleGenerateCertificate(completedProject)}
+                        disabled={generatingCertificate === completedProject.participation.id || !ngoSignature}
+                        className="bg-blue-600 hover:bg-blue-700"
+                      >
+                        {generatingCertificate === completedProject.participation.id ? (
+                          <>
+                            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                            Generating...
+                          </>
+                        ) : (
+                          <>
+                            <Download className="w-4 h-4 mr-2" />
+                            Generate Certificate
+                          </>
+                        )}
+                      </Button>
                     </div>
-                  ) : (
-                    <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <h4 className="font-medium text-blue-900">Ready for Certificate</h4>
-                          <p className="text-sm text-blue-700">
-                            This student has successfully completed the project and received teacher approval.
-                          </p>
-                        </div>
-                        <Button
-                          onClick={() => handleIssueCertificate(completedProject)}
-                          disabled={issuingCertificate === completedProject.participation.id}
-                          className="bg-blue-600 hover:bg-blue-700"
-                        >
-                          {issuingCertificate === completedProject.participation.id ? (
-                            <div className="w-4 h-4 mr-2 loading-spinner" />
-                          ) : (
-                            <Send className="w-4 h-4 mr-2" />
-                          )}
-                          {issuingCertificate === completedProject.participation.id ? 'Issuing...' : 'Issue Certificate'}
-                        </Button>
-                      </div>
-                    </div>
-                  )}
+                  </div>
                 </CardContent>
               </Card>
             ))}
@@ -312,7 +363,7 @@ export default function NGOCertificatesPage() {
                 No Completed Projects Yet
               </h3>
               <p className="text-gray-600 mb-6">
-                Students who complete your projects and receive teacher approval will appear here for certificate issuance.
+                Students who complete your projects and receive teacher approval will appear here for certificate generation.
               </p>
             </CardContent>
           </Card>

@@ -48,7 +48,8 @@ export default function NGOProfilePage() {
     bio: "",
     website: "",
     location: "",
-    focusAreas: [] as string[]
+    focusAreas: [] as string[],
+    signature: ""
   });
   const [newFocusArea, setNewFocusArea] = useState("");
 
@@ -74,7 +75,8 @@ export default function NGOProfilePage() {
           bio: userData.profile?.bio || "",
           website: userData.profile?.website || "",
           location: userData.profile?.location || "",
-          focusAreas: userData.profile?.focusAreas || []
+          focusAreas: userData.profile?.focusAreas || [],
+          signature: userData.profile?.signature || ""
         });
       }
     } catch (error) {
@@ -95,7 +97,8 @@ export default function NGOProfilePage() {
           bio: editForm.bio,
           website: editForm.website,
           location: editForm.location,
-          focusAreas: editForm.focusAreas
+          focusAreas: editForm.focusAreas,
+          signature: editForm.signature
         }
       });
       
@@ -483,6 +486,29 @@ export default function NGOProfilePage() {
                       </Button>
                     </div>
                   )}
+                </div>
+
+                {/* Certificate Signature */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Certificate Signature
+                  </label>
+                  {isEditing ? (
+                    <input
+                      type="text"
+                      value={editForm.signature}
+                      onChange={(e) => setEditForm({ ...editForm, signature: e.target.value })}
+                      className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                      placeholder="e.g., Prof. John Smith, Director"
+                    />
+                  ) : (
+                    <p className="text-gray-700">
+                      {user?.profile?.signature || "Not set"}
+                    </p>
+                  )}
+                  <p className="text-xs text-gray-500 mt-1">
+                    This signature will appear on certificates issued to students
+                  </p>
                 </div>
 
                 {/* Delete Account Button */}

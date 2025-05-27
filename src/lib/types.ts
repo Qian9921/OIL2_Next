@@ -21,6 +21,7 @@ export interface User {
     institution?: string;
     subject?: string;
     experience?: number;
+    signature?: string;
   };
 }
 
