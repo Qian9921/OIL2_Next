@@ -271,18 +271,51 @@ export default function EditProjectPage() {
 
     setIsRefiningSubtasks(true);
     try {
+      // Create a clean copy of the data to prevent issues with special characters or markdown
       const dataToRefine = {
-        projectTitle: formData.title,
-        projectDescription: formData.description,
-        projectDifficulty: formData.difficulty,
-        projectRequirements: formData.requirements,
-        projectLearningGoals: formData.learningGoals,
+        projectTitle: formData.title || "",
+        projectDescription: formData.description || "",
+        projectDifficulty: formData.difficulty || "beginner",
+        projectRequirements: Array.isArray(formData.requirements) ? [...formData.requirements] : [],
+        projectLearningGoals: Array.isArray(formData.learningGoals) ? [...formData.learningGoals] : [],
         existingSubtasks: subtasks.map(st => ({ 
-          title: st.title,
-          description: st.description,
-          estimatedHours: st.estimatedHours
+          title: st.title || "",
+          description: st.description || "",
+          estimatedHours: typeof st.estimatedHours === 'number' ? st.estimatedHours : 0
         })),
       };
+      
+      // Check for markdown or special characters that might need sanitization
+      const markdownInProject = /[\*\_\`\[\]\(\)\<\>\|\\]/.test(dataToRefine.projectTitle) || 
+                               /[\*\_\`\[\]\(\)\<\>\|\\]/.test(dataToRefine.projectDescription);
+      
+      const markdownInSubtasks = dataToRefine.existingSubtasks.some(st => 
+        /[\*\_\`\[\]\(\)\<\>\|\\]/.test(st.title) || 
+        /[\*\_\`\[\]\(\)\<\>\|\\]/.test(st.description)
+      );
+      
+      // Check for very long content that might cause issues
+      const isContentLong = dataToRefine.projectDescription.length > 2000 || 
+                           dataToRefine.projectTitle.length > 100 ||
+                           dataToRefine.existingSubtasks.some(st => st.description.length > 500);
+      
+      if (markdownInProject || markdownInSubtasks) {
+        toast({ 
+          title: "Markdown Detected", 
+          description: "Your content contains markdown or special characters. We'll sanitize this for best results.", 
+          variant: "default" 
+        });
+      }
+      
+      if (isContentLong) {
+        toast({
+          title: "Long Content Detected",
+          description: "Your content is quite lengthy, which may impact AI refinement. If you encounter errors, try simplifying or shortening your content.",
+          variant: "default"
+        });
+      }
+
+      console.log("Sending subtask data to refine:", dataToRefine);
 
       const response = await fetch('/api/refine-subtasks', {
         method: 'POST',
@@ -292,16 +325,30 @@ export default function EditProjectPage() {
         body: JSON.stringify(dataToRefine),
       });
 
-      const responseData = await response.json();
-
+      // Enhanced error handling for failed requests
       if (!response.ok) {
-        const errorMessage = typeof responseData === 'object' && responseData !== null && 'message' in responseData 
-          ? responseData.message 
-          : 'AI subtask optimization failed';
+        let responseData;
+        try {
+          responseData = await response.json();
+          console.error("Error response from AI subtask service:", responseData);
+        } catch (parseError) {
+          console.error("Could not parse subtask error response:", parseError);
+          responseData = { 
+            message: `Server returned status ${response.status} ${response.statusText}` 
+          };
+        }
         
-        toast({ title: "AI Subtask Optimization Error", description: errorMessage, variant: "destructive" });
+        const errorMessage = responseData?.message || 'Failed to refine subtasks with AI.';
+        toast({ 
+          title: "AI Subtask Optimization Error", 
+          description: errorMessage, 
+          variant: "destructive" 
+        });
         throw new Error(errorMessage);
       }
+
+      // Handle successful response
+      const responseData = await response.json();
 
       if (Array.isArray(responseData) && responseData.length > 0) {
         const validSubtasks = responseData.filter(st => 
@@ -311,6 +358,7 @@ export default function EditProjectPage() {
         );
         
         if (validSubtasks.length === 0) {
+          console.error("API returned invalid subtask format:", responseData);
           toast({ title: "AI Optimization Issue", description: "AI returned invalid subtasks, using default subtasks", variant: "destructive" });
           setSubtasks([...initialSubtasks.map(st => ({...st}))]);
           return;
@@ -348,24 +396,52 @@ export default function EditProjectPage() {
         return total + (typeof subtask.estimatedHours === 'number' ? subtask.estimatedHours : 0);
       }, 0);
 
+      // Create a clean copy of the data to prevent issues with special characters or markdown
       const projectDetailsToRefine = {
-        title: formData.title,
-        shortDescription: formData.shortDescription,
-        description: formData.description,
-        difficulty: formData.difficulty,
-        maxParticipants: formData.maxParticipants,
-        deadline: formData.deadline,
+        title: formData.title || "",
+        shortDescription: formData.shortDescription || "",
+        description: formData.description || "",
+        difficulty: formData.difficulty || "beginner",
+        maxParticipants: formData.maxParticipants || "",
+        deadline: formData.deadline || "",
         estimatedHours: totalEstimatedHours.toString(),
-        tags: formData.tags,
-        requirements: formData.requirements,
-        learningGoals: formData.learningGoals,
+        tags: Array.isArray(formData.tags) ? [...formData.tags] : [],
+        requirements: Array.isArray(formData.requirements) ? [...formData.requirements] : [],
+        learningGoals: Array.isArray(formData.learningGoals) ? [...formData.learningGoals] : [],
       };
 
+      // Basic validation
       if (!projectDetailsToRefine.title.trim() && !projectDetailsToRefine.description.trim()) {
         toast({ title: "Missing Information", description: "Please provide at least a project title or description for optimization", variant: "destructive" });
         setIsRefining(false);
         return;
       }
+
+      // Check for markdown or special characters that might need sanitization
+      const containsMarkdown = /[\*\_\`\[\]\(\)\<\>\|\\]/.test(projectDetailsToRefine.title) || 
+                              /[\*\_\`\[\]\(\)\<\>\|\\]/.test(projectDetailsToRefine.description);
+      
+      // Check for very long content that might cause issues
+      const isContentLong = projectDetailsToRefine.description.length > 2000 || 
+                          projectDetailsToRefine.title.length > 100;
+      
+      if (containsMarkdown) {
+        toast({ 
+          title: "Markdown Detected", 
+          description: "Your content contains markdown or special characters. We'll sanitize this for best results.", 
+          variant: "default" 
+        });
+      }
+      
+      if (isContentLong) {
+        toast({
+          title: "Long Content Detected",
+          description: "Your content is quite lengthy, which may impact AI refinement. If you encounter errors, try simplifying or shortening your content.",
+          variant: "default"
+        });
+      }
+
+      console.log("Sending project details to refine:", projectDetailsToRefine);
 
       const response = await fetch('/api/refine-project', {
         method: 'POST',
@@ -375,13 +451,31 @@ export default function EditProjectPage() {
         body: JSON.stringify(projectDetailsToRefine),
       });
 
-      const responseData = await response.json();
-
+      // Enhanced error handling for failed requests
       if (!response.ok) {
-        toast({ title: "AI Optimization Error", description: responseData.message || 'AI project details optimization failed', variant: "destructive" });
-        throw new Error(responseData.message || 'AI project details optimization failed');
+        let responseData;
+        try {
+          responseData = await response.json();
+          console.error("Error response from AI service:", responseData);
+        } catch (parseError) {
+          console.error("Could not parse error response:", parseError);
+          responseData = { 
+            message: `Server returned status ${response.status} ${response.statusText}` 
+          };
+        }
+        
+        const errorMessage = responseData?.message || 'Failed to refine project details with AI.';
+        toast({ 
+          title: "AI Optimization Error", 
+          description: errorMessage, 
+          variant: "destructive" 
+        });
+        throw new Error(errorMessage);
       }
 
+      // Handle successful response
+      const responseData = await response.json();
+      
       let formattedDeadline = formData.deadline;
       
       if (responseData.estimatedDays && typeof responseData.estimatedDays === 'number') {

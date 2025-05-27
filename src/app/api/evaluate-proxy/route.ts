@@ -26,7 +26,25 @@ export async function POST(request: Request) {
     
     // Get the response data
     const responseData = await response.json();
-    console.log("Raw API response (full data):", JSON.stringify(responseData, null, 2)); // Detailed debug log
+    
+    // Enhanced logging of the API response
+    console.log("Raw API response (full data):", JSON.stringify(responseData, null, 2));
+    console.log("API Response Structure Analysis:");
+    console.log("- Has score field:", 'score' in responseData);
+    console.log("- Has result object:", 'result' in responseData);
+    if (responseData.result) {
+      console.log("- Has rawContent:", 'rawContent' in responseData.result);
+      if (responseData.result.rawContent) {
+        console.log("- Has assessment:", 'assessment' in responseData.result.rawContent);
+        console.log("- Assessment value:", responseData.result.rawContent.assessment);
+        console.log("- Assessment type:", typeof responseData.result.rawContent.assessment);
+        console.log("- Has checkpoints:", 'checkpoints' in responseData.result.rawContent);
+        if (responseData.result.rawContent.checkpoints) {
+          console.log("- Number of checkpoints:", responseData.result.rawContent.checkpoints.length);
+          console.log("- Checkpoint statuses:", responseData.result.rawContent.checkpoints.map((c: any) => c.status));
+        }
+      }
+    }
     
     // If the response is not ok, throw an error
     if (!response.ok) {
@@ -37,16 +55,44 @@ export async function POST(request: Request) {
       );
     }
     
-    // Validate the score exists and is a number
-    if (responseData && (typeof responseData.score !== 'number' || isNaN(responseData.score))) {
-      // If score is missing or invalid, set a default score of 0
-      responseData.score = 0;
-      if (!responseData.feedback) {
-        responseData.feedback = "The evaluation system couldn't determine a score for your work. Please make sure your GitHub repository is accessible and contains the required work for this task.";
+    // Extract the assessment value as the score if available
+    if (!('score' in responseData) && responseData.result?.rawContent?.assessment !== undefined) {
+      console.log("Extracting score from result.rawContent.assessment:", responseData.result.rawContent.assessment);
+      
+      // Add the assessment value as the score field
+      responseData.score = responseData.result.rawContent.assessment;
+      
+      // Also add a default feedback message if needed
+      if (!('feedback' in responseData)) {
+        // Determine the feedback based on checkpoints
+        const checkpoints = responseData.result.rawContent.checkpoints || [];
+        
+        // Correct the logic to properly count completed/passed checkpoints
+        const passedCheckpoints = checkpoints.filter(
+          (c: any) => c.status && (
+            c.status.toLowerCase().includes('pass') || 
+            c.status.toLowerCase().includes('complete') ||
+            c.status.toLowerCase() === 'completed'
+          ) && !c.status.toLowerCase().includes('not')
+        ).length;
+        
+        console.log(`Checkpoint analysis: ${passedCheckpoints} passed out of ${checkpoints.length} total`);
+        
+        // Create feedback based on assessment score and checkpoints
+        if (responseData.score >= 80) {
+          responseData.feedback = "Great job! You've successfully completed this task.";
+        } else if (passedCheckpoints > 0) {
+          responseData.feedback = `You've completed ${passedCheckpoints} out of ${checkpoints.length} requirements. Please review the details and try again.`;
+        } else {
+          responseData.feedback = "None of the requirements have been met yet. Please check the evaluation details and try again.";
+        }
       }
+      
+      console.log("Updated response with score field:", responseData.score);
+      console.log("Final feedback message:", responseData.feedback);
     }
     
-    // Return the response data
+    // Return the modified response data
     return NextResponse.json(responseData);
   } catch (error) {
     console.error('Error in evaluation proxy:', error);

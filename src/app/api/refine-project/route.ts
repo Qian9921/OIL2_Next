@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { VertexAI, HarmCategory, HarmBlockThreshold } from '@google-cloud/vertexai';
-
-const PROJECT_ID = process.env.GOOGLE_CLOUD_PROJECT || 'openimpactlab-v2'; // GCP Project ID
-// Ensure this LOCATION is a valid Vertex AI region where your model is available (e.g., us-central1)
-const LOCATION = process.env.GOOGLE_CLOUD_LOCATION || 'us-central1'; 
-// Use a standard Vertex AI model identifier for Gemini 1.5 Flash or your specific model ID
-const MODEL_NAME = 'gemini-2.5-flash-preview-05-20'; 
+import {
+  createGenerativeModel,
+  sanitizeInput,
+  sanitizeArrayInput,
+  validateAIResponse,
+  parseJsonObjectResponse
+} from '@/lib/vertex-ai-utils';
 
 interface RefineRequestData {
   title: string;
@@ -42,25 +42,23 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ message: 'Please provide at least a title or description to refine.' }, { status: 400 });
     }
 
-    const vertex_ai = new VertexAI({ project: PROJECT_ID, location: LOCATION });
-    const generativeModel = vertex_ai.getGenerativeModel({
-      model: MODEL_NAME,
-      safetySettings: [
-        { category: HarmCategory.HARM_CATEGORY_HARASSMENT, threshold: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE },
-        { category: HarmCategory.HARM_CATEGORY_HATE_SPEECH, threshold: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE },
-        { category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT, threshold: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE },
-        { category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT, threshold: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE },
-      ],
-      generationConfig: {
-        maxOutputTokens: 2048,
-        temperature: 0.7,
-        topP: 1,
-        topK: 32,
-      },
-    });
+    // Use shared generative model with configured token limit
+    const generativeModel = createGenerativeModel(2048);
 
-    const currentRequirementsString = body.requirements.length > 0 ? body.requirements.join(', ') : '(none provided)';
-    const currentLearningGoalsString = body.learningGoals.length > 0 ? body.learningGoals.join(', ') : '(none provided)';
+    // Sanitize all input fields using shared helpers
+    const sanitizedTitle = sanitizeInput(body.title);
+    const sanitizedShortDescription = sanitizeInput(body.shortDescription);
+    const sanitizedDescription = sanitizeInput(body.description);
+    const sanitizedDifficulty = body.difficulty;
+    const sanitizedMaxParticipants = sanitizeInput(body.maxParticipants);
+    const sanitizedDeadline = sanitizeInput(body.deadline);
+    const sanitizedEstimatedHours = sanitizeInput(body.estimatedHours);
+    const sanitizedTags = sanitizeArrayInput(body.tags);
+    const sanitizedRequirements = sanitizeArrayInput(body.requirements);
+    const sanitizedLearningGoals = sanitizeArrayInput(body.learningGoals);
+
+    const currentRequirementsString = sanitizedRequirements.length > 0 ? sanitizedRequirements.join(', ') : '(none provided)';
+    const currentLearningGoalsString = sanitizedLearningGoals.length > 0 ? sanitizedLearningGoals.join(', ') : '(none provided)';
 
     const prompt = 
 `You are an expert curriculum designer and project manager for social impact initiatives involving high school students.
@@ -75,13 +73,13 @@ Adhere to the following standards for all generated content:
 - Flexibility: Focus on learning goals and outcomes rather than mandating specific tools or technologies.
 
 The project details are:
-Title: ${body.title || '(not provided)'}
-Short Description: ${body.shortDescription || '(not provided)'}
-Detailed Description: ${body.description || '(not provided)'}
-Difficulty Level: ${body.difficulty || '(not provided)'}
-Maximum Participants: ${body.maxParticipants || '(not specified, consider suggesting if relevant)'}
-Estimated Hours: ${body.estimatedHours || '(not specified, consider suggesting if relevant)'}
-Current Tags: ${body.tags.length > 0 ? body.tags.join(', ') : '(none provided)'}
+Title: ${sanitizedTitle || '(not provided)'}
+Short Description: ${sanitizedShortDescription || '(not provided)'}
+Detailed Description: ${sanitizedDescription || '(not provided)'}
+Difficulty Level: ${sanitizedDifficulty || '(not provided)'}
+Maximum Participants: ${sanitizedMaxParticipants || '(not specified, consider suggesting if relevant)'}
+Estimated Hours: ${sanitizedEstimatedHours || '(not specified, consider suggesting if relevant)'}
+Current Tags: ${sanitizedTags.length > 0 ? sanitizedTags.join(', ') : '(none provided)'}
 Current Participation Requirements: ${currentRequirementsString}
 Current Learning Goals: ${currentLearningGoalsString}
 
@@ -130,40 +128,41 @@ Example of good output (partial):
 }
 
 Input to refine:
-Title: ${body.title}
-Short Description: ${body.shortDescription}
-Description: ${body.description}
-Difficulty: ${body.difficulty}
-Max Participants: ${body.maxParticipants}
-Deadline: ${body.deadline || '(not specified)'}
-Estimated Hours: ${body.estimatedHours}
-Tags: ${JSON.stringify(body.tags)}
-Requirements: ${JSON.stringify(body.requirements)}
-Learning Goals: ${JSON.stringify(body.learningGoals)}
+Title: ${sanitizedTitle}
+Short Description: ${sanitizedShortDescription}
+Description: ${sanitizedDescription}
+Difficulty: ${sanitizedDifficulty}
+Max Participants: ${sanitizedMaxParticipants}
+Deadline: ${sanitizedDeadline || '(not specified)'}
+Estimated Hours: ${sanitizedEstimatedHours}
+Tags: ${JSON.stringify(sanitizedTags)}
+Requirements: ${JSON.stringify(sanitizedRequirements)}
+Learning Goals: ${JSON.stringify(sanitizedLearningGoals)}
 
 Please provide only the JSON object in your response, without any surrounding text or explanations. Ensure the JSON is valid and complete. Remember to focus exclusively on digital, technology-based projects that encourage but don't mandate the use of open-source software and resources.`;
 
+    // Generate content using the AI model
     const result = await generativeModel.generateContent(prompt);
-    const response = result.response;
     
-    if (!response.candidates?.[0]?.content?.parts?.[0]?.text) {
-      console.error("Vertex AI response missing expected text content:", JSON.stringify(response, null, 2));
-      return NextResponse.json({ message: 'AI response was empty or in an unexpected format.' }, { status: 500 });
+    // Validate the AI response using shared helper
+    const validationResult = validateAIResponse(result.response);
+    
+    if (!validationResult.isValid) {
+      return NextResponse.json({ message: validationResult.error }, { status: 500 });
     }
-
-    const responseText = response.candidates[0].content.parts[0].text;
-    console.log("Vertex AI Response Text:", responseText);
-
-    let refinedJson: RefinedProjectDetails;
-    try {
-      const cleanedResponseText = responseText.replace(/```json\n|```/g, '').trim();
-      refinedJson = JSON.parse(cleanedResponseText);
-    } catch (parseError: unknown) {
-      console.error("Failed to parse Vertex AI response as JSON:", parseError, "Original response:", responseText);
-      return NextResponse.json({ message: `Failed to parse AI response. Raw response: ${responseText}` }, { status: 500 });
+    
+    // Parse the JSON response using shared helper
+    const parseResult = parseJsonObjectResponse(validationResult.responseText);
+    
+    if (!parseResult.success) {
+      console.error("Failed to parse project AI response:", parseResult.error);
+      return NextResponse.json({ 
+        message: "The AI response could not be processed. Please try again with simpler input." 
+      }, { status: 500 });
     }
-
-    return NextResponse.json(refinedJson, { status: 200 });
+    
+    // Return the refined project details
+    return NextResponse.json(parseResult.parsedJson, { status: 200 });
 
   } catch (error: unknown) {
     console.error("Error in /api/refine-project:", error);
@@ -173,7 +172,7 @@ Please provide only the JSON object in your response, without any surrounding te
         return NextResponse.json({ message: 'Vertex AI Authentication Error. Ensure GOOGLE_APPLICATION_CREDENTIALS is set correctly and the service account has Vertex AI User role.' }, { status: 500 });
     }
     if (errorMessage.includes('Could not find location')) {
-        return NextResponse.json({ message: `Vertex AI Location Error: The location '${LOCATION}' is likely invalid or the model '${MODEL_NAME}' is not available there. Please check your Vertex AI region and model availability.` }, { status: 500 });
+        return NextResponse.json({ message: `Vertex AI Location Error: Check your Vertex AI region and model availability.` }, { status: 500 });
     }
     return NextResponse.json({ message: errorMessage || 'An unexpected error occurred while calling Vertex AI.' }, { status: 500 });
   }

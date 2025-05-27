@@ -19,6 +19,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { ProjectCard } from "@/components/project/project-card";
 import { LoadingState } from "@/components/ui/loading-state";
 import { Timestamp } from "firebase/firestore";
+import { Participation } from "@/lib/types";
 
 export default function StudentProjectsPage() {
   const { data: session } = useSession();
@@ -26,10 +27,12 @@ export default function StudentProjectsPage() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [filteredProjects, setFilteredProjects] = useState<Project[]>([]);
   const [userParticipations, setUserParticipations] = useState<string[]>([]);
+  const [participationDetails, setParticipationDetails] = useState<Participation[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [difficultyFilter, setDifficultyFilter] = useState("all");
   const [tagFilter, setTagFilter] = useState("all");
+  const [statusFilter, setStatusFilter] = useState("all");
   const [joiningProject, setJoiningProject] = useState<string | null>(null);
   const [projectToJoin, setProjectToJoin] = useState<Project | null>(null);
 
@@ -39,7 +42,7 @@ export default function StudentProjectsPage() {
 
   useEffect(() => {
     filterProjects();
-  }, [projects, searchTerm, difficultyFilter, tagFilter]);
+  }, [projects, searchTerm, difficultyFilter, tagFilter, statusFilter]);
 
   const loadProjects = async () => {
     try {
@@ -51,6 +54,7 @@ export default function StudentProjectsPage() {
         const participations = await getParticipations({ studentId: session.user.id });
         const projectIds = participations.map(p => p.projectId);
         setUserParticipations(projectIds);
+        setParticipationDetails(participations);
       }
     } catch (error) {
       console.error("Error loading projects:", error);
@@ -78,6 +82,16 @@ export default function StudentProjectsPage() {
       filtered = filtered.filter(project => 
         project.tags && project.tags.includes(tagFilter)
       );
+    }
+    
+    if (statusFilter !== "all") {
+      if (statusFilter === "available") {
+        filtered = filtered.filter(project => !isProjectJoined(project.id));
+      } else if (statusFilter === "joined") {
+        filtered = filtered.filter(project => isProjectJoined(project.id) && !isProjectCompleted(project.id));
+      } else if (statusFilter === "completed") {
+        filtered = filtered.filter(project => isProjectCompleted(project.id));
+      }
     }
 
     setFilteredProjects(filtered);
@@ -152,6 +166,11 @@ export default function StudentProjectsPage() {
     return userParticipations.includes(projectId);
   };
 
+  const isProjectCompleted = (projectId: string) => {
+    const participation = participationDetails.find(p => p.projectId === projectId);
+    return participation?.status === 'completed';
+  };
+
   if (isLoading) {
     return (
       <MainLayout>
@@ -192,18 +211,32 @@ export default function StudentProjectsPage() {
               Discover meaningful social impact projects and join them 🌟
             </p>
           </div>
-          <Link href="/student/my-projects">
-            <Button>
-              <BookOpen className="w-4 h-4 mr-2" />
-              My Projects
+          <div className="flex space-x-2">
+            <Button 
+              variant="outline" 
+              onClick={() => {
+                setSearchTerm("");
+                setDifficultyFilter("all");
+                setTagFilter("all");
+                setStatusFilter("all");
+              }}
+            >
+              <Filter className="w-4 h-4 mr-2" />
+              Clear Filters
             </Button>
-          </Link>
+            <Link href="/student/my-projects">
+              <Button>
+                <BookOpen className="w-4 h-4 mr-2" />
+                My Projects
+              </Button>
+            </Link>
+          </div>
         </div>
 
         {/* Filters */}
         <Card>
           <CardContent className="p-4">
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
               {/* Search */}
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
@@ -240,8 +273,20 @@ export default function StudentProjectsPage() {
                 ))}
               </select>
 
-              {/* Results Count */}
-              <div className="flex items-center text-sm text-gray-600">
+              {/* Status Filter */}
+              <select
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value)}
+                className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+              >
+                <option value="all">All Statuses</option>
+                <option value="available">Available</option>
+                <option value="joined">Joined</option>
+                <option value="completed">Completed</option>
+              </select>
+              
+              {/* Results Count - now spans full width at the bottom */}
+              <div className="col-span-full flex items-center justify-end text-sm text-gray-600 mt-2">
                 <Filter className="w-4 h-4 mr-2" />
                 Found {filteredProjects.length} projects
               </div>
@@ -258,6 +303,7 @@ export default function StudentProjectsPage() {
                 project={project}
                 showJoinButton={true}
                 isJoined={isProjectJoined(project.id)}
+                isCompleted={isProjectCompleted(project.id)}
                 isFull={isProjectFull(project) ? true : false}
                 isJoining={joiningProject === project.id}
                 onJoinClick={handleJoinProjectIntent}

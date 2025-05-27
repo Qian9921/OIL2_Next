@@ -1,9 +1,20 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { VertexAI, HarmCategory, HarmBlockThreshold } from '@google-cloud/vertexai';
+import {
+  createGenerativeModel,
+  sanitizeInput,
+  sanitizeArrayInput,
+  validateAIResponse,
+  parseJsonArrayResponse
+} from '@/lib/vertex-ai-utils';
 
-const PROJECT_ID = process.env.GOOGLE_CLOUD_PROJECT || 'openimpactlab-v2';
-const LOCATION = process.env.GOOGLE_CLOUD_LOCATION || 'us-central1';
-const MODEL_NAME = 'gemini-2.5-flash-preview-05-20'; // Or your preferred model for this task
+// Helper to sanitize subtask data
+function sanitizeSubtaskData(subtask: SubtaskData): SubtaskData {
+  return {
+    title: sanitizeInput(subtask.title),
+    description: sanitizeInput(subtask.description),
+    estimatedHours: subtask.estimatedHours
+  };
+}
 
 interface SubtaskData {
   title: string;
@@ -37,31 +48,25 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ message: 'Project title and description are required to refine subtasks.' }, { status: 400 });
     }
 
-    const vertex_ai = new VertexAI({ project: PROJECT_ID, location: LOCATION });
-    const generativeModel = vertex_ai.getGenerativeModel({
-      model: MODEL_NAME,
-      safetySettings: [
-        { category: HarmCategory.HARM_CATEGORY_HARASSMENT, threshold: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE },
-        { category: HarmCategory.HARM_CATEGORY_HATE_SPEECH, threshold: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE },
-        { category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT, threshold: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE },
-        { category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT, threshold: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE },
-      ],
-      generationConfig: {
-        maxOutputTokens: 4096, // Increased from 2048 to ensure we get complete responses
-        temperature: 0.5, // Lowered from 0.6 for more predictable, focused responses
-        topP: 1,
-        topK: 32,
-      },
-    });
+    // Use shared generative model with configured token limit
+    const generativeModel = createGenerativeModel(4096);
 
-    const existingSubtasksString = body.existingSubtasks.length > 0
-      ? body.existingSubtasks.map((st, i) => 
+    // Sanitize all input data using shared helpers
+    const sanitizedProjectTitle = sanitizeInput(body.projectTitle);
+    const sanitizedProjectDescription = sanitizeInput(body.projectDescription);
+    const sanitizedProjectDifficulty = body.projectDifficulty;
+    const sanitizedProjectRequirements = sanitizeArrayInput(body.projectRequirements);
+    const sanitizedProjectLearningGoals = sanitizeArrayInput(body.projectLearningGoals);
+    const sanitizedExistingSubtasks = body.existingSubtasks.map(subtask => sanitizeSubtaskData(subtask));
+
+    const existingSubtasksString = sanitizedExistingSubtasks.length > 0
+      ? sanitizedExistingSubtasks.map((st, i) => 
           `Subtask ${i + 1}:\nTitle: ${st.title || '(not provided)'}\nDescription: ${st.description || '(not provided)'}\nEstimated Hours: ${st.estimatedHours || '(not provided)'}`
         ).join('\n\n')
       : 'No existing subtasks provided. Please generate an initial set.';
 
-    const requirementsString = body.projectRequirements.join('; ') || 'Not specified';
-    const learningGoalsString = body.projectLearningGoals.join('; ') || 'Not specified';
+    const requirementsString = sanitizedProjectRequirements.join('; ') || 'Not specified';
+    const learningGoalsString = sanitizedProjectLearningGoals.join('; ') || 'Not specified';
 
     const prompt = 
 `You are an expert curriculum designer specializing in creating engaging and practical project-based learning experiences for high school students on social impact themes.
@@ -79,9 +84,9 @@ Adhere to the following standards:
 - Flexibility: Focus on the learning outcomes and deliverables rather than mandating specific tools or methods.
 
 Project Details:
-Title: ${body.projectTitle}
-Description: ${body.projectDescription}
-Difficulty: ${body.projectDifficulty}
+Title: ${sanitizedProjectTitle}
+Description: ${sanitizedProjectDescription}
+Difficulty: ${sanitizedProjectDifficulty}
 Participation Requirements: ${requirementsString}
 Learning Goals: ${learningGoalsString}
 Existing Subtasks:
@@ -124,65 +129,53 @@ Example of one subtask object in the array:
 If refining existing subtasks, improve their clarity, detail, estimated hours, and alignment with goals/requirements. If generating new ones, ensure they form a logical progression for the project and cover the learning goals.
 Provide ONLY the JSON array in your response, without any surrounding text, explanations, or markdown. Ensure the JSON is valid and complete.`;
 
+    // Generate content using the AI model
     const result = await generativeModel.generateContent(prompt);
-    const response = result.response;
-
-    if (!response.candidates?.[0]?.content?.parts?.[0]?.text) {
-      console.error("Vertex AI response missing expected text content for subtasks:", JSON.stringify(response, null, 2));
-      return NextResponse.json({ message: 'AI subtask response was empty or in an unexpected format.' }, { status: 500 });
+    
+    // Validate the AI response using shared helper
+    const validationResult = validateAIResponse(result.response);
+    
+    if (!validationResult.isValid) {
+      return NextResponse.json({ message: validationResult.error }, { status: 500 });
     }
-
-    const responseText = response.candidates[0].content.parts[0].text;
-    console.log("Vertex AI Subtask Response Text:", responseText);
-
-    let refinedSubtasksJson: RefinedSubtask[];
-    try {
-      // Clean the response of any markdown code blocks or extra characters
-      const cleanedResponseText = responseText.replace(/```json\n|\```/g, '').trim();
-      
-      // Check if the JSON is possibly truncated by looking for common issues
-      if (!cleanedResponseText.endsWith(']') || 
-          cleanedResponseText.includes('...') || 
-          (cleanedResponseText.match(/\{/g) || []).length !== (cleanedResponseText.match(/\}/g) || []).length) {
-        console.error("Potentially truncated or incomplete JSON from AI:", cleanedResponseText);
-        return NextResponse.json({ message: "AI generated an incomplete response. Please try again or provide more details." }, { status: 500 });
-      }
-      
-      // Parse the JSON
-      refinedSubtasksJson = JSON.parse(cleanedResponseText);
-      
-      // Additional validation to ensure it's an array and objects have required fields
-      if (!Array.isArray(refinedSubtasksJson)) {
-        console.error("Parsed JSON is not an array:", refinedSubtasksJson);
-        throw new Error("AI returned data that is not a valid array of subtasks");
-      }
-      
-      // Validate each subtask has the minimum required fields
-      const invalidSubtasks = refinedSubtasksJson.filter(st => 
-        !st.title || !st.description || typeof st.estimatedHours !== 'number'
-      );
-      
-      if (invalidSubtasks.length > 0) {
-        console.error("Some subtasks are missing required fields:", invalidSubtasks);
-        throw new Error("Some subtasks are missing required fields (title, description, or estimatedHours)");
-      }
-      
-      // Check if any descriptions are truncated (ending with ellipsis or abruptly)
-      const truncatedDescriptions = refinedSubtasksJson.filter(st => 
-        st.description.endsWith('...') || 
-        st.description.match(/\w$/) // Ends with a word character (no punctuation)
-      );
-      
-      if (truncatedDescriptions.length > 0) {
-        console.warn("Some subtask descriptions appear to be truncated:", truncatedDescriptions);
-        // We'll still proceed but log a warning
-      }
-
-    } catch (parseError: unknown) {
-      console.error("Failed to parse Vertex AI subtask response as JSON:", parseError, "Original response:", responseText);
-      return NextResponse.json({ message: `Failed to parse AI subtask response. Raw response: ${responseText}` }, { status: 500 });
+    
+    // Parse the JSON array response using shared helper
+    const parseResult = parseJsonArrayResponse(validationResult.responseText);
+    
+    if (!parseResult.success) {
+      console.error("Failed to parse subtasks AI response:", parseResult.error);
+      return NextResponse.json({ 
+        message: "The AI subtask response could not be processed. Please try again with simpler input." 
+      }, { status: 500 });
     }
-
+    
+    // Additional validation for subtasks
+    const refinedSubtasksJson = parseResult.parsedJson as RefinedSubtask[];
+    
+    // Validate each subtask has the minimum required fields
+    const invalidSubtasks = refinedSubtasksJson.filter(st => 
+      !st.title || !st.description || typeof st.estimatedHours !== 'number'
+    );
+    
+    if (invalidSubtasks.length > 0) {
+      console.error("Some subtasks are missing required fields:", invalidSubtasks);
+      return NextResponse.json({ 
+        message: "Some subtasks are missing required fields. Please try again with simpler input."
+      }, { status: 500 });
+    }
+    
+    // Check if any descriptions are truncated (ending with ellipsis or abruptly)
+    const truncatedDescriptions = refinedSubtasksJson.filter(st => 
+      st.description.endsWith('...') || 
+      st.description.match(/\w$/) // Ends with a word character (no punctuation)
+    );
+    
+    if (truncatedDescriptions.length > 0) {
+      console.warn("Some subtask descriptions appear to be truncated:", truncatedDescriptions);
+      // We'll still proceed but log a warning
+    }
+    
+    // Return the refined subtasks
     return NextResponse.json(refinedSubtasksJson, { status: 200 });
 
   } catch (error: unknown) {
@@ -192,7 +185,7 @@ Provide ONLY the JSON array in your response, without any surrounding text, expl
         return NextResponse.json({ message: 'Vertex AI Authentication Error for subtasks. Check credentials and permissions.' }, { status: 500 });
     }
     if (errorMessage.includes('Could not find location')) {
-        return NextResponse.json({ message: `Vertex AI Location Error for subtasks: The location '${LOCATION}' or model '${MODEL_NAME}' may be invalid.` }, { status: 500 });
+        return NextResponse.json({ message: `Vertex AI Location Error: Check your Vertex AI region and model availability.` }, { status: 500 });
     }
     return NextResponse.json({ message: errorMessage || 'An unexpected error occurred while calling Vertex AI for subtasks.' }, { status: 500 });
   }

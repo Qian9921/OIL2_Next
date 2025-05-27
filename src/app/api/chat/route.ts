@@ -30,7 +30,7 @@ const generativeModel = vertex_ai.getGenerativeModel({
     { category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT, threshold: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE },
   ],
   generationConfig: {
-    maxOutputTokens: 8192, // Maximum output token limit for Gemini-2.5 Flash
+    maxOutputTokens: 65535, // Maximum output token limit for Gemini-2.5 Flash
     temperature: 0.8,
     topP: 0.95,
   },
@@ -53,6 +53,16 @@ export async function POST(req: NextRequest) {
     if (chatHistory.length > 0) {
       console.log(`First message in history: ${chatHistory[0].parts[0].text?.substring(0, 50)}...`);
       console.log(`Last message in history: ${chatHistory[chatHistory.length-1].parts[0].text?.substring(0, 50)}...`);
+    }
+    
+    // Log current message length
+    if (message) {
+      console.log(`Current message length: ${message.length} characters (${Math.round(message.length/3000*100)}% of 3000 limit)`);
+    }
+    
+    // Log image attachment if present
+    if (imageData) {
+      console.log(`Image attachment included: ${imageMimeType}`);
     }
 
     // 1. Verify user authentication (optional, depends on your session management)
@@ -92,7 +102,11 @@ export async function POST(req: NextRequest) {
     Task Resources: ${subtask.resources?.join(', ') || 'Not specified'}
     
     IMPORTANT: Maintain context from the entire conversation history. Remember what the student has asked before and what you've previously explained.
-    Be aware of the student's progress throughout the conversation and build upon previous exchanges.`;
+    Be aware of the student's progress throughout the conversation and build upon previous exchanges.
+    
+    Students may ask detailed questions with longer prompts (up to 3000 characters). Pay careful attention to all details in their messages and 
+    address each point comprehensively. Your context window is large enough to maintain the full conversation history, so refer back to
+    previous exchanges when needed and maintain continuity in your guidance.`;
 
     const userParts: Part[] = [];
     if (message && message.trim()) { // Ensure message is not just whitespace
@@ -332,7 +346,7 @@ async function evaluatePromptWithAI(prompt: string, subtask: Subtask) {
       model: MODEL_NAME,
       generationConfig: {
         temperature: 0.2,
-        maxOutputTokens: 8192, // Increased to match the main model configuration
+        maxOutputTokens: 65535, // Maximum output token limit for Gemini-2.5 Flash
       }
     });
     

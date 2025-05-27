@@ -155,7 +155,7 @@ export default function ProjectTaskPage() {
   const [showPromptHistoryDialog, setShowPromptHistoryDialog] = useState(false);
   const [showSubmitProjectDialog, setShowSubmitProjectDialog] = useState(false);
 
-  const MAX_USER_INPUT_LENGTH = 500;
+  const MAX_USER_INPUT_LENGTH = 3000; // Increased from 500 to 3000 for better Gemini compatibility
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -523,6 +523,7 @@ export default function ProjectTaskPage() {
   const handleSendMessage = async () => {
     if (!userInput.trim() || isChatLoading) return;
     
+    // Process user input (now supports up to 3000 characters for more detailed prompts)
     const currentInput = userInput.trim();
     setUserInput('');
     
@@ -571,6 +572,7 @@ export default function ProjectTaskPage() {
         projectId: currentProjectId,
         subtaskId: subtask.id,
         messageLength: currentInput.length,
+        messageLengthPercentage: Math.round((currentInput.length / MAX_USER_INPUT_LENGTH) * 100) + "%",
         chatHistoryLength: chatMessages.length,
         evaluatePromptQuality: true,
         requestPersonalizedFeedback: true,
@@ -1568,7 +1570,7 @@ export default function ProjectTaskPage() {
               
               <CardContent 
                 ref={chatContainerRef} 
-                className="flex-grow overflow-y-auto px-4 py-4 bg-slate-50 rounded-b-none min-h-0"
+                className="flex-grow overflow-y-auto px-4 py-4 bg-slate-50 rounded-b-none min-h-0 pb-4"
               >
                 <div className="space-y-4">
                   {chatMessages.map((msg, index) => (
@@ -1598,7 +1600,7 @@ export default function ProjectTaskPage() {
                 </div>
               </CardContent>
               
-              <div className="p-3 border-t bg-white rounded-b-lg mt-auto flex-shrink-0">
+              <div className="p-3 border-t bg-white rounded-b-lg mt-auto flex-shrink-0 space-y-2">
                 {selectedFilePreview && (
                   <div className="mb-2 p-2 border border-slate-300 rounded-md bg-slate-50 flex items-center justify-between">
                     <div className="flex items-center space-x-2">
@@ -1644,18 +1646,25 @@ export default function ProjectTaskPage() {
                     />
                   )}
                   
-                  <Input 
-                    type="text" 
+                  <Textarea 
                     placeholder={isSubtaskCompletedByStudent ? "Task completed. Chat disabled." : (!isCurrentSequentially ? "Complete previous tasks to enable chat." : (selectedFile ? "Add a caption..." : "Ask your AI assistant..."))} 
                     value={userInput}
-                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+                    onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => {
                       if (e.target.value.length <= MAX_USER_INPUT_LENGTH) {
                         setUserInput(e.target.value);
                       }
                     }}
-                    onKeyPress={(e: React.KeyboardEvent<HTMLInputElement>) => e.key === 'Enter' && !isChatLoading && !isSubtaskCompletedByStudent && isCurrentSequentially && handleSendMessage()}
+                    onKeyDown={(e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+                      if (e.key === 'Enter' && !e.shiftKey) {
+                        e.preventDefault();
+                        if (!isChatLoading && !isSubtaskCompletedByStudent && isCurrentSequentially) {
+                          handleSendMessage();
+                        }
+                      }
+                    }}
                     disabled={isChatLoading || isSubtaskCompletedByStudent || !isCurrentSequentially}
-                    className="flex-1 text-sm focus-visible:ring-1 focus-visible:ring-purple-500"
+                    className="flex-1 text-sm focus-visible:ring-1 focus-visible:ring-purple-500 min-h-[50px] max-h-[200px] resize-y"
+                    autoFocus
                   />
                   <Button onClick={handleSendMessage} disabled={isChatLoading || (!userInput.trim() && !selectedFile) || isSubtaskCompletedByStudent || !isCurrentSequentially} size="icon" className="rounded-full w-9 h-9">
                     <Send className="w-4 h-4" />
@@ -1668,8 +1677,13 @@ export default function ProjectTaskPage() {
                     )}
                   </div>
                   <p className={`text-xs text-right ${userInput.length > MAX_USER_INPUT_LENGTH ? 'text-red-500' : 'text-gray-500'}`}>
-                  {userInput.length}/{MAX_USER_INPUT_LENGTH}
-                </p>
+                    {userInput.length}/{MAX_USER_INPUT_LENGTH} characters
+                    {userInput.length > 0 && userInput.length < 500 && (
+                      <span className="ml-1 text-blue-500">
+                        • Tip: Longer, detailed prompts often get better responses
+                      </span>
+                    )}
+                  </p>
                 </div>
               </div>
             </Card>

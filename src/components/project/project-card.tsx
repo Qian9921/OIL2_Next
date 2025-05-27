@@ -10,7 +10,8 @@ import {
   Edit,
   Trash2,
   Settings,
-  Plus
+  Plus,
+  Award
 } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -32,6 +33,8 @@ export interface ProjectCardProps {
   showJoinButton?: boolean;
   /** Whether project is joined by current user */
   isJoined?: boolean;
+  /** Whether the project has been completed by the user */
+  isCompleted?: boolean;
   /** Whether to show edit/delete buttons (for NGO view) */
   showAdminActions?: boolean;
   /** Whether the project is full (maxed participants) */
@@ -59,6 +62,7 @@ export function ProjectCard({
   project,
   showJoinButton = false,
   isJoined = false,
+  isCompleted = false,
   showAdminActions = false,
   isFull = false,
   isJoining = false,
@@ -104,6 +108,13 @@ export function ProjectCard({
               {isJoined && (
                 <span className="px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
                   Joined
+                </span>
+              )}
+              
+              {isCompleted && (
+                <span className="px-2 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800 flex items-center">
+                  <CheckCircle className="w-3 h-3 mr-1" />
+                  Completed
                 </span>
               )}
             </div>
@@ -154,6 +165,14 @@ export function ProjectCard({
             </span>
           </div>
         </div>
+
+        {/* Completion message for completed projects */}
+        {isCompleted && (
+          <div className="mt-2 text-xs py-1.5 px-2 bg-yellow-50 border border-yellow-200 rounded-md text-yellow-800 flex items-center">
+            <CheckCircle className="w-3.5 h-3.5 mr-1.5 text-yellow-600" />
+            <span>You've successfully completed this project! View your certificate in My Projects.</span>
+          </div>
+        )}
 
         {/* Tags */}
         {project.tags && project.tags.length > 0 && (
@@ -207,13 +226,31 @@ export function ProjectCard({
           )}
           
           {/* Student continue button (if already joined) */}
-          {showJoinButton && isJoined && (
+          {showJoinButton && isJoined && !isCompleted && (
             <Link href="/student/my-projects" className="w-full">
               <Button className="w-full">
                 <Target className="w-4 h-4 mr-2" />
                 Continue
               </Button>
             </Link>
+          )}
+          
+          {/* Student completed project buttons */}
+          {showJoinButton && isJoined && isCompleted && (
+            <div className="flex flex-col space-y-2">
+              <Link href="/student/certificates" className="w-full">
+                <Button variant="outline" className="w-full border-yellow-300 text-yellow-700 hover:bg-yellow-50">
+                  <Award className="w-4 h-4 mr-2" />
+                  View Certificate
+                </Button>
+              </Link>
+              <Link href="/student/my-projects" className="w-full">
+                <Button variant="outline" className="w-full">
+                  <BookOpen className="w-4 h-4 mr-2" />
+                  View Project
+                </Button>
+              </Link>
+            </div>
           )}
           
           {/* Admin actions (NGO view) */}
