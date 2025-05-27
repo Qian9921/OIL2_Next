@@ -168,6 +168,7 @@ export default function NGOCertificatesPage() {
         studentName: selectedProject.student.name,
         ngoId: session!.user!.id,
         ngoName: session!.user!.name || 'NGO',
+        ngoSignature: ngoSignature,
         projectId: selectedProject.project.id,
         projectTitle: selectedProject.project.title,
         participationId: selectedProject.participation.id,

@@ -171,6 +171,7 @@ export interface Certificate {
   projectTitle: string;
   ngoId: string;
   ngoName: string;
+  ngoSignature: string;
   participationId: string;
   issuedAt: Timestamp;
   certificateNumber: string;

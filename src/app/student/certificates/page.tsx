@@ -67,7 +67,7 @@ export default function StudentCertificatesPage() {
       // Generate preview using the same data structure as NGO
       const certificateData = {
         studentName: certificate.studentName,
-        ngoSignature: certificate.ngoName, // Use NGO name as signature for now
+        ngoSignature: certificate.ngoSignature,
         ngoName: certificate.ngoName,
         contents: certificate.projectTitle,
         date: certificate.completionDate.toDate().toISOString().split('T')[0]
@@ -106,7 +106,7 @@ export default function StudentCertificatesPage() {
     try {
       const certificateData = {
         studentName: certificate.studentName,
-        ngoSignature: certificate.ngoName,
+        ngoSignature: certificate.ngoSignature,
         ngoName: certificate.ngoName,
         contents: certificate.projectTitle,
         date: certificate.completionDate.toDate().toISOString().split('T')[0]
