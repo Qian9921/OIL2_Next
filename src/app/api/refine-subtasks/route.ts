@@ -74,6 +74,9 @@ Adhere to the following standards:
 - Logical Flow: Subtasks should follow a logical progression.
 - Feasibility: Estimated hours should be realistic for high school students.
 - Conciseness: Keep descriptions focused and under 250 characters if possible. Avoid lengthy explanations.
+- Open Source: Encourage the use of open-source software, tools, data sources, and technologies while allowing students flexibility in their choices.
+- Assessment-Ready: Include specific, measurable outcomes that clearly indicate what successful completion looks like.
+- Flexibility: Focus on the learning outcomes and deliverables rather than mandating specific tools or methods.
 
 Project Details:
 Title: ${body.projectTitle}
@@ -85,20 +88,37 @@ Existing Subtasks:
 ${existingSubtasksString}
 
 For each subtask, provide:
-1.  A concise and motivating 'title'.
-2.  A brief but clear 'description' of what the student needs to do, learn, or achieve. Be specific but concise.
-3.  A realistic 'estimatedHours' (integer) for completion, considering the project difficulty:
-    - For beginner projects: typically 2-5 hours per subtask
-    - For intermediate projects: typically 4-8 hours per subtask
-    - For advanced projects: typically 6-12 hours per subtask
-    Always set realistic expectations that won't overwhelm students.
+1. A concise and motivating 'title'.
+2. A clear 'description' that includes:
+   - What the student needs to do (specific actions)
+   - Why they're doing it (context and purpose)
+   - How to approach it (suggested steps, not prescriptive)
+   - What success looks like (qualitative criteria)
+   - Suggested tools or resources (as recommendations, not requirements)
+   - The expected output or deliverable
+3. A realistic 'estimatedHours' (integer) for completion, considering the project difficulty:
+   - For beginner projects: typically 2-5 hours per subtask
+   - For intermediate projects: typically 4-8 hours per subtask
+   - For advanced projects: typically 6-12 hours per subtask
+   Always set realistic expectations that won't overwhelm students.
+
+IMPORTANT: The task descriptions will be used to evaluate whether students have successfully completed the task. An AI system will compare the task description against the student's work in their GitHub repository and score it. Therefore, the description MUST include qualitative criteria for success that are specific and measurable.
+
+IMPORTANT: Each task description should clearly answer the question: "How will we know when this task is done correctly?" Focus on the quality and characteristics of the final deliverable rather than the specific tools used to create it.
+
+IMPORTANT: When suggesting tools, platforms, or resources, emphasize they are recommendations, not requirements. Students should be free to choose alternatives that accomplish the same goals. For example:
+- Instead of "Use GIMP to edit images," say "Edit images using software of your choice (GIMP is a recommended free, open-source option)"
+- Instead of "Build with WordPress," say "Create a website using a content management system or framework of your choice (open-source options like WordPress, Hugo, or Jekyll are recommended)"
+- Instead of "Use React," say "Develop the frontend using a JavaScript framework of your choice (open-source options like React, Vue.js, or Angular are recommended)"
+
+IMPORTANT: Recommend open-source options when suggesting tools, but always frame them as suggestions rather than requirements.
 
 Output the refined/generated subtasks STRICTLY as a JSON array of objects. Each object in the array must have "title", "description", and "estimatedHours" keys.
 Example of one subtask object in the array:
 {
-  "title": "Research Local Water Contamination Issues",
-  "description": "Investigate common water pollutants in your community. Identify their sources and health impacts. Document your findings in a brief report.",
-  "estimatedHours": 5
+  "title": "Create an Interactive Data Visualization Dashboard",
+  "description": "Develop an interactive dashboard to visualize the environmental data you've collected. Your dashboard should include at least 3 different visualization types (e.g., bar charts, line graphs, maps) and allow users to filter or interact with the data. Consider using visualization libraries like D3.js, Chart.js, or any similar tool you're comfortable with. The final product should be responsive, visually appealing, and effectively communicate key insights from your data. Success criteria: The dashboard loads without errors, displays data correctly, includes interactive elements, and follows accessibility best practices.",
+  "estimatedHours": 6
 }
 
 If refining existing subtasks, improve their clarity, detail, estimated hours, and alignment with goals/requirements. If generating new ones, ensure they form a logical progression for the project and cover the learning goals.

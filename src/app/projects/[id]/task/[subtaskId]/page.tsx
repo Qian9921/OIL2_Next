@@ -571,10 +571,25 @@ export default function ProjectTaskPage() {
         projectId: currentProjectId,
         subtaskId: subtask.id,
         messageLength: currentInput.length,
+        chatHistoryLength: chatMessages.length,
         evaluatePromptQuality: true,
         requestPersonalizedFeedback: true,
         hasImageData: !!userMessage.imageData
       });
+      
+      // Convert chat messages to the format expected by the API
+      const formattedChatHistory = chatMessages.map(msg => ({
+        role: msg.role === 'user' ? 'user' : 'model',
+        parts: [
+          ...(msg.content ? [{ text: msg.content }] : []),
+          ...(msg.imageData ? [{ 
+            inlineData: { 
+              data: msg.imageData.split(',')[1], 
+              mimeType: msg.imageData.split(';')[0].split(':')[1] 
+            } 
+          }] : [])
+        ]
+      }));
       
       const response = await fetch(endpoint, {
         method: 'POST',
@@ -584,6 +599,7 @@ export default function ProjectTaskPage() {
           projectId: currentProjectId,
           subtaskId: subtask.id,
           message: currentInput,
+          chatHistory: formattedChatHistory,
           evaluatePromptQuality: true,
           requestPersonalizedFeedback: true,
           ...(userMessage.imageData && {

@@ -30,8 +30,8 @@ const generativeModel = vertex_ai.getGenerativeModel({
     { category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT, threshold: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE },
   ],
   generationConfig: {
-    maxOutputTokens: 2048,
-    temperature: 0.8, // Slightly higher for more conversational/creative responses
+    maxOutputTokens: 8192, // Maximum output token limit for Gemini-2.5 Flash
+    temperature: 0.8,
     topP: 0.95,
   },
 });
@@ -46,6 +46,13 @@ export async function POST(req: NextRequest) {
     }
     if (imageData && !imageMimeType) {
       return NextResponse.json({ message: 'imageMimeType is required when imageData is provided.' }, { status: 400 });
+    }
+
+    // Log chat history length for debugging
+    console.log(`Received chat with history length: ${chatHistory.length} turns`);
+    if (chatHistory.length > 0) {
+      console.log(`First message in history: ${chatHistory[0].parts[0].text?.substring(0, 50)}...`);
+      console.log(`Last message in history: ${chatHistory[chatHistory.length-1].parts[0].text?.substring(0, 50)}...`);
     }
 
     // 1. Verify user authentication (optional, depends on your session management)
@@ -82,7 +89,10 @@ export async function POST(req: NextRequest) {
     Task Description: "${subtask.description}"
     Task Estimated Hours: ${subtask.estimatedHours}
     Task Completion Criteria: ${subtask.completionCriteria?.join(', ') || 'Not specified'}
-    Task Resources: ${subtask.resources?.join(', ') || 'Not specified'}`; 
+    Task Resources: ${subtask.resources?.join(', ') || 'Not specified'}
+    
+    IMPORTANT: Maintain context from the entire conversation history. Remember what the student has asked before and what you've previously explained.
+    Be aware of the student's progress throughout the conversation and build upon previous exchanges.`;
 
     const userParts: Part[] = [];
     if (message && message.trim()) { // Ensure message is not just whitespace
@@ -92,15 +102,21 @@ export async function POST(req: NextRequest) {
       userParts.push({ inlineData: { data: imageData, mimeType: imageMimeType } });
     }
 
+    // Ensure we're processing chat history correctly
+    const processedChatHistory = chatHistory.map(turn => ({
+      role: turn.role,
+      parts: turn.parts.reduce((acc: Part[], part) => {
+        if (part.text) acc.push({ text: part.text });
+        else if (part.inlineData) acc.push({ inlineData: { mimeType: part.inlineData.mimeType, data: part.inlineData.data }});
+        return acc;
+      }, [] as Part[])
+    }));
+
+    // Log chat history length for debugging
+    console.log(`Processing chat with history length: ${processedChatHistory.length} turns`);
+
     const contents = [
-      ...chatHistory.map(turn => ({
-        role: turn.role,
-        parts: turn.parts.reduce((acc: Part[], part) => {
-          if (part.text) acc.push({ text: part.text });
-          else if (part.inlineData) acc.push({ inlineData: { mimeType: part.inlineData.mimeType, data: part.inlineData.data }});
-          return acc;
-        }, [] as Part[])
-      })),
+      ...processedChatHistory,
       { role: 'user', parts: userParts }
     ].filter(content => content.parts.length > 0); // Ensure no content turns with empty parts
 
@@ -114,88 +130,89 @@ export async function POST(req: NextRequest) {
 
     const result = await generativeModel.generateContentStream(streamRequest);
 
-    // Evaluate prompt quality if requested
+    // Handle prompt evaluation if requested
     let promptQualityScore: number | null = null;
     let promptQualityDetails: { goal: number; context: number; expectations: number; source: number } | null = null;
-    let streakInfo: { currentStreak: number; bestStreak: number; isGoodPrompt: boolean } | null = null;
     let promptFeedback: any = null;
     
     // Initialize headers
     const headers: HeadersInit = { 'Content-Type': 'text/plain; charset=utf-8' };
     
-    if (evaluatePromptQuality && message) {
+    // Consolidate prompt evaluation and feedback into a single call
+    if (evaluatePromptQuality || requestPersonalizedFeedback) {
       try {
-        // Call Gemini to evaluate the prompt quality
-        const qualityResult = await evaluatePromptWithAI(message, subtask);
-        promptQualityScore = qualityResult.overallScore;
-        promptQualityDetails = {
-          goal: qualityResult.goalScore,
-          context: qualityResult.contextScore,
-          expectations: qualityResult.expectationsScore,
-          source: qualityResult.sourceScore
-        };
+        // Single call to Gemini for both evaluation and feedback
+        console.log("Making a single call to Gemini for prompt evaluation and/or feedback");
+        const result = await evaluatePromptWithAI(message, subtask);
         
-        // Generate personalized feedback if requested
+        // Process scores if evaluation was requested
+        if (evaluatePromptQuality) {
+          promptQualityScore = result.overallScore;
+          promptQualityDetails = {
+            goal: result.goalScore,
+            context: result.contextScore,
+            expectations: result.expectationsScore,
+            source: result.sourceScore
+          };
+        }
+        
+        // Process feedback if it was requested
         if (requestPersonalizedFeedback) {
-          try {
-            const feedbackJson = await generatePersonalizedFeedback(message, subtask);
-            promptFeedback = JSON.parse(feedbackJson);
-            console.log("DEBUG - Successfully parsed prompt feedback:", promptFeedback);
-            
-            // Add to headers with type assertion only if we have valid feedback
-            if (promptFeedback && typeof promptFeedback.feedback === 'string') {
-              headers['X-Prompt-Feedback' as keyof HeadersInit] = encodeURIComponent(feedbackJson);
-              console.log("DEBUG - Added feedback to headers");
-            }
-          } catch (feedbackError) {
-            console.error("Error generating or parsing feedback:", feedbackError);
-            // Don't set feedback headers if there's an error
+          promptFeedback = { feedback: result.feedback };
+          console.log("DEBUG - Using feedback from evaluation:", promptFeedback);
+          
+          // Add to headers with type assertion only if we have valid feedback
+          if (promptFeedback && typeof promptFeedback.feedback === 'string') {
+            headers['X-Prompt-Feedback' as keyof HeadersInit] = encodeURIComponent(JSON.stringify(promptFeedback));
+            console.log("DEBUG - Added feedback to headers");
           }
         }
         
-        // Save the prompt evaluation to Firebase only if we have valid scores
-        if (participation && promptQualityScore !== null && promptQualityDetails) {
-          console.log("DEBUG - About to save prompt evaluation with feedback:", promptFeedback);
-          
+        // Save to Firebase if there's any data to save and we have the required IDs
+        if ((promptQualityScore !== null || (promptFeedback && typeof promptFeedback.feedback === 'string')) && 
+            userId && projectId && subtaskId) {
           try {
-            // Ensure feedback is in the standardized format
-            const standardizedFeedback = promptFeedback && typeof promptFeedback === 'object' ? 
-              (typeof promptFeedback.feedback === 'string' ? 
-                { feedback: promptFeedback.feedback } : 
-                // Convert old format if needed
-                (promptFeedback.strengths || promptFeedback.tips) ? 
-                  { feedback: formatFeedbackFromArrays(promptFeedback.strengths, promptFeedback.tips) } : 
-                  null
-              ) : null;
+            console.log("DEBUG - About to save prompt evaluation with feedback:", promptFeedback);
+            // Create evaluation object with the structure expected by savePromptEvaluation
+            const evaluationObj = {
+              goalScore: result.goalScore,
+              contextScore: result.contextScore,
+              expectationsScore: result.expectationsScore,
+              sourceScore: result.sourceScore,
+              overallScore: result.overallScore,
+              prompt: message
+            };
             
-            // Only save if we have actual feedback
-            if (standardizedFeedback) {
-              streakInfo = await savePromptEvaluation(
-                participation.id,
-                subtaskId,
-                {
-                  goalScore: promptQualityDetails.goal,
-                  contextScore: promptQualityDetails.context,
-                  expectationsScore: promptQualityDetails.expectations,
-                  sourceScore: promptQualityDetails.source,
-                  overallScore: promptQualityScore,
-                  prompt: message
-                },
-                standardizedFeedback
-              );
+            const streakInfo: any = await savePromptEvaluation(
+              userId,
+              subtaskId,
+              evaluationObj,
+              promptFeedback
+            );
+            
+            console.log("DEBUG - Successfully saved prompt evaluation with feedback. Streak info:", streakInfo);
+            
+            // Add streak info to headers if available
+            if (streakInfo) {
+              // Extract streak info values directly from the returned object
+              const currentStreak = streakInfo.currentStreak || 0;
+              const bestStreak = streakInfo.bestStreak || 0;
+              const isGoodPrompt = streakInfo.isGoodPrompt || false;
               
-              console.log("DEBUG - Successfully saved prompt evaluation with feedback. Streak info:", streakInfo);
+              // Create a new object for the JSON
+              headers['X-Prompt-Streak' as keyof HeadersInit] = JSON.stringify({
+                current: currentStreak,
+                best: bestStreak,
+                isGoodPrompt: isGoodPrompt
+              });
             }
           } catch (saveError) {
             console.error("Error saving prompt evaluation:", saveError);
           }
         }
-      } catch (evalError) {
-        console.error("Error evaluating prompt quality:", evalError);
-        // Continue with the main functionality even if evaluation fails
-        // Do not set any quality scores in headers
-        promptQualityScore = null;
-        promptQualityDetails = null;
+      } catch (error) {
+        console.error("Error in prompt evaluation or feedback generation:", error);
+        // Don't stop the overall request just because evaluation failed
       }
     }
 
@@ -222,8 +239,8 @@ export async function POST(req: NextRequest) {
       headers['X-Prompt-Source-Score' as keyof HeadersInit] = promptQualityDetails.source.toString();
       
       // Only add streak info if it was successfully calculated
-      if (streakInfo) {
-        headers['X-Prompt-Streak' as keyof HeadersInit] = encodeURIComponent(JSON.stringify(streakInfo));
+      if (promptFeedback && typeof promptFeedback.feedback === 'string') {
+        headers['X-Prompt-Streak' as keyof HeadersInit] = encodeURIComponent(JSON.stringify(promptFeedback));
       }
       
       // Include prompt evaluation as a single JSON object for easier parsing
@@ -234,7 +251,7 @@ export async function POST(req: NextRequest) {
         expectationsScore: promptQualityDetails.expectations,
         sourceScore: promptQualityDetails.source,
         overallScore: promptQualityScore,
-        isGoodPrompt: streakInfo?.isGoodPrompt
+        isGoodPrompt: promptFeedback?.isGoodPrompt
       };
       
       // Only include feedback if it's properly formatted
@@ -266,11 +283,11 @@ export async function POST(req: NextRequest) {
   }
 }
 
-// Function to evaluate prompt quality using Gemini
+// Combined function to evaluate prompt quality AND generate feedback in a single API call
 async function evaluatePromptWithAI(prompt: string, subtask: Subtask) {
   try {
-    const evaluationPrompt = `
-      I need you to evaluate the quality of a student's message to an AI assistant.
+    const combinedEvaluationPrompt = `
+      I need you to evaluate the quality of a student's message to an AI assistant and provide personalized feedback.
       
       The student is working on a task, but what I want you to evaluate is NOT the task itself, but rather HOW WELL the student communicated with the AI assistant.
       
@@ -283,28 +300,45 @@ async function evaluatePromptWithAI(prompt: string, subtask: Subtask) {
       ${prompt}
       """
       
-      Evaluate ONLY this student message based on these prompt engineering criteria:
+      Part 1: Evaluate this student message based on these prompt engineering criteria:
       1. Goal (0-100): Does the student's message have a specific, clear goal? Does it use action verbs or questions that clearly state what they need?
       2. Context (0-100): Does the student's message provide context for why they need help or how they plan to use the information?
       3. Expectations (0-100): Does the student's message specify what format or level of detail they want in the response?
       4. Source (0-100): Does the student's message reference relevant facts, constraints, or what they've already tried?
       
-      DO NOT evaluate the task itself or how well the student is doing on their assignment.
-      ONLY evaluate how effectively they've communicated their needs to the AI assistant.
+      Part 2: Provide personalized feedback on the student's communication style:
+      - Write ONE SINGLE PARAGRAPH (3-5 sentences maximum) addressing their overall communication skills
+      - Include both strengths and areas for improvement
+      - Focus ONLY on their communication style and prompt engineering techniques
+      - DO NOT critique the student's task progress or solution ideas
+      - Write it as a cohesive paragraph with complete sentences, not as bullet points
       
-      Return ONLY a JSON object with scores in this exact format:
+      Return your evaluation as a JSON object with the following structure:
       {
         "goalScore": 75,
         "contextScore": 60,
         "expectationsScore": 80,
         "sourceScore": 40,
-        "overallScore": 64
+        "overallScore": 64,
+        "feedback": "One concise paragraph (3-5 sentences) giving overall feedback on the quality of the student's communication with AI. Mention 1-2 strengths and 1-2 areas for improvement."
       }
+      
+      DO NOT evaluate the task itself or how well the student is doing on their assignment.
+      ONLY evaluate how effectively they've communicated their needs to the AI assistant.
     `;
     
-    const model = vertex_ai.getGenerativeModel({ model: MODEL_NAME });
-    const result = await model.generateContent(evaluationPrompt);
+    console.log("evaluatePromptWithAI: Sending combined prompt to Gemini for evaluation and feedback.");
+    const model = vertex_ai.getGenerativeModel({ 
+      model: MODEL_NAME,
+      generationConfig: {
+        temperature: 0.2,
+        maxOutputTokens: 8192, // Increased to match the main model configuration
+      }
+    });
+    
+    const result = await model.generateContent(combinedEvaluationPrompt);
     const textResult = result.response.candidates?.[0]?.content?.parts?.[0]?.text || '';
+    console.log("evaluatePromptWithAI: Received raw textResult from Gemini:", textResult);
     
     const jsonMatch = textResult.match(/\{[\s\S]*\}/);
     if (!jsonMatch) {
@@ -312,107 +346,41 @@ async function evaluatePromptWithAI(prompt: string, subtask: Subtask) {
       throw new Error("Failed to extract JSON from evaluation response");
     }
     
-    let scoreData;
+    let combinedData;
     try {
-      scoreData = JSON.parse(jsonMatch[0]);
+      combinedData = JSON.parse(jsonMatch[0]);
     } catch (parseError) {
       console.error("evaluatePromptWithAI: Failed to parse JSON from evaluation response. JSON string:", jsonMatch[0], "Error:", parseError);
       throw new Error("Failed to parse JSON from evaluation response");
     }
 
     // Validate that all required score fields exist and are numbers
-    const requiredFields = ['goalScore', 'contextScore', 'expectationsScore', 'sourceScore', 'overallScore'];
-    for (const field of requiredFields) {
-      if (typeof scoreData[field] !== 'number') {
+    const requiredScoreFields = ['goalScore', 'contextScore', 'expectationsScore', 'sourceScore', 'overallScore'];
+    for (const field of requiredScoreFields) {
+      if (typeof combinedData[field] !== 'number') {
         console.error(`evaluatePromptWithAI: Missing or invalid ${field} in evaluation response`);
         throw new Error(`Missing or invalid ${field} in evaluation response`);
       }
     }
+    
+    // Validate feedback field
+    if (typeof combinedData.feedback !== 'string' || !combinedData.feedback.trim()) {
+      console.error("evaluatePromptWithAI: Missing or invalid feedback in evaluation response");
+      combinedData.feedback = "Your prompt could be improved by adding more specific details about what you need help with.";
+    }
 
     return {
-      goalScore: scoreData.goalScore,
-      contextScore: scoreData.contextScore,
-      expectationsScore: scoreData.expectationsScore,
-      sourceScore: scoreData.sourceScore,
-      overallScore: scoreData.overallScore
+      goalScore: combinedData.goalScore,
+      contextScore: combinedData.contextScore,
+      expectationsScore: combinedData.expectationsScore,
+      sourceScore: combinedData.sourceScore,
+      overallScore: combinedData.overallScore,
+      feedback: combinedData.feedback
     };
   } catch (error) {
     console.error("Error in evaluatePromptWithAI function:", error);
     // Instead of returning placeholder scores, propagate the error
     throw error;
-  }
-}
-
-// Function to generate personalized feedback using Gemini
-async function generatePersonalizedFeedback(prompt: string, subtask: Subtask) {
-  try {
-    const feedbackPrompt = `
-      I need you to generate personalized feedback about how well a student communicated with an AI assistant.
-      
-      The student is working on a task, but what I want you to evaluate is NOT the task itself or its solution, but ONLY HOW WELL the student communicated their needs to the AI.
-      
-      Task context (for your reference only): 
-      - Task title: "${subtask.title}"
-      - Task description: "${subtask.description}"
-      
-      THE STUDENT'S MESSAGE TO EVALUATE:
-      """
-      ${prompt}
-      """
-      
-      VERY IMPORTANT: 
-      1. Do NOT critique the student's task progress or solution ideas.
-      2. Focus ONLY on their communication style and prompt engineering techniques.
-      3. Return ONLY a valid JSON object with the exact structure below. No markdown, no explanations, just the JSON.
-      4. The feedback should be ONE SINGLE PARAGRAPH (3-5 sentences maximum) that addresses their overall communication skills.
-      5. DO NOT format the feedback as bullet points or a list. Write it as a cohesive paragraph with complete sentences.
-      6. Include both strengths and areas for improvement in the feedback paragraph.
-      
-      {
-        "feedback": "One concise paragraph (3-5 sentences) giving overall feedback on the quality of the student's communication with AI. Mention 1-2 strengths and 1-2 areas for improvement."
-      }
-    `;
-    
-    console.log("generatePersonalizedFeedback: Sending prompt to Gemini for feedback generation.");
-    const model = vertex_ai.getGenerativeModel({ 
-      model: MODEL_NAME,
-      generationConfig: {
-        temperature: 0.2,
-        maxOutputTokens: 10000,
-      }
-    });
-    
-    const result = await model.generateContent(feedbackPrompt);
-    
-    const textResult = result.response.candidates?.[0]?.content?.parts?.[0]?.text || '';
-    console.log("generatePersonalizedFeedback: Received raw textResult from Gemini:", textResult);
-    
-    // Extract the JSON from the response
-    const jsonMatch = textResult.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) {
-      console.error("generatePersonalizedFeedback: Failed to extract JSON from feedback response");
-      return JSON.stringify({ feedback: "Unable to generate personalized feedback at this time." });
-    }
-    
-    let feedbackData;
-    try {
-      feedbackData = JSON.parse(jsonMatch[0]);
-      
-      // Ensure the feedback is in the correct format - a single string property
-      if (typeof feedbackData.feedback !== 'string') {
-        console.error("generatePersonalizedFeedback: Feedback is not a string");
-        return JSON.stringify({ feedback: "Unable to generate personalized feedback at this time." });
-      }
-      
-      // Return the standardized format
-      return JSON.stringify({ feedback: feedbackData.feedback });
-    } catch (parseError) {
-      console.error("generatePersonalizedFeedback: Failed to parse JSON from feedback response:", parseError);
-      return JSON.stringify({ feedback: "Unable to generate personalized feedback at this time." });
-    }
-  } catch (error) {
-    console.error("Error in generatePersonalizedFeedback function:", error);
-    return JSON.stringify({ feedback: "Unable to generate personalized feedback at this time." });
   }
 }
 
