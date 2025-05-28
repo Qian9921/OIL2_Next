@@ -1,4 +1,4 @@
-# OpenImpactLab 🌟
+# OpenImpactLab Beta 🌟
 
 A platform connecting students, teachers, and NGOs to create positive social impact through collaborative projects.
 
