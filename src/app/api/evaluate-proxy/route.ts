@@ -59,8 +59,14 @@ export async function POST(request: Request) {
     if (!('score' in responseData) && responseData.result?.rawContent?.assessment !== undefined) {
       console.log("Extracting score from result.rawContent.assessment:", responseData.result.rawContent.assessment);
       
-      // Add the assessment value as the score field
-      responseData.score = responseData.result.rawContent.assessment;
+      // Convert from 0-1 range to 0-100% range
+      const rawAssessment = responseData.result.rawContent.assessment;
+      const convertedScore = Math.round(rawAssessment * 100);
+      
+      console.log(`Converting assessment score: ${rawAssessment} (0-1 range) -> ${convertedScore}% (0-100 range)`);
+      
+      // Add the converted assessment value as the score field
+      responseData.score = convertedScore;
       
       // Also add a default feedback message if needed
       if (!('feedback' in responseData)) {

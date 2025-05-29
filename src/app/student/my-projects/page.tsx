@@ -189,11 +189,18 @@ export default function StudentMyProjectsPage() {
         
         const result = await response.json();
         
+        // Convert score from 0-1 range to 0-100% range if needed
+        let finalScore = result.score;
+        if (typeof result.score === 'number' && result.score <= 1) {
+          finalScore = Math.round(result.score * 100);
+          console.log(`Converting score: ${result.score} (0-1 range) -> ${finalScore}% (0-100 range)`);
+        }
+        
         // Check if the score meets the threshold (80%)
-        if (result.score < 80) {
+        if (finalScore < 80) {
           toast({ 
             title: "Task Incomplete", 
-            description: `Your work does not meet the required criteria (${result.score}%). Please review and try again.`, 
+            description: `Your work does not meet the required criteria (${finalScore}%). Please review and try again.`, 
             variant: "destructive" 
           });
           setUpdatingSubtask(null);
