@@ -282,3 +282,5 @@ For support, please create an issue in the GitHub repository or contact the deve
 Made with ❤️ for creating positive impact in the world.
 
 Hello! Li-Ta is starting coding here. 
+
+Li-Ta's first trial to merge from a branch to the master. 
