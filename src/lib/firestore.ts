@@ -753,6 +753,12 @@ export async function getUsersByRole(role: UserRole): Promise<User[]> {
   return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as User));
 }
 
+export async function getUsers(): Promise<User[]> {
+  const q = query(collection(db, 'users'), orderBy('createdAt', 'desc'));
+  const snapshot = await getDocs(q);
+  return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as User));
+}
+
 // Certificate operations
 export async function createCertificate(certificateData: Omit<Certificate, 'id' | 'issuedAt' | 'certificateNumber'>) {
   const certificateNumber = `CERT-${Date.now()}-${Math.random().toString(36).substr(2, 9).toUpperCase()}`;
