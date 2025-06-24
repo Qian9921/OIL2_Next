@@ -21,9 +21,11 @@ import {
   CheckCircle,
   Award,
   FileText,
-  BarChart3
+  BarChart3,
+  Mail
 } from "lucide-react";
 import Link from "next/link";
+import { EmailDialog } from "@/components/teacher/email-dialog";
 
 interface StudentProject extends Participation {
   project: Project;
@@ -103,12 +105,30 @@ export default function TeacherDashboardPage() {
       <div className="space-y-6">
         {/* Welcome Section */}
         <div className="bg-gradient-to-r from-green-500 to-blue-600 rounded-2xl p-8 text-white">
-          <h1 className="text-3xl font-bold mb-2">
-            Welcome back, {session?.user?.name}! 👩‍🏫
-          </h1>
-          <p className="text-green-100">
-            Monitor your students' progress and guide them on their learning journey.
-          </p>
+          <div className="flex justify-between items-center">
+            <div>
+              <h1 className="text-3xl font-bold mb-2">
+                Welcome back, {session?.user?.name}! 👩‍🏫
+              </h1>
+              <p className="text-green-100">
+                Monitor your students' progress and guide them on their learning journey.
+              </p>
+            </div>
+            <div>
+              <EmailDialog
+                trigger={
+                                      <Button
+                      variant="secondary"
+                      size="lg"
+                      className="bg-white/20 hover:bg-white/30 text-white border-white/30 backdrop-blur-sm"
+                    >
+                      <Mail className="w-5 h-5 mr-2" />
+                      Send Email
+                    </Button>
+                }
+              />
+            </div>
+          </div>
         </div>
 
         {/* Stats Cards */}
