@@ -5,7 +5,7 @@ import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { GraduationCap, Users, Building, ArrowRight, Sparkles, Code, Terminal } from "lucide-react";
+import { GraduationCap, Users, Building, ArrowRight, Sparkles, Code, Terminal, Heart, Award, Globe } from "lucide-react";
 import Link from "next/link";
 import { LoadingState } from "@/components/ui/loading-state";
 import { FeatureBadge } from "@/components/ui/feature-badge";
@@ -198,6 +198,60 @@ export default function Home() {
                     </div>
                   </div>
                 </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Time Auction Partnership Section */}
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
+        <div className="bg-gradient-to-br from-orange-50 via-red-50 to-pink-50 rounded-3xl p-8 md:p-12 relative overflow-hidden">
+          <div className="absolute top-0 right-0 w-48 h-48 rounded-full bg-orange-200 opacity-20 blur-3xl"></div>
+          <div className="absolute bottom-0 left-0 w-32 h-32 rounded-full bg-red-200 opacity-20 blur-3xl"></div>
+          
+          <div className="relative z-10">
+            <div className="flex items-center justify-between mb-8">
+              <div className="flex items-center space-x-4">
+                <div className="w-12 h-12 bg-gradient-to-br from-orange-500 to-red-600 rounded-xl flex items-center justify-center">
+                  <Heart className="w-6 h-6 text-white" />
+                </div>
+                <div>
+                  <h2 className="text-3xl font-bold text-gray-900">Time Auction 合作项目</h2>
+                  <p className="text-lg text-gray-600">与专业志愿服务平台合作，提供真实的NGO项目体验</p>
+                </div>
+              </div>
+              <Link href="/time-auction">
+                <Button className="bg-gradient-to-r from-orange-500 to-red-600 hover:from-orange-600 hover:to-red-700 text-white shadow-lg">
+                  探索项目
+                  <ArrowRight className="w-4 h-4 ml-2" />
+                </Button>
+              </Link>
+            </div>
+            
+            <div className="grid md:grid-cols-3 gap-6">
+              <div className="bg-white/70 backdrop-blur-sm rounded-xl p-6 border border-orange-100">
+                <div className="w-10 h-10 bg-orange-100 rounded-lg flex items-center justify-center mb-4">
+                  <Users className="w-5 h-5 text-orange-600" />
+                </div>
+                <h3 className="font-semibold text-gray-900 mb-2">专业技能匹配</h3>
+                <p className="text-sm text-gray-600">根据您的技能和兴趣，匹配最适合的NGO志愿项目</p>
+              </div>
+              
+              <div className="bg-white/70 backdrop-blur-sm rounded-xl p-6 border border-red-100">
+                <div className="w-10 h-10 bg-red-100 rounded-lg flex items-center justify-center mb-4">
+                  <Award className="w-5 h-5 text-red-600" />
+                </div>
+                <h3 className="font-semibold text-gray-900 mb-2">独特奖励体验</h3>
+                <p className="text-sm text-gray-600">完成项目后获得独特的学习机会和体验奖励</p>
+              </div>
+              
+              <div className="bg-white/70 backdrop-blur-sm rounded-xl p-6 border border-pink-100">
+                <div className="w-10 h-10 bg-pink-100 rounded-lg flex items-center justify-center mb-4">
+                  <Globe className="w-5 h-5 text-pink-600" />
+                </div>
+                <h3 className="font-semibold text-gray-900 mb-2">全球影响力</h3>
+                <p className="text-sm text-gray-600">参与国际NGO项目，创造真正的社会影响</p>
               </div>
             </div>
           </div>

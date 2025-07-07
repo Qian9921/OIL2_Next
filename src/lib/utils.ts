@@ -113,7 +113,16 @@ export function calculateDeadlineFromDays(estimatedDays: number, fromDate: Date 
 export function formatDeadline(deadline: Date | Timestamp | undefined | null, fallbackText: string = 'No deadline'): string {
   if (!deadline) return fallbackText;
   
-  const dateObj = deadline instanceof Date ? deadline : deadline.toDate();
+  let dateObj: Date;
+  if (deadline instanceof Date) {
+    dateObj = deadline;
+  } else if (typeof deadline === 'object' && deadline !== null && typeof deadline.toDate === 'function') {
+    dateObj = deadline.toDate();
+  } else {
+    // Fallback: treat as Date-like object or convert to Date
+    dateObj = new Date(deadline as any);
+  }
+  
   return dateObj.toLocaleDateString('en-US', { 
     year: 'numeric', 
     month: 'short', 
@@ -159,3 +168,58 @@ export const formatTimestamp = (timestamp: Timestamp | undefined): string => {
     timeStyle: 'short'
   }).format(date);
 };
+
+// Firebase connection management utilities
+export function getFirebaseConnectionStatus() {
+  try {
+    // 动态导入以避免服务器端错误
+    const { getConnectionStatus, getPersistenceStatus } = require('./firebase');
+    return {
+      isOnline: getConnectionStatus(),
+      persistenceEnabled: getPersistenceStatus(),
+      timestamp: new Date().toISOString()
+    };
+  } catch (error) {
+    console.warn('Failed to get Firebase connection status:', error);
+    return {
+      isOnline: false,
+      persistenceEnabled: false,
+      timestamp: new Date().toISOString()
+    };
+  }
+}
+
+export async function forceFirebaseReconnect() {
+  try {
+    const { forceReconnect } = require('./firebase');
+    await forceReconnect();
+    return true;
+  } catch (error) {
+    console.error('Failed to force Firebase reconnect:', error);
+    return false;
+  }
+}
+
+// Enhanced error handling for Firebase operations
+export function isFirebaseAvailable(): boolean {
+  try {
+    const { getConnectionStatus } = require('./firebase');
+    return getConnectionStatus();
+  } catch (error) {
+    return false;
+  }
+}
+
+export function logFirebaseError(error: any, context: string = 'Firebase Operation'): void {
+  if (error?.code === 'unavailable') {
+    // Don't log unavailable errors as they're expected during network issues
+    return;
+  }
+  
+  console.error(`${context} Error:`, {
+    code: error?.code,
+    message: error?.message,
+    timestamp: new Date().toISOString(),
+    context
+  });
+}

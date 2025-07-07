@@ -27,7 +27,10 @@ import {
   StudentDashboard,
   ProjectStats,
   TeacherDashboard,
-  Certificate
+  Certificate,
+  Class,
+  ClassDashboard,
+  StudentWithClass
 } from "./types";
 
 // User operations
@@ -124,10 +127,20 @@ export async function deleteProject(projectId: string) {
 export async function createParticipation(participationData: Omit<Participation, 'id' | 'joinedAt' | 'chatHistory' | 'submissions' | 'createdAt' | 'updatedAt'>) {
   const batch = writeBatch(db);
   
+  // 获取学生信息以获取班级ID
+  let classId: string | undefined = undefined;
+  if (participationData.studentId) {
+    const student = await getUser(participationData.studentId);
+    if (student?.classId) {
+      classId = student.classId;
+    }
+  }
+  
   // Create participation
   const participationRef = doc(collection(db, 'participations'));
   batch.set(participationRef, {
     ...participationData,
+    classId, // 添加班级关联
     joinedAt: Timestamp.now(),
     chatHistory: [],
     submissions: [],
@@ -631,33 +644,61 @@ export async function getStudentDashboard(studentId: string): Promise<StudentDas
 }
 
 export async function getTeacherDashboard(teacherId: string): Promise<TeacherDashboard> {
-  // Get all students that this teacher supervises
-  // For now, we'll use a simple approach where teachers can see all students
-  // In a real system, you would have a teacher-student relationship collection
+  // 获取教师的班级
+  const teacherClasses = await getClassesByTeacher(teacherId);
   
-  // Get all participations to see student activities
-  const allParticipations = await getParticipations({});
+  if (teacherClasses.length === 0) {
+    // 如果教师没有班级，使用旧的逻辑（向后兼容）
+    const allParticipations = await getParticipations({});
+    const uniqueStudentIds = new Set(allParticipations.map(p => p.studentId));
+    const studentsSupervised = uniqueStudentIds.size;
+    const uniqueProjectIds = new Set(allParticipations.map(p => p.projectId));
+    const projectsSupervised = uniqueProjectIds.size;
+    const allSubmissions = await getSubmissions({ status: 'pending' });
+    const pendingReviews = allSubmissions.length;
+    const recentSubmissions = await getSubmissions({});
 
-  // Get unique students supervised
-  const uniqueStudentIds = new Set(allParticipations.map(p => p.studentId));
-  const studentsSupervised = uniqueStudentIds.size;
+    return {
+      studentsSupervised,
+      projectsSupervised,
+      pendingReviews,
+      recentSubmissions: recentSubmissions.slice(0, 10)
+    };
+  }
 
-  // Get unique projects supervised
-  const uniqueProjectIds = new Set(allParticipations.map(p => p.projectId));
-  const projectsSupervised = uniqueProjectIds.size;
+  // 统计所有班级的数据
+  let totalStudents = 0;
+  let totalProjects = 0;
+  let totalPendingReviews = 0;
+  let allClassSubmissions: Submission[] = [];
 
-  // Get submissions for review using the new function
-  const allSubmissions = await getSubmissions({ status: 'pending' });
-  const pendingReviews = allSubmissions.length;
-
-  // Get recent submissions (all submissions, not just pending)
-  const recentSubmissions = await getSubmissions({});
+  for (const classItem of teacherClasses) {
+    totalStudents += classItem.studentIds.length;
+    
+    // 获取班级的提交（只包括待审核的）
+    const classSubmissions = await getSubmissions({ classId: classItem.id });
+    allClassSubmissions = [...allClassSubmissions, ...classSubmissions];
+    
+    // 统计待审核的提交
+    const pendingClassSubmissions = classSubmissions.filter(s => s.status === 'pending');
+    totalPendingReviews += pendingClassSubmissions.length;
+    
+    // 统计项目数（通过参与记录）
+    const classParticipations = await Promise.all(
+      classItem.studentIds.map(studentId => getParticipations({ studentId }))
+    );
+    const flatParticipations = classParticipations.flat();
+    const uniqueProjectIds = new Set(flatParticipations.map(p => p.projectId));
+    totalProjects += uniqueProjectIds.size;
+  }
 
   return {
-    studentsSupervised,
-    projectsSupervised,
-    pendingReviews,
-    recentSubmissions: recentSubmissions.slice(0, 10) // Return top 10 recent submissions
+    studentsSupervised: totalStudents,
+    projectsSupervised: totalProjects,
+    pendingReviews: totalPendingReviews,
+    recentSubmissions: allClassSubmissions
+      .sort((a, b) => b.submittedAt.toMillis() - a.submittedAt.toMillis())
+      .slice(0, 10)
   };
 }
 
@@ -675,6 +716,7 @@ export async function getSubmissions(filters?: {
   projectId?: string;
   studentId?: string;
   status?: string;
+  classId?: string; // 添加班级过滤
 }): Promise<Submission[]> {
   let q = query(collection(db, 'submissions'), orderBy('submittedAt', 'desc'));
   
@@ -695,7 +737,21 @@ export async function getSubmissions(filters?: {
   }
   
   const snapshot = await getDocs(q);
-  return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Submission));
+  let submissions = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Submission));
+  
+  // 如果需要按班级过滤，我们需要获取参与记录来检查班级ID
+  if (filters?.classId) {
+    const filteredSubmissions = [];
+    for (const submission of submissions) {
+      const participation = await getParticipation(submission.participationId);
+      if (participation?.classId === filters.classId) {
+        filteredSubmissions.push(submission);
+      }
+    }
+    submissions = filteredSubmissions;
+  }
+  
+  return submissions;
 }
 
 export async function updateSubmission(submissionId: string, submissionData: Partial<Submission>) {
@@ -1217,4 +1273,309 @@ export async function savePromptEvaluation(
     console.error('Error saving prompt evaluation:', error);
     throw error;
   }
+}
+
+// ==================== 班级相关操作 ====================
+
+// 生成6位随机邀请码
+function generateInviteCode(): string {
+  return Math.random().toString(36).substring(2, 8).toUpperCase();
+}
+
+// 创建班级
+export async function createClass(classData: Omit<Class, 'id' | 'createdAt' | 'updatedAt' | 'inviteCode' | 'studentIds'>): Promise<string> {
+  let inviteCode = generateInviteCode();
+  
+  // 确保邀请码唯一
+  while (await getClassByInviteCode(inviteCode)) {
+    inviteCode = generateInviteCode();
+  }
+  
+  const now = Timestamp.now();
+  const classDoc = await addDoc(collection(db, 'classes'), {
+    ...classData,
+    inviteCode,
+    studentIds: [],
+    createdAt: now,
+    updatedAt: now
+  });
+  
+  // 更新教师的班级列表
+  const teacher = await getUser(classData.teacherId);
+  if (teacher) {
+    const teacherClassIds = teacher.classIds || [];
+    await updateUser(classData.teacherId, {
+      classIds: [...teacherClassIds, classDoc.id]
+    });
+  }
+  
+  return classDoc.id;
+}
+
+// 获取班级信息
+export async function getClass(classId: string): Promise<Class | null> {
+  const classDoc = await getDoc(doc(db, 'classes', classId));
+  if (classDoc.exists()) {
+    return { id: classDoc.id, ...classDoc.data() } as Class;
+  }
+  return null;
+}
+
+// 通过邀请码获取班级
+export async function getClassByInviteCode(inviteCode: string): Promise<Class | null> {
+  const q = query(collection(db, 'classes'), where('inviteCode', '==', inviteCode));
+  const snapshot = await getDocs(q);
+  if (!snapshot.empty) {
+    const classDoc = snapshot.docs[0];
+    return { id: classDoc.id, ...classDoc.data() } as Class;
+  }
+  return null;
+}
+
+// 获取教师的班级列表
+export async function getClassesByTeacher(teacherId: string): Promise<Class[]> {
+  const q = query(
+    collection(db, 'classes'),
+    where('teacherId', '==', teacherId),
+    where('isActive', '==', true),
+    orderBy('createdAt', 'desc')
+  );
+  const snapshot = await getDocs(q);
+  return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Class));
+}
+
+// 学生加入班级
+export async function joinClass(studentId: string, inviteCode: string): Promise<{ success: boolean; message: string; classId?: string }> {
+  try {
+    // 检查邀请码是否有效
+    const classData = await getClassByInviteCode(inviteCode);
+    if (!classData) {
+      return { success: false, message: '邀请码无效' };
+    }
+    
+    if (!classData.isActive) {
+      return { success: false, message: '班级已停用' };
+    }
+    
+    // 检查学生是否已经在班级中
+    if (classData.studentIds.includes(studentId)) {
+      return { success: false, message: '您已经在这个班级中了' };
+    }
+    
+    // 检查班级人数限制
+    if (classData.maxStudents && classData.studentIds.length >= classData.maxStudents) {
+      return { success: false, message: '班级人数已满' };
+    }
+    
+    // 获取学生信息
+    const student = await getUser(studentId);
+    if (!student) {
+      return { success: false, message: '学生信息不存在' };
+    }
+    
+    // 如果学生已经在其他班级，先退出
+    if (student.classId) {
+      await leaveClass(studentId, student.classId);
+    }
+    
+    // 使用事务更新班级和学生信息
+    await runTransaction(db, async (transaction) => {
+      const classRef = doc(db, 'classes', classData.id);
+      const studentRef = doc(db, 'users', studentId);
+      
+      // 更新班级学生列表
+      transaction.update(classRef, {
+        studentIds: [...classData.studentIds, studentId],
+        updatedAt: Timestamp.now()
+      });
+      
+      // 更新学生的班级ID
+      transaction.update(studentRef, {
+        classId: classData.id,
+        updatedAt: Timestamp.now()
+      });
+    });
+    
+    return { success: true, message: '成功加入班级', classId: classData.id };
+  } catch (error) {
+    console.error('Error joining class:', error);
+    return { success: false, message: '加入班级失败，请重试' };
+  }
+}
+
+// 学生离开班级
+export async function leaveClass(studentId: string, classId: string): Promise<{ success: boolean; message: string }> {
+  try {
+    const classData = await getClass(classId);
+    if (!classData) {
+      return { success: false, message: '班级不存在' };
+    }
+    
+    // 使用事务更新班级和学生信息
+    await runTransaction(db, async (transaction) => {
+      const classRef = doc(db, 'classes', classId);
+      const studentRef = doc(db, 'users', studentId);
+      
+      // 从班级学生列表中移除学生
+      const updatedStudentIds = classData.studentIds.filter(id => id !== studentId);
+      transaction.update(classRef, {
+        studentIds: updatedStudentIds,
+        updatedAt: Timestamp.now()
+      });
+      
+      // 清除学生的班级ID
+      transaction.update(studentRef, {
+        classId: null,
+        updatedAt: Timestamp.now()
+      });
+    });
+    
+    return { success: true, message: '成功离开班级' };
+  } catch (error) {
+    console.error('Error leaving class:', error);
+    return { success: false, message: '离开班级失败，请重试' };
+  }
+}
+
+// 获取班级的学生列表（包含详细信息）
+export async function getStudentsByClass(classId: string): Promise<StudentWithClass[]> {
+  const classData = await getClass(classId);
+  if (!classData) {
+    return [];
+  }
+  
+  const students: StudentWithClass[] = [];
+  for (const studentId of classData.studentIds) {
+    const student = await getUser(studentId);
+    if (student) {
+      // 获取学生的参与记录
+      const participations = await getParticipations({ studentId });
+      students.push({
+        ...student,
+        class: classData,
+        participations
+      });
+    }
+  }
+  
+  return students;
+}
+
+// 获取班级仪表板数据
+export async function getClassDashboard(classId: string): Promise<ClassDashboard> {
+  const classData = await getClass(classId);
+  if (!classData) {
+    throw new Error('班级不存在');
+  }
+  
+  const totalStudents = classData.studentIds.length;
+  
+  // 获取班级所有学生的参与记录
+  const allParticipations = await Promise.all(
+    classData.studentIds.map(studentId => getParticipations({ studentId }))
+  );
+  const flatParticipations = allParticipations.flat();
+  
+  // 计算活跃项目数和完成项目数
+  const activeProjects = flatParticipations.filter(p => p.status === 'active').length;
+  const completedProjects = flatParticipations.filter(p => p.status === 'completed').length;
+  
+  // 获取待审核的提交
+  const allSubmissions = await Promise.all(
+    flatParticipations.map(p => getSubmissions({ participationId: p.id }))
+  );
+  const flatSubmissions = allSubmissions.flat();
+  const pendingSubmissions = flatSubmissions.filter(s => s.status === 'pending').length;
+  
+  // 获取最近的活动（简化版）
+  const recentActivities = flatParticipations
+    .sort((a, b) => b.updatedAt.toMillis() - a.updatedAt.toMillis())
+    .slice(0, 5)
+    .map(p => ({
+      id: p.id,
+      type: 'project_joined' as const,
+      title: '学生加入项目',
+      description: `${p.studentName} 加入了项目`,
+      timestamp: p.joinedAt
+    }));
+  
+  return {
+    totalStudents,
+    activeProjects,
+    completedProjects,
+    pendingSubmissions,
+    recentActivities
+  };
+}
+
+// 更新班级信息
+export async function updateClass(classId: string, classData: Partial<Class>): Promise<void> {
+  await updateDoc(doc(db, 'classes', classId), {
+    ...classData,
+    updatedAt: Timestamp.now()
+  });
+}
+
+// 删除班级
+export async function deleteClass(classId: string): Promise<{ success: boolean; message: string }> {
+  try {
+    const classData = await getClass(classId);
+    if (!classData) {
+      return { success: false, message: '班级不存在' };
+    }
+    
+    // 使用事务删除班级并更新相关数据
+    await runTransaction(db, async (transaction) => {
+      const classRef = doc(db, 'classes', classId);
+      
+      // 清除所有学生的班级关联
+      for (const studentId of classData.studentIds) {
+        const studentRef = doc(db, 'users', studentId);
+        transaction.update(studentRef, {
+          classId: null,
+          updatedAt: Timestamp.now()
+        });
+      }
+      
+      // 清除教师的班级关联
+      const teacherRef = doc(db, 'users', classData.teacherId);
+      const teacher = await getUser(classData.teacherId);
+      if (teacher && teacher.classIds) {
+        const updatedClassIds = teacher.classIds.filter(id => id !== classId);
+        transaction.update(teacherRef, {
+          classIds: updatedClassIds,
+          updatedAt: Timestamp.now()
+        });
+      }
+      
+      // 删除班级
+      transaction.delete(classRef);
+    });
+    
+    return { success: true, message: '班级删除成功' };
+  } catch (error) {
+    console.error('Error deleting class:', error);
+    return { success: false, message: '删除班级失败，请重试' };
+  }
+}
+
+// 获取教师班级的所有提交（用于审核页面）
+export async function getSubmissionsForTeacher(teacherId: string): Promise<Submission[]> {
+  // 获取教师的班级
+  const teacherClasses = await getClassesByTeacher(teacherId);
+  
+  if (teacherClasses.length === 0) {
+    // 如果教师没有班级，返回所有提交（向后兼容）
+    return await getSubmissions({});
+  }
+
+  // 获取所有班级的提交
+  let allClassSubmissions: Submission[] = [];
+  for (const classItem of teacherClasses) {
+    const classSubmissions = await getSubmissions({ classId: classItem.id });
+    allClassSubmissions = [...allClassSubmissions, ...classSubmissions];
+  }
+
+  // 按提交时间排序
+  return allClassSubmissions.sort((a, b) => b.submittedAt.toMillis() - a.submittedAt.toMillis());
 } 

@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Avatar } from "@/components/ui/avatar";
-import { getSubmissions, updateSubmission, updateParticipation, getProject, getParticipation } from "@/lib/firestore";
+import { getSubmissions, updateSubmission, updateParticipation, getProject, getParticipation, getSubmissionsForTeacher } from "@/lib/firestore";
 import { Submission, Project, Participation } from "@/lib/types";
 import { generateAvatar, getStatusColor } from "@/lib/utils";
 import { showSuccessToast, showErrorToast } from "@/lib/toast-utils";
@@ -67,8 +67,8 @@ export default function TeacherSubmissionsPage() {
 
   const loadSubmissions = async () => {
     try {
-      // Get all submissions
-      const submissionsData = await getSubmissions({});
+      // Get submissions for this teacher's classes only
+      const submissionsData = await getSubmissionsForTeacher(session?.user?.id || "");
       
       // Enhance submissions with project and participation details
       const enhancedSubmissions: EnhancedSubmission[] = [];

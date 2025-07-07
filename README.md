@@ -284,3 +284,107 @@ Made with ❤️ for creating positive impact in the world.
 Hello! Li-Ta is starting coding here. 
 
 Li-Ta's first trial to merge from a branch to the master. 
+
+## Firebase 连接问题解决方案
+
+### 问题描述
+项目中可能会遇到 Firebase Firestore 连接错误，典型错误信息：
+```
+FirebaseError: [code=unavailable]: The operation could not be completed
+```
+
+### 解决方案特性
+
+#### 1. 智能重试机制
+- **指数退避重试**：网络错误时自动重试，延迟时间逐渐增加
+- **最大重试次数**：默认 3 次重试，避免无限循环
+- **网络状态检测**：区分网络错误和其他错误类型
+
+#### 2. 离线持久化
+- **自动启用**：优先尝试多标签页持久化，失败后回退到单标签页
+- **数据缓存**：网络断开时使用本地缓存数据
+- **自动同步**：网络恢复后自动同步离线数据
+
+#### 3. 连接状态监控
+- **实时监控**：检测网络连接状态变化
+- **自动重连**：网络恢复时自动重新连接 Firebase
+- **状态指示器**：开发环境中显示连接状态（🟢 在线，🔴 离线，💾 持久化已启用）
+
+#### 4. 错误日志优化
+- **噪音过滤**：开发环境中过滤掉预期的网络错误警告
+- **智能日志**：只记录重要错误，避免日志污染
+- **错误分类**：区分网络错误和业务逻辑错误
+
+### 使用方法
+
+#### 开发环境监控
+在开发环境中，右上角会显示 Firebase 连接状态：
+- 🟢 Firebase 在线
+- 🔴 Firebase 离线
+- 💾 离线持久化已启用
+
+#### 手动重连
+```typescript
+import { forceFirebaseReconnect } from '@/lib/utils';
+
+// 强制重连 Firebase
+await forceFirebaseReconnect();
+```
+
+#### 检查连接状态
+```typescript
+import { getFirebaseConnectionStatus } from '@/lib/utils';
+
+const status = getFirebaseConnectionStatus();
+console.log(status); // { isOnline: true, persistenceEnabled: true, timestamp: "..." }
+```
+
+### 技术实现
+
+#### 网络错误检测
+系统会自动检测以下错误类型：
+- `unavailable` - 服务不可用
+- `deadline-exceeded` - 请求超时
+- `internal` - 内部错误
+- 网络连接相关错误
+
+#### 重试策略
+- 基础延迟：1000ms
+- 指数退避：每次重试延迟翻倍
+- 最大重试：3次
+- 非网络错误：不重试，直接抛出
+
+#### 离线持久化
+1. 优先尝试 `enableMultiTabIndexedDbPersistence`
+2. 失败后回退到 `enableIndexedDbPersistence`
+3. 都失败时仍可正常使用，但无离线功能
+
+### 配置选项
+
+可以通过修改 `src/lib/firebase.ts` 中的常量来调整：
+- `MAX_RECONNECT_ATTEMPTS` - 最大重连次数
+- `RECONNECT_DELAY_BASE` - 重连基础延迟
+- `MAX_RETRY_ATTEMPTS` - 最大重试次数
+
+### 故障排除
+
+1. **持续连接问题**：
+   - 检查网络连接
+   - 确认 Firebase 配置正确
+   - 查看浏览器控制台是否有其他错误
+
+2. **持久化失败**：
+   - 确认浏览器支持 IndexedDB
+   - 检查浏览器存储限制
+   - 尝试清除浏览器缓存
+
+3. **重试无效**：
+   - 可能是 Firebase 服务端问题
+   - 检查 Firebase 控制台状态
+   - 尝试手动重连
+
+### 注意事项
+- 开发环境中会显示详细的连接状态
+- 生产环境中会抑制不必要的错误日志
+- 所有 Firebase 操作都自动包含重试机制
+- 网络恢复时会自动重新连接

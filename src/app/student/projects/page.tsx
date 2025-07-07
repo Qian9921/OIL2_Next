@@ -5,17 +5,19 @@ import { useSession } from "next-auth/react";
 import { MainLayout } from "@/components/layout/main-layout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { getProjects, createParticipation, getParticipations } from "@/lib/firestore";
-import { Project } from "@/lib/types";
+import { getProjects, createParticipation, getParticipations, getUser, joinClass } from "@/lib/firestore";
+import { Project, User } from "@/lib/types";
 import { 
   BookOpen, 
   Users, 
   Search,
   Filter,
+  Heart,
 } from "lucide-react";
 import Link from "next/link";
 import { useToast } from "@/hooks/use-toast";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
+import { Input } from "@/components/ui/input";
 import { ProjectCard } from "@/components/project/project-card";
 import { LoadingState } from "@/components/ui/loading-state";
 import { Timestamp } from "firebase/firestore";
@@ -35,6 +37,10 @@ export default function StudentProjectsPage() {
   const [statusFilter, setStatusFilter] = useState("all");
   const [joiningProject, setJoiningProject] = useState<string | null>(null);
   const [projectToJoin, setProjectToJoin] = useState<Project | null>(null);
+  const [showClassDialog, setShowClassDialog] = useState(false);
+  const [inviteCode, setInviteCode] = useState("");
+  const [isJoiningClass, setIsJoiningClass] = useState(false);
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
 
   useEffect(() => {
     loadProjects();
@@ -46,15 +52,21 @@ export default function StudentProjectsPage() {
 
   const loadProjects = async () => {
     try {
+      // Load only regular projects
       const allProjects = await getProjects({ status: 'published' });
       setProjects(allProjects);
       
-      // Load user participations if logged in
+      // Load user participations and user info if logged in
       if (session?.user?.id) {
-        const participations = await getParticipations({ studentId: session.user.id });
+        const [participations, userInfo] = await Promise.all([
+          getParticipations({ studentId: session.user.id }),
+          getUser(session.user.id)
+        ]);
+        
         const projectIds = participations.map(p => p.projectId);
         setUserParticipations(projectIds);
         setParticipationDetails(participations);
+        setCurrentUser(userInfo);
       }
     } catch (error) {
       console.error("Error loading projects:", error);
@@ -93,11 +105,13 @@ export default function StudentProjectsPage() {
         filtered = filtered.filter(project => isProjectCompleted(project.id));
       }
     }
+    
+
 
     setFilteredProjects(filtered);
   };
 
-  const handleJoinProjectIntent = (project: Project) => {
+  const handleJoinProjectIntent = async (project: Project) => {
     if (!session?.user?.id) {
       toast({
         title: "Login Required",
@@ -107,6 +121,15 @@ export default function StudentProjectsPage() {
       return;
     }
     
+    // Check if user has a class
+    if (!currentUser?.classId) {
+      // User doesn't have a class, show class join dialog
+      setProjectToJoin(project);
+      setShowClassDialog(true);
+      return;
+    }
+    
+    // User has a class, proceed with normal join dialog
     setProjectToJoin(project);
   };
 
@@ -148,6 +171,72 @@ export default function StudentProjectsPage() {
     }
   };
 
+  const handleJoinClassAndProject = async () => {
+    if (!projectToJoin || !session?.user?.id || !session?.user?.name || !inviteCode.trim()) {
+      return;
+    }
+
+    setIsJoiningClass(true);
+
+    try {
+      // First, join the class
+      const classResult = await joinClass(session.user.id, inviteCode.trim());
+      
+      if (!classResult.success) {
+        toast({
+          title: "Failed to Join Class",
+          description: classResult.message,
+          variant: "destructive"
+        });
+        return;
+      }
+
+      // If class join was successful, join the project
+      await createParticipation({
+        projectId: projectToJoin.id,
+        studentId: session.user.id,
+        studentName: session.user.name,
+        status: 'active',
+        progress: 0,
+        completedSubtasks: []
+      });
+
+      // Reload data to reflect changes
+      await loadProjects();
+      
+      toast({
+        title: "Success!",
+        description: "Successfully joined class and project!",
+        variant: "default"
+      });
+
+      // Close dialogs and reset state
+      setShowClassDialog(false);
+      setProjectToJoin(null);
+      setInviteCode("");
+    } catch (error) {
+      console.error("Error joining class and project:", error);
+      toast({
+        title: "Join Failed",
+        description: "Failed to join class and project, please try again",
+        variant: "destructive"
+      });
+    } finally {
+      setIsJoiningClass(false);
+    }
+  };
+
+  const handleSkipClassJoin = () => {
+    setShowClassDialog(false);
+    setProjectToJoin(null);
+    setInviteCode("");
+    toast({
+      title: "Join Cancelled",
+      description: "You need to join a class first to participate in projects",
+      variant: "default"
+    });
+  };
+
   const getAllTags = () => {
     const tags = new Set<string>();
     projects.forEach(project => {
@@ -182,8 +271,8 @@ export default function StudentProjectsPage() {
   return (
     <MainLayout>
       <div className="space-y-6">
-        {/* AlertDialog for joining project */}
-        <AlertDialog open={!!projectToJoin} onOpenChange={(open) => !open && setProjectToJoin(null)}>
+        {/* AlertDialog for joining project (when user has class) */}
+        <AlertDialog open={!!projectToJoin && !showClassDialog} onOpenChange={(open) => !open && setProjectToJoin(null)}>
           <AlertDialogContent>
             <AlertDialogHeader>
               <AlertDialogTitle>Join Project</AlertDialogTitle>
@@ -198,6 +287,47 @@ export default function StudentProjectsPage() {
                 className="bg-green-600 hover:bg-green-700 text-white"
               >
                 {joiningProject === projectToJoin?.id ? 'Joining...' : 'Join Project'}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+
+        {/* AlertDialog for joining class first */}
+        <AlertDialog open={showClassDialog} onOpenChange={(open) => !open && setShowClassDialog(false)}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Join a Class First</AlertDialogTitle>
+              <AlertDialogDescription>
+                To join "{projectToJoin?.title}", you need to be part of a class. Please enter your teacher's invite code to join a class and continue with the project.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <div className="py-4">
+              <label htmlFor="inviteCode" className="block text-sm font-medium text-gray-700 mb-2">
+                Class Invite Code
+              </label>
+              <Input
+                id="inviteCode"
+                type="text"
+                placeholder="Enter 6-digit invite code"
+                value={inviteCode}
+                onChange={(e) => setInviteCode(e.target.value.toUpperCase())}
+                maxLength={6}
+                className="w-full"
+              />
+              <p className="text-xs text-gray-500 mt-1">
+                Ask your teacher for the class invite code
+              </p>
+            </div>
+            <AlertDialogFooter>
+              <AlertDialogCancel onClick={handleSkipClassJoin}>
+                Skip for Now
+              </AlertDialogCancel>
+              <AlertDialogAction 
+                onClick={handleJoinClassAndProject}
+                disabled={!inviteCode.trim() || isJoiningClass}
+                className="bg-blue-600 hover:bg-blue-700 text-white"
+              >
+                {isJoiningClass ? 'Joining...' : 'Join Class & Project'}
               </AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>
@@ -224,6 +354,12 @@ export default function StudentProjectsPage() {
               <Filter className="w-4 h-4 mr-2" />
               Clear Filters
             </Button>
+            <Link href="/time-auction">
+              <Button variant="outline" className="bg-gradient-to-r from-orange-50 to-red-50 border-orange-200 text-orange-700 hover:from-orange-100 hover:to-red-100">
+                <Heart className="w-4 h-4 mr-2" />
+                Time Auction
+              </Button>
+            </Link>
             <Link href="/student/my-projects">
               <Button>
                 <BookOpen className="w-4 h-4 mr-2" />
@@ -284,6 +420,8 @@ export default function StudentProjectsPage() {
                 <option value="joined">Joined</option>
                 <option value="completed">Completed</option>
               </select>
+              
+
               
               {/* Results Count - now spans full width at the bottom */}
               <div className="col-span-full flex items-center justify-end text-sm text-gray-600 mt-2">

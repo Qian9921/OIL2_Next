@@ -6,8 +6,8 @@ import { MainLayout } from "@/components/layout/main-layout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Avatar } from "@/components/ui/avatar";
-import { getParticipations, getProject, getUser, getUsersByRole } from "@/lib/firestore";
-import { Participation, Project, User } from "@/lib/types";
+import { getParticipations, getProject, getUser, getClassesByTeacher, getStudentsByClass } from "@/lib/firestore";
+import { Participation, Project, User, Class, StudentWithClass } from "@/lib/types";
 import { generateAvatar, getStatusColor } from "@/lib/utils";
 import { LoadingState } from "@/components/ui/loading-state";
 import { 
@@ -43,32 +43,44 @@ export default function TeacherStudentsPage() {
   const [showMessage, setShowMessage] = useState<string | null>(null);
 
   useEffect(() => {
-    loadStudentsData();
-  }, []);
+    if (session?.user?.id) {
+      loadStudentsData();
+    }
+  }, [session]);
 
   const loadStudentsData = async () => {
+    if (!session?.user?.id) return;
+    
     try {
-      // Get all students first
-      const allStudents = await getUsersByRole('student');
+      // Get teacher's classes first
+      const teacherClasses = await getClassesByTeacher(session.user.id);
       
-      // Get all participations
-      const allParticipations = await getParticipations({});
-      
-      // Group participations by student
-      const studentParticipationsMap = new Map<string, Participation[]>();
-      for (const participation of allParticipations) {
-        if (!studentParticipationsMap.has(participation.studentId)) {
-          studentParticipationsMap.set(participation.studentId, []);
-        }
-        studentParticipationsMap.get(participation.studentId)!.push(participation);
+      if (teacherClasses.length === 0) {
+        // Teacher has no classes, so no students to show
+        setStudentsWithProjects([]);
+        return;
       }
-
-      // Process all students (including those without participations)
+      
+      // Get all students from all teacher's classes
+      const allStudentsMap = new Map<string, StudentWithClass>();
+      
+      for (const teacherClass of teacherClasses) {
+        const classStudents = await getStudentsByClass(teacherClass.id);
+        for (const student of classStudents) {
+          // Use map to avoid duplicates if student is in multiple classes
+          allStudentsMap.set(student.id, student);
+        }
+      }
+      
+      const allStudents = Array.from(allStudentsMap.values());
+      
+      // Process students data
       const studentsData: StudentWithProjects[] = [];
       
       for (const student of allStudents) {
         try {
-          const participations = studentParticipationsMap.get(student.id) || [];
+          // Student already has participations from getStudentsByClass
+          const participations = student.participations || [];
           const participationsWithProjects = [];
           
           for (const participation of participations) {
@@ -331,14 +343,14 @@ export default function TeacherStudentsPage() {
               <h3 className="text-xl font-semibold text-gray-900 mb-2">
                 {searchTerm || statusFilter !== "all" 
                   ? "No students found" 
-                  : "No students yet"}
+                  : "No students in your classes yet"}
               </h3>
               <p className="text-gray-600 mb-6">
                 {searchTerm || statusFilter !== "all"
                   ? "Try adjusting your search criteria or filters"
-                  : "Students will appear here when they join projects"}
+                  : "Create a class and share the invite code with students to get started"}
               </p>
-              {(searchTerm || statusFilter !== "all") && (
+              {(searchTerm || statusFilter !== "all") ? (
                 <Button
                   onClick={() => {
                     setSearchTerm("");
@@ -348,6 +360,12 @@ export default function TeacherStudentsPage() {
                 >
                   Clear Filters
                 </Button>
+              ) : (
+                <Link href="/teacher/classes">
+                  <Button>
+                    Create Your First Class
+                  </Button>
+                </Link>
               )}
             </CardContent>
           </Card>
