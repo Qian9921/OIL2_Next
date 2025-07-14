@@ -187,15 +187,17 @@ export default function ClassDetailPage() {
           <AlertDialogContent>
             <AlertDialogHeader>
               <AlertDialogTitle>Confirm remove student</AlertDialogTitle>
-              <AlertDialogDescription>
-                Are you sure you want to remove student "{studentToRemove?.name}" from class "{classData.name}"?
-                <br />
-                <br />
-                This action will:
-                <ul className="list-disc list-inside mt-2 space-y-1">
-                  <li>Remove the class association from the student's account</li>
-                  <li>The student will need to use the invite code to join the class again</li>
-                </ul>
+              <AlertDialogDescription asChild>
+                <div>
+                  <p>
+                    Are you sure you want to remove student "{studentToRemove?.name}" from class "{classData.name}"?
+                  </p>
+                  <p className="mt-4 font-medium">This action will:</p>
+                  <ul className="list-disc list-inside mt-2 space-y-1">
+                    <li>Remove the class association from the student's account</li>
+                    <li>The student will need to use the invite code to join the class again</li>
+                  </ul>
+                </div>
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>

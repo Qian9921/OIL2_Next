@@ -62,16 +62,26 @@ export default function TeacherClassesPage() {
       const teacherClasses = await getClassesByTeacher(session.user.id);
       setClasses(teacherClasses);
       
-      // 加载每个班级的仪表板数据
-      const dashboards: { [classId: string]: ClassDashboard } = {};
-      for (const classItem of teacherClasses) {
+      // 并行加载每个班级的仪表板数据
+      const dashboardPromises = teacherClasses.map(async (classItem) => {
         try {
           const dashboard = await getClassDashboard(classItem.id);
-          dashboards[classItem.id] = dashboard;
+          return { classId: classItem.id, dashboard };
         } catch (error) {
           console.error(`Error loading dashboard for class ${classItem.id}:`, error);
+          return { classId: classItem.id, dashboard: null };
         }
-      }
+      });
+      
+      const dashboardResults = await Promise.all(dashboardPromises);
+      const dashboards: { [classId: string]: ClassDashboard } = {};
+      
+      dashboardResults.forEach(({ classId, dashboard }) => {
+        if (dashboard) {
+          dashboards[classId] = dashboard;
+        }
+      });
+      
       setClassDashboards(dashboards);
     } catch (error) {
       console.error("Error loading classes:", error);

@@ -61,37 +61,53 @@ export default function TeacherStudentsPage() {
         return;
       }
       
-      // Get all students from all teacher's classes
+      // 并行获取所有教师班级的学生
+      const classStudentPromises = teacherClasses.map(async (teacherClass) => {
+        try {
+          return await getStudentsByClass(teacherClass.id);
+        } catch (error) {
+          console.error(`Error loading students for class ${teacherClass.id}:`, error);
+          return [];
+        }
+      });
+      
+      const classStudentsResults = await Promise.all(classStudentPromises);
       const allStudentsMap = new Map<string, StudentWithClass>();
       
-      for (const teacherClass of teacherClasses) {
-        const classStudents = await getStudentsByClass(teacherClass.id);
-        for (const student of classStudents) {
-          // Use map to avoid duplicates if student is in multiple classes
-          allStudentsMap.set(student.id, student);
-        }
-      }
+      // 合并所有班级的学生，避免重复
+      classStudentsResults.flat().forEach(student => {
+        allStudentsMap.set(student.id, student);
+      });
       
       const allStudents = Array.from(allStudentsMap.values());
       
-      // Process students data
-      const studentsData: StudentWithProjects[] = [];
-      
-      for (const student of allStudents) {
+      // 并行处理学生数据
+      const studentDataPromises = allStudents.map(async (student) => {
         try {
           // Student already has participations from getStudentsByClass
           const participations = student.participations || [];
-          const participationsWithProjects = [];
           
-          for (const participation of participations) {
-            const project = await getProject(participation.projectId);
-            if (project) {
-              participationsWithProjects.push({
-                ...participation,
-                project
-              });
+          // 并行获取所有参与项目的详细信息
+          const participationProjectPromises = participations.map(async (participation) => {
+            try {
+              const project = await getProject(participation.projectId);
+              if (project) {
+                return {
+                  ...participation,
+                  project
+                };
+              }
+              return null;
+            } catch (error) {
+              console.error(`Error loading project for participation ${participation.id}:`, error);
+              return null;
             }
-          }
+          });
+          
+          const participationResults = await Promise.all(participationProjectPromises);
+          const participationsWithProjects = participationResults.filter(
+            (item): item is Participation & { project: Project } => item !== null
+          );
 
           const activeProjects = participationsWithProjects.filter(p => p.status === 'active').length;
           const completedProjects = participationsWithProjects.filter(p => p.status === 'completed').length;
@@ -99,17 +115,23 @@ export default function TeacherStudentsPage() {
             ? Math.round(participationsWithProjects.reduce((sum, p) => sum + p.progress, 0) / participationsWithProjects.length)
             : 0;
 
-          studentsData.push({
+          return {
             student,
             participations: participationsWithProjects,
             totalProgress,
             activeProjects,
             completedProjects
-          });
+          };
         } catch (error) {
           console.error(`Error loading data for student ${student.id}:`, error);
+          return null;
         }
-      }
+      });
+      
+      const studentResults = await Promise.all(studentDataPromises);
+      const studentsData = studentResults.filter(
+        (item): item is StudentWithProjects => item !== null
+      );
 
       setStudentsWithProjects(studentsData);
     } catch (error) {

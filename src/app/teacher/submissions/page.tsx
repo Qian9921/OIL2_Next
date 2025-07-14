@@ -70,14 +70,13 @@ export default function TeacherSubmissionsPage() {
       // Get submissions for this teacher's classes only
       const submissionsData = await getSubmissionsForTeacher(session?.user?.id || "");
       
-      // Enhance submissions with project and participation details
-      const enhancedSubmissions: EnhancedSubmission[] = [];
-      
-      for (const submission of submissionsData) {
+      // 并行增强提交数据，获取项目和参与详细信息
+      const enhancementPromises = submissionsData.map(async (submission) => {
         try {
-          // Get project details
-          const project = await getProject(submission.projectId);
-          const participation = await getParticipation(submission.participationId);
+          const [project, participation] = await Promise.all([
+            getProject(submission.projectId),
+            getParticipation(submission.participationId)
+          ]);
           
           const enhanced: EnhancedSubmission = {
             ...submission,
@@ -86,13 +85,15 @@ export default function TeacherSubmissionsPage() {
             githubRepo: participation?.studentGitHubRepo,
           };
           
-          enhancedSubmissions.push(enhanced);
+          return enhanced;
         } catch (error) {
           console.error(`Error enhancing submission ${submission.id}:`, error);
-          // Add submission without enhancement if there's an error
-          enhancedSubmissions.push(submission as EnhancedSubmission);
+          // Return submission without enhancement if there's an error
+          return submission as EnhancedSubmission;
         }
-      }
+      });
+      
+      const enhancedSubmissions = await Promise.all(enhancementPromises);
       
       setSubmissions(enhancedSubmissions);
     } catch (error) {

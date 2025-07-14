@@ -52,19 +52,28 @@ export default function TeacherDashboardPage() {
       
       setDashboard(dashboardData);
       
-      // Load project details for recent participations
+      // 并行加载最近参与项目的详细信息
       const recentParticipations = participationsData.slice(0, 10);
-      const studentProjectsWithDetails: StudentProject[] = [];
-      
-      for (const participation of recentParticipations) {
-        const project = await getProject(participation.projectId);
-        if (project) {
-          studentProjectsWithDetails.push({
-            ...participation,
-            project
-          });
+      const projectPromises = recentParticipations.map(async (participation) => {
+        try {
+          const project = await getProject(participation.projectId);
+          if (project) {
+            return {
+              ...participation,
+              project
+            };
+          }
+          return null;
+        } catch (error) {
+          console.error(`Error loading project for participation ${participation.id}:`, error);
+          return null;
         }
-      }
+      });
+      
+      const studentProjectResults = await Promise.all(projectPromises);
+      const studentProjectsWithDetails = studentProjectResults.filter(
+        (item): item is StudentProject => item !== null
+      );
       
       setStudentProjects(studentProjectsWithDetails);
     } catch (error) {

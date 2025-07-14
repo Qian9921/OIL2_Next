@@ -191,7 +191,31 @@ export default function StudentProjectsPage() {
         return;
       }
 
-      // If class join was successful, join the project
+      // Check if student has already joined this project to prevent duplicates
+      const { getParticipationByProjectAndStudent } = await import("@/lib/firestore");
+      const existingParticipation = await getParticipationByProjectAndStudent(
+        projectToJoin.id, 
+        session.user.id
+      );
+
+      if (existingParticipation && (existingParticipation.status === 'active' || existingParticipation.status === 'completed')) {
+        toast({
+          title: "Already Joined",
+          description: "You have already joined this project!",
+          variant: "default"
+        });
+        
+        // Close dialogs and reset state
+        setShowClassDialog(false);
+        setProjectToJoin(null);
+        setInviteCode("");
+        
+        // Reload data to reflect changes
+        await loadProjects();
+        return;
+      }
+
+      // If class join was successful and no existing participation, join the project
       await createParticipation({
         projectId: projectToJoin.id,
         studentId: session.user.id,
