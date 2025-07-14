@@ -6,8 +6,8 @@ import { MainLayout } from "@/components/layout/main-layout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Avatar } from "@/components/ui/avatar";
-import { getParticipations, getProject, getUser, getUsersByRole } from "@/lib/firestore";
-import { Participation, Project, User } from "@/lib/types";
+import { getParticipations, getProject, getUser, getClassesByTeacher, getStudentsByClass } from "@/lib/firestore";
+import { Participation, Project, User, Class, StudentWithClass } from "@/lib/types";
 import { generateAvatar, getStatusColor } from "@/lib/utils";
 import { LoadingState } from "@/components/ui/loading-state";
 import { 
@@ -43,43 +43,71 @@ export default function TeacherStudentsPage() {
   const [showMessage, setShowMessage] = useState<string | null>(null);
 
   useEffect(() => {
-    loadStudentsData();
-  }, []);
+    if (session?.user?.id) {
+      loadStudentsData();
+    }
+  }, [session]);
 
   const loadStudentsData = async () => {
+    if (!session?.user?.id) return;
+    
     try {
-      // Get all students first
-      const allStudents = await getUsersByRole('student');
+      // Get teacher's classes first
+      const teacherClasses = await getClassesByTeacher(session.user.id);
       
-      // Get all participations
-      const allParticipations = await getParticipations({});
-      
-      // Group participations by student
-      const studentParticipationsMap = new Map<string, Participation[]>();
-      for (const participation of allParticipations) {
-        if (!studentParticipationsMap.has(participation.studentId)) {
-          studentParticipationsMap.set(participation.studentId, []);
-        }
-        studentParticipationsMap.get(participation.studentId)!.push(participation);
+      if (teacherClasses.length === 0) {
+        // Teacher has no classes, so no students to show
+        setStudentsWithProjects([]);
+        return;
       }
-
-      // Process all students (including those without participations)
-      const studentsData: StudentWithProjects[] = [];
       
-      for (const student of allStudents) {
+      // 并行获取所有教师班级的学生
+      const classStudentPromises = teacherClasses.map(async (teacherClass) => {
         try {
-          const participations = studentParticipationsMap.get(student.id) || [];
-          const participationsWithProjects = [];
+          return await getStudentsByClass(teacherClass.id);
+        } catch (error) {
+          console.error(`Error loading students for class ${teacherClass.id}:`, error);
+          return [];
+        }
+      });
+      
+      const classStudentsResults = await Promise.all(classStudentPromises);
+      const allStudentsMap = new Map<string, StudentWithClass>();
+      
+      // 合并所有班级的学生，避免重复
+      classStudentsResults.flat().forEach(student => {
+        allStudentsMap.set(student.id, student);
+      });
+      
+      const allStudents = Array.from(allStudentsMap.values());
+      
+      // 并行处理学生数据
+      const studentDataPromises = allStudents.map(async (student) => {
+        try {
+          // Student already has participations from getStudentsByClass
+          const participations = student.participations || [];
           
-          for (const participation of participations) {
-            const project = await getProject(participation.projectId);
-            if (project) {
-              participationsWithProjects.push({
-                ...participation,
-                project
-              });
+          // 并行获取所有参与项目的详细信息
+          const participationProjectPromises = participations.map(async (participation) => {
+            try {
+              const project = await getProject(participation.projectId);
+              if (project) {
+                return {
+                  ...participation,
+                  project
+                };
+              }
+              return null;
+            } catch (error) {
+              console.error(`Error loading project for participation ${participation.id}:`, error);
+              return null;
             }
-          }
+          });
+          
+          const participationResults = await Promise.all(participationProjectPromises);
+          const participationsWithProjects = participationResults.filter(
+            (item): item is Participation & { project: Project } => item !== null
+          );
 
           const activeProjects = participationsWithProjects.filter(p => p.status === 'active').length;
           const completedProjects = participationsWithProjects.filter(p => p.status === 'completed').length;
@@ -87,17 +115,23 @@ export default function TeacherStudentsPage() {
             ? Math.round(participationsWithProjects.reduce((sum, p) => sum + p.progress, 0) / participationsWithProjects.length)
             : 0;
 
-          studentsData.push({
+          return {
             student,
             participations: participationsWithProjects,
             totalProgress,
             activeProjects,
             completedProjects
-          });
+          };
         } catch (error) {
           console.error(`Error loading data for student ${student.id}:`, error);
+          return null;
         }
-      }
+      });
+      
+      const studentResults = await Promise.all(studentDataPromises);
+      const studentsData = studentResults.filter(
+        (item): item is StudentWithProjects => item !== null
+      );
 
       setStudentsWithProjects(studentsData);
     } catch (error) {
@@ -331,14 +365,14 @@ export default function TeacherStudentsPage() {
               <h3 className="text-xl font-semibold text-gray-900 mb-2">
                 {searchTerm || statusFilter !== "all" 
                   ? "No students found" 
-                  : "No students yet"}
+                  : "No students in your classes yet"}
               </h3>
               <p className="text-gray-600 mb-6">
                 {searchTerm || statusFilter !== "all"
                   ? "Try adjusting your search criteria or filters"
-                  : "Students will appear here when they join projects"}
+                  : "Create a class and share the invite code with students to get started"}
               </p>
-              {(searchTerm || statusFilter !== "all") && (
+              {(searchTerm || statusFilter !== "all") ? (
                 <Button
                   onClick={() => {
                     setSearchTerm("");
@@ -348,6 +382,12 @@ export default function TeacherStudentsPage() {
                 >
                   Clear Filters
                 </Button>
+              ) : (
+                <Link href="/teacher/classes">
+                  <Button>
+                    Create Your First Class
+                  </Button>
+                </Link>
               )}
             </CardContent>
           </Card>

@@ -1,0 +1,52 @@
+{
+  "project_id": "4947",
+  "project_url": "https://timeauction.org/en/project/bring-me-a-book-hong-kong/biennial-report-designer/4947",
+  "project_title": "Web Developer (WordPress)",
+  "project_description": "Update a charity's website using WordPress",
+  "organization": {
+    "name": "Asia Pacific Youth Development Foundation",
+    "website": "https://ayfhk.org/",
+    "causes": ["Education", "Community Development", "Youth"],
+    "description": "Established in 2017, Asia Pacific Youth Development Foundation (AYF) is dedicated to advancing youth's future by connecting, inspiring and elevating young people in Hong Kong and beyond. We envision a sustainable future built by concerted youth efforts, hence we are committed to fostering knowledge transfer and building partnerships to harness the full potential of young people, elevate their leadership strengths, and ultimately narrow the opportunities gaps."
+  },
+  "project_details": {
+    "what_we_need": [
+      "Join us for a 15 minutes initial call to learn more about our organisation and discuss website objectives",
+      "Revamp a simple one-page website into a 5-page WordPress site using Elementor, including sections for About Us, Knowledge Sharing, and Programs",
+      "Create a website layout plan and provide technical guidance to a student researcher who will help with content development",
+      "Implement responsive design and ensure website matches the style of fcv.org.hk",
+      "Experience with WordPress, Elementor, and knowledge of PHP/HTML required"
+    ],
+    "background": "We are working with the Hong Kong Sarcopenia Foundation (HKSPF), which is a pioneer and small charity dedicated to preventing and reversing the course of sarcopenia — the progressive loss of muscle mass and physical function which occurs with aging, affecting adults beginning at the age of 30.",
+    "what_we_have": "We can provide a revamp plan for the website together with some SEO knowledge sharing, but we want to have a passionate volunteer who is willing to work out the detailed layouts and implement the revamp with our student.",
+    "why_important": "Having an updated and interactive website will help us raise awareness, as well as to better promote our organisation to potential beneficiaries, volunteers, donors and other stakeholders.",
+    "project_period": "29 Jan 2025 - 15 Mar 2025",
+    "location": "Remote",
+    "team_project": true
+  },
+  "requirements": {
+    "time": "10 hours in total",
+    "skills": ["Web Design", "Website Development", "Responsive Web Design"],
+    "experience_level": ["Some experience"],
+    "language": ["Chinese (Cantonese)", "English"],
+    "age_range": "No age requirement"
+  },
+  "posting_info": {
+    "posted": "6 months ago",
+    "application_status": "Application closed"
+  },
+  "similar_opportunities": [
+    {
+      "title": "每週於固定時間及地點教基層學童彈鋼琴",
+      "organization": "WeWah音樂家",
+      "time": "3h per week, about 1 year"
+    },
+    {
+      "title": "Help capture precious moments at SPCA events",
+      "organization": "Society for the Prevention of Cruelty to Animals (HK)",
+      "time": "4h in total, 2 months"
+    }
+  ],
+  "scraped_at": "2025-01-16",
+  "scraped_content_type": "complete_project_page"
+} 

@@ -10,6 +10,8 @@ export interface User {
   avatar?: string;
   createdAt: Timestamp;
   updatedAt: Timestamp;
+  classId?: string; // 学生所属班级ID
+  classIds?: string[]; // 教师管理的班级ID列表
   profile?: {
     bio?: string;
     school?: string;
@@ -44,6 +46,51 @@ export interface Project {
   requirements?: string[];
   learningGoals?: string[];
   image?: string;
+  source?: 'internal' | 'time_auction'; // 项目来源标识
+}
+
+// Time Auction 项目原始数据结构
+export interface TimeAuctionProject {
+  project_id: string;
+  project_url: string;
+  project_title: string;
+  project_description: string;
+  organization: {
+    name: string;
+    website: string;
+    causes: string[];
+    description: string;
+  };
+  project_details: {
+    what_we_need: string[];
+    background: string;
+    what_we_have: string;
+    why_important: string;
+    project_period: string;
+    location: string;
+  };
+  requirements: {
+    time: string;
+    skills: string[];
+    experience_level: string[];
+    language: string[];
+    age_range: string;
+  };
+  special_program?: {
+    name: string;
+    description: string;
+  };
+  posting_info: {
+    posted: string;
+    application_status: string;
+  };
+  similar_opportunities?: Array<{
+    title: string;
+    organization: string;
+    time: string;
+  }>;
+  scraped_at: string;
+  scraped_content_type: string;
 }
 
 export interface Subtask {
@@ -61,6 +108,7 @@ export interface Participation {
   projectId: string;
   studentId: string;
   studentName?: string;
+  classId?: string; // 参与项目时的班级ID
   createdAt: Timestamp;
   updatedAt: Timestamp;
   joinedAt: Timestamp;
@@ -249,4 +297,32 @@ export interface Deadline {
   projectTitle: string;
   dueDate: Timestamp;
   priority: 'low' | 'medium' | 'high';
+}
+
+// 班级相关接口
+export interface Class {
+  id: string;
+  name: string;
+  description?: string;
+  teacherId: string;
+  teacherName: string;
+  inviteCode: string; // 6位随机邀请码
+  studentIds: string[]; // 班级中的学生ID列表
+  isActive: boolean;
+  createdAt: Timestamp;
+  updatedAt: Timestamp;
+  maxStudents?: number;
+}
+
+export interface ClassDashboard {
+  totalStudents: number;
+  activeProjects: number;
+  completedProjects: number;
+  pendingSubmissions: number;
+  recentActivities: Activity[];
+}
+
+export interface StudentWithClass extends User {
+  class?: Class;
+  participations?: Participation[];
 } 

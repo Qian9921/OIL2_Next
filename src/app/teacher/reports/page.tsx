@@ -92,43 +92,62 @@ export default function TeacherReportsPage() {
         projectMap.get(participation.projectId)!.push(participation);
       }
 
-      // Calculate project stats
-      const projectStats: ProjectReport[] = [];
-      for (const [projectId, participations] of projectMap) {
-        const project = await getProject(projectId);
-        if (project) {
-          const completedCount = participations.filter(p => p.status === 'completed').length;
-          const averageProgress = participations.reduce((sum, p) => sum + p.progress, 0) / participations.length;
-          
-          projectStats.push({
-            id: projectId,
-            title: project.title,
-            ngoName: project.ngoName,
-            participantCount: participations.length,
-            completionRate: Math.round((completedCount / participations.length) * 100),
-            averageProgress: Math.round(averageProgress)
-          });
+      // 并行计算项目统计数据
+      const projectStatsPromises = Array.from(projectMap.entries()).map(async ([projectId, participations]) => {
+        try {
+          const project = await getProject(projectId);
+          if (project) {
+            const completedCount = participations.filter(p => p.status === 'completed').length;
+            const averageProgress = participations.reduce((sum, p) => sum + p.progress, 0) / participations.length;
+            
+            return {
+              id: projectId,
+              title: project.title,
+              ngoName: project.ngoName,
+              participantCount: participations.length,
+              completionRate: Math.round((completedCount / participations.length) * 100),
+              averageProgress: Math.round(averageProgress)
+            };
+          }
+          return null;
+        } catch (error) {
+          console.error(`Error loading project ${projectId}:`, error);
+          return null;
         }
-      }
+      });
 
-      // Calculate student stats
-      const studentStats: StudentReport[] = [];
-      for (const [studentId, participations] of studentMap) {
-        const student = await getUser(studentId);
-        if (student && student.role === 'student') {
-          const completedProjects = participations.filter(p => p.status === 'completed').length;
-          const averageProgress = participations.reduce((sum, p) => sum + p.progress, 0) / participations.length;
-          
-          studentStats.push({
-            id: studentId,
-            name: student.name,
-            projectCount: participations.length,
-            completedProjects,
-            averageProgress: Math.round(averageProgress),
-            totalHours: participations.length * 10 // Estimated
-          });
+      // 并行计算学生统计数据
+      const studentStatsPromises = Array.from(studentMap.entries()).map(async ([studentId, participations]) => {
+        try {
+          const student = await getUser(studentId);
+          if (student && student.role === 'student') {
+            const completedProjects = participations.filter(p => p.status === 'completed').length;
+            const averageProgress = participations.reduce((sum, p) => sum + p.progress, 0) / participations.length;
+            
+            return {
+              id: studentId,
+              name: student.name,
+              projectCount: participations.length,
+              completedProjects,
+              averageProgress: Math.round(averageProgress),
+              totalHours: participations.length * 10 // Estimated
+            };
+          }
+          return null;
+        } catch (error) {
+          console.error(`Error loading student ${studentId}:`, error);
+          return null;
         }
-      }
+      });
+
+      // 等待所有统计数据计算完成
+      const [projectStatsResults, studentStatsResults] = await Promise.all([
+        Promise.all(projectStatsPromises),
+        Promise.all(studentStatsPromises)
+      ]);
+
+      const projectStats = projectStatsResults.filter((item): item is ProjectReport => item !== null);
+      const studentStats = studentStatsResults.filter((item): item is StudentReport => item !== null);
 
       // Calculate overall stats
       const totalStudents = studentMap.size;

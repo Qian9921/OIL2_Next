@@ -14,7 +14,9 @@ import {
   LogOut,
   Heart,
   Sparkles,
-  Award
+  Award,
+  UserPlus,
+  GraduationCap
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -38,6 +40,8 @@ const getNavItems = (role: string): NavItem[] => {
         { label: "Dashboard", href: "/student", icon: Home },
         { label: "Browse Projects", href: "/student/projects", icon: FolderOpen },
         { label: "My Projects", href: "/student/my-projects", icon: BookOpen },
+        { label: "My Class", href: "/student/class", icon: GraduationCap },
+        { label: "Join Class", href: "/student/join-class", icon: UserPlus },
         { label: "Profile", href: "/student/profile", icon: Settings },
       ];
     case "ngo":
@@ -50,6 +54,7 @@ const getNavItems = (role: string): NavItem[] => {
     case "teacher":
       return [
         { label: "Dashboard", href: "/teacher", icon: Home },
+        { label: "My Classes", href: "/teacher/classes", icon: GraduationCap },
         { label: "Students", href: "/teacher/students", icon: Users },
         { label: "Submissions", href: "/teacher/submissions", icon: BookOpen },
         { label: "Reports", href: "/teacher/reports", icon: FolderOpen },

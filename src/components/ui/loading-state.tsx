@@ -43,4 +43,49 @@ export function LoadingState({
       )}
     </div>
   );
+}
+
+// Firebase connection status indicator
+interface FirebaseConnectionIndicatorProps {
+  showStatus?: boolean;
+  className?: string;
+}
+
+export function FirebaseConnectionIndicator({ 
+  showStatus = false, 
+  className = '' 
+}: FirebaseConnectionIndicatorProps) {
+  const [connectionStatus, setConnectionStatus] = React.useState<{
+    isOnline: boolean;
+    persistenceEnabled: boolean;
+    timestamp: string;
+  } | null>(null);
+
+  React.useEffect(() => {
+    if (!showStatus) return;
+
+    const checkConnection = async () => {
+      try {
+        const { getFirebaseConnectionStatus } = await import('@/lib/utils');
+        const status = getFirebaseConnectionStatus();
+        setConnectionStatus(status);
+      } catch (error) {
+        console.warn('Failed to check Firebase connection:', error);
+      }
+    };
+
+    checkConnection();
+    const interval = setInterval(checkConnection, 5000); // Check every 5 seconds
+
+    return () => clearInterval(interval);
+  }, [showStatus]);
+
+  if (!showStatus || !connectionStatus) return null;
+
+  return (
+    <div className={`text-xs text-gray-500 ${className}`}>
+      Firebase: {connectionStatus.isOnline ? '🟢' : '🔴'} 
+      {connectionStatus.persistenceEnabled ? ' 💾' : ''}
+    </div>
+  );
 } 

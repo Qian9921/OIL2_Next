@@ -7,8 +7,9 @@ import { MainLayout } from "@/components/layout/main-layout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Avatar } from "@/components/ui/avatar";
-import { getProject, getParticipations, createParticipation, getCertificates } from "@/lib/firestore";
-import { Project, Participation, Certificate } from "@/lib/types";
+import { getProject, getParticipations, createParticipation, getCertificates, getUser, joinClass } from "@/lib/firestore";
+import { Project, Participation, Certificate, User, TimeAuctionProject } from "@/lib/types";
+import { TimeAuctionDetail } from "@/components/project/time-auction-detail";
 import { generateAvatar, getDifficultyColor, formatDeadline } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { 
@@ -39,6 +40,8 @@ import {
   AlertDialogTitle 
 } from "@/components/ui/alert-dialog";
 import { LoadingState } from "@/components/ui/loading-state";
+import { Input } from "@/components/ui/input";
+import { FormattedText } from "@/components/ui/formatted-text";
 import { Timestamp } from "firebase/firestore";
 
 export default function ProjectDetailPage() {
@@ -47,12 +50,17 @@ export default function ProjectDetailPage() {
   const { data: session } = useSession();
   const { toast } = useToast();
   const [project, setProject] = useState<Project | null>(null);
+  const [timeAuctionProject, setTimeAuctionProject] = useState<TimeAuctionProject | null>(null);
   const [participations, setParticipations] = useState<Participation[]>([]);
   const [myParticipation, setMyParticipation] = useState<Participation | null>(null);
   const [myCertificate, setMyCertificate] = useState<Certificate | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isJoining, setIsJoining] = useState(false);
   const [showJoinDialog, setShowJoinDialog] = useState(false);
+  const [showClassDialog, setShowClassDialog] = useState(false);
+  const [inviteCode, setInviteCode] = useState("");
+  const [isJoiningClass, setIsJoiningClass] = useState(false);
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
 
   useEffect(() => {
     if (params.id) {
@@ -62,21 +70,45 @@ export default function ProjectDetailPage() {
 
   const loadProjectData = async () => {
     try {
-      const [projectData, participationData] = await Promise.all([
-        getProject(params.id as string),
-        getParticipations({ projectId: params.id as string })
-      ]);
+      let projectData: Project | null = null;
+      
+      // Check if this is a Time Auction project
+      if ((params.id as string).startsWith('time-auction-')) {
+        // Load Time Auction project from API
+        const timeAuctionResponse = await fetch('/api/time-auction/projects');
+        if (timeAuctionResponse.ok) {
+          const timeAuctionProjects = await timeAuctionResponse.json();
+          projectData = timeAuctionProjects.find((p: Project) => p.id === params.id);
+        }
+        
+        // Also load the raw Time Auction data for specialized display
+        const rawTimeAuctionResponse = await fetch(`/api/time-auction/projects/${params.id}`);
+        if (rawTimeAuctionResponse.ok) {
+          const rawTimeAuctionData = await rawTimeAuctionResponse.json();
+          setTimeAuctionProject(rawTimeAuctionData);
+        }
+      } else {
+        // Load regular project from Firebase
+        projectData = await getProject(params.id as string);
+      }
+      
+      const participationData = await getParticipations({ projectId: params.id as string });
       
       setProject(projectData);
       setParticipations(participationData);
       
       // Check if current user has already joined (only consider active participations)
       if (session?.user?.id) {
-        const userParticipation = participationData.find(p => 
-          p.studentId === session.user.id && 
-          (p.status === 'active' || p.status === 'completed')
-        );
+        const [userParticipation, userInfo] = await Promise.all([
+          participationData.find(p => 
+            p.studentId === session.user.id && 
+            (p.status === 'active' || p.status === 'completed')
+          ),
+          getUser(session.user.id)
+        ]);
+        
         setMyParticipation(userParticipation || null);
+        setCurrentUser(userInfo);
         
         // Check if user has a certificate for this project
         if (userParticipation) {
@@ -98,7 +130,7 @@ export default function ProjectDetailPage() {
     }
   };
 
-  const handleJoinButtonClick = () => {
+  const handleJoinButtonClick = async () => {
     if (!session?.user?.id || !session?.user?.name || !project) {
       toast({ title: "Login Required", description: "Please log in first to join the project.", variant: "destructive" });
       return;
@@ -109,7 +141,14 @@ export default function ProjectDetailPage() {
       return;
     }
 
-    // Show confirmation dialog
+    // Check if user has a class
+    if (!currentUser?.classId) {
+      // User doesn't have a class, show class join dialog
+      setShowClassDialog(true);
+      return;
+    }
+
+    // User has a class, proceed with normal join dialog
     setShowJoinDialog(true);
   };
 
@@ -143,6 +182,93 @@ export default function ProjectDetailPage() {
     }
   };
 
+  const handleJoinClassAndProject = async () => {
+    if (!project || !session?.user?.id || !session?.user?.name || !inviteCode.trim()) {
+      return;
+    }
+
+    setIsJoiningClass(true);
+
+    try {
+      // First, join the class
+      const classResult = await joinClass(session.user.id, inviteCode.trim());
+      
+      if (!classResult.success) {
+        toast({
+          title: "Failed to Join Class",
+          description: classResult.message,
+          variant: "destructive"
+        });
+        return;
+      }
+
+      // Check if student has already joined this project to prevent duplicates
+      const { getParticipationByProjectAndStudent } = await import("@/lib/firestore");
+      const existingParticipation = await getParticipationByProjectAndStudent(
+        project.id, 
+        session.user.id
+      );
+
+      if (existingParticipation && (existingParticipation.status === 'active' || existingParticipation.status === 'completed')) {
+        toast({
+          title: "Already Joined",
+          description: "You have already joined this project!",
+          variant: "default"
+        });
+        
+        // Close dialogs and reset state
+        setShowClassDialog(false);
+        setInviteCode("");
+        
+        // Reload data to reflect changes
+        await loadProjectData();
+        return;
+      }
+
+      // If class join was successful and no existing participation, join the project
+      await createParticipation({
+        projectId: project.id,
+        studentId: session.user.id,
+        studentName: session.user.name,
+        status: 'active',
+        completedSubtasks: [],
+        progress: 0
+      });
+
+      // Reload data to reflect changes
+      await loadProjectData();
+      
+      toast({
+        title: "Success!",
+        description: "Successfully joined class and project!",
+        variant: "default"
+      });
+
+      // Close dialogs and reset state
+      setShowClassDialog(false);
+      setInviteCode("");
+    } catch (error) {
+      console.error("Error joining class and project:", error);
+      toast({
+        title: "Join Failed",
+        description: "Failed to join class and project, please try again",
+        variant: "destructive"
+      });
+    } finally {
+      setIsJoiningClass(false);
+    }
+  };
+
+  const handleSkipClassJoin = () => {
+    setShowClassDialog(false);
+    setInviteCode("");
+    toast({
+      title: "Join Cancelled",
+      description: "You need to join a class first to participate in projects",
+      variant: "default"
+    });
+  };
+
   const isProjectFull = () => {
     return project?.maxParticipants && project.currentParticipants >= project.maxParticipants;
   };
@@ -153,6 +279,7 @@ export default function ProjectDetailPage() {
     if (myParticipation) return false;
     if (project?.status !== 'published') return false;
     if (isProjectFull()) return false;
+    if (project?.source === 'time_auction') return false; // Time Auction projects cannot be joined through our platform
     return true;
   };
 
@@ -192,6 +319,7 @@ export default function ProjectDetailPage() {
           <h1 className="text-2xl font-bold text-gray-900 mb-4">Project Not Found</h1>
           <p className="text-gray-600 mb-6">Please check if the project ID is correct</p>
           <Link href={
+            (params.id as string).startsWith('time-auction-') ? "/time-auction" :
             session?.user?.role === 'student' ? "/student/projects" : 
             session?.user?.role === 'teacher' ? "/teacher/submissions" :
             session?.user?.role === 'ngo' ? "/ngo/projects" : 
@@ -207,7 +335,7 @@ export default function ProjectDetailPage() {
   return (
     <MainLayout>
       <div className="space-y-6">
-        {/* Join Project AlertDialog */}
+        {/* Join Project AlertDialog (when user has class) */}
         <AlertDialog open={showJoinDialog} onOpenChange={setShowJoinDialog}>
           <AlertDialogContent>
             <AlertDialogHeader>
@@ -225,10 +353,57 @@ export default function ProjectDetailPage() {
           </AlertDialogContent>
         </AlertDialog>
 
-        {/* Header */}
+        {/* AlertDialog for joining class first */}
+        <AlertDialog open={showClassDialog} onOpenChange={(open) => !open && setShowClassDialog(false)}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Join a Class First</AlertDialogTitle>
+              <AlertDialogDescription>
+                To join "{project?.title}", you need to be part of a class. Please enter your teacher's invite code to join a class and continue with the project.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <div className="py-4">
+              <label htmlFor="inviteCode" className="block text-sm font-medium text-gray-700 mb-2">
+                Class Invite Code
+              </label>
+              <Input
+                id="inviteCode"
+                type="text"
+                placeholder="Enter 6-digit invite code"
+                value={inviteCode}
+                onChange={(e) => setInviteCode(e.target.value.toUpperCase())}
+                maxLength={6}
+                className="w-full"
+              />
+              <p className="text-xs text-gray-500 mt-1">
+                Ask your teacher for the class invite code
+              </p>
+            </div>
+            <AlertDialogFooter>
+              <AlertDialogCancel onClick={handleSkipClassJoin}>
+                Skip for Now
+              </AlertDialogCancel>
+              <AlertDialogAction 
+                onClick={handleJoinClassAndProject}
+                disabled={!inviteCode.trim() || isJoiningClass}
+                className="bg-blue-600 hover:bg-blue-700 text-white"
+              >
+                {isJoiningClass ? 'Joining...' : 'Join Class & Project'}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+
+        {/* Time Auction Project - Use specialized component */}
+        {project?.source === 'time_auction' && timeAuctionProject ? (
+          <TimeAuctionDetail project={timeAuctionProject} />
+        ) : (
+          <>
+            {/* Header */}
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-4">
             <Link href={
+              project.source === 'time_auction' ? "/time-auction" :
               session?.user?.role === 'student' ? "/student/projects" : 
               session?.user?.role === 'teacher' ? "/teacher/submissions" :
               session?.user?.role === 'ngo' ? "/ngo/projects" : 
@@ -270,18 +445,28 @@ export default function ProjectDetailPage() {
                 <CardTitle className="flex items-center space-x-2">
                   <BookOpen className="w-5 h-5 text-blue-600" />
                   <span>Project Introduction</span>
+                  {project.source === 'time_auction' && (
+                    <span className="px-2 py-1 rounded-full text-xs font-medium bg-gradient-to-r from-orange-100 to-red-100 text-orange-800 flex items-center ml-2">
+                      <Heart className="w-3 h-3 mr-1" />
+                      Time Auction
+                    </span>
+                  )}
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
                 {project.shortDescription && (
                   <div className="p-4 bg-blue-50 rounded-lg">
-                    <p className="text-blue-900 font-medium">{project.shortDescription}</p>
+                    <FormattedText className="text-blue-900 font-medium">
+                      {project.shortDescription}
+                    </FormattedText>
                   </div>
                 )}
                 
                 <div>
-                  <h4 className="font-medium text-gray-900 mb-3">Detailed Description</h4>
-                  <p className="text-gray-700 leading-relaxed">{project.description}</p>
+                  <h4 className="font-medium text-gray-900 mb-3">Project Description</h4>
+                  <FormattedText className="text-gray-700 leading-relaxed">
+                    {project.description}
+                  </FormattedText>
                 </div>
 
                 {/* Project Stats */}
@@ -336,7 +521,9 @@ export default function ProjectDetailPage() {
                     {project.learningGoals.map((goal, index) => (
                       <div key={index} className="flex items-start space-x-3 p-3 bg-yellow-50 rounded-lg">
                         <CheckCircle className="w-5 h-5 text-yellow-600 mt-0.5 flex-shrink-0" />
-                        <span className="text-gray-800">{goal}</span>
+                        <FormattedText className="text-gray-800 flex-1">
+                          {goal}
+                        </FormattedText>
                       </div>
                     ))}
                   </div>
@@ -369,9 +556,9 @@ export default function ProjectDetailPage() {
                           <h5 className="font-medium text-gray-900 mb-2">
                             {subtask.title}
                           </h5>
-                          <p className="text-gray-600 text-sm mb-2">
+                          <FormattedText className="text-gray-600 text-sm mb-2">
                             {subtask.description}
-                          </p>
+                          </FormattedText>
                           {subtask.estimatedHours && (
                             <div className="flex items-center text-xs text-gray-500">
                               <Calendar className="w-3 h-3 mr-1" />
@@ -386,13 +573,69 @@ export default function ProjectDetailPage() {
               </Card>
             )}
 
+            {/* Time Auction specific content */}
+            {project.source === 'time_auction' && (
+              <>
+                {/* Project Background for Time Auction */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center space-x-2">
+                      <BookOpen className="w-5 h-5 text-indigo-600" />
+                      <span>Project Background</span>
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <FormattedText className="text-gray-700 leading-relaxed">
+                      {project.subtasks?.[0]?.description?.split('\n').find(line => line.includes('At Time Auction')) ||
+                       "At Time Auction, we're running a pilot program to better connect skilled volunteers with NGOs, and are looking for volunteers to help us with this program in the next 2-4 months."}
+                    </FormattedText>
+                  </CardContent>
+                </Card>
+
+                {/* Why Important */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center space-x-2">
+                      <Heart className="w-5 h-5 text-red-600" />
+                      <span>Why This Project Matters</span>
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <FormattedText className="text-gray-700 leading-relaxed">
+                      There are 880+ NGOs on our platform now and many more are signing up. Your support will help us reach more skilled-volunteers that can help these NGOs create meaningful social impact.
+                    </FormattedText>
+                  </CardContent>
+                </Card>
+
+                {/* Special Program */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center space-x-2">
+                      <Award className="w-5 h-5 text-purple-600" />
+                      <span>Special Recognition Program</span>
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="p-4 bg-purple-50 rounded-lg">
+                      <h4 className="font-semibold text-purple-900 mb-2">Swire Trust Go-Givers Program</h4>
+                      <FormattedText className="text-purple-800 text-sm">
+                        This program aims to encourage skilled volunteers to support Swire Trust NGO partners in education, marine conservation, and arts. 
+                        From now until 2025, 10 outstanding volunteers will be selected annually as the 'Swire Trust Go-Givers of the Year' with special and empowering rewards. 
+                        40 volunteers who contribute the highest number of hours annually will also be recognised!
+                      </FormattedText>
+                    </div>
+                  </CardContent>
+                </Card>
+              </>
+            )}
+
             {/* Requirements */}
             {project.requirements && project.requirements.length > 0 && (
               <Card>
                 <CardHeader>
                   <CardTitle className="flex items-center space-x-2">
                     <AlertCircle className="w-5 h-5 text-orange-600" />
-                    <span>Participation Requirements</span>
+                    <span>{project.source === 'time_auction' ? 'What We Need From You' : 'Participation Requirements'}</span>
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
@@ -400,10 +643,19 @@ export default function ProjectDetailPage() {
                     {project.requirements.map((requirement, index) => (
                       <li key={index} className="flex items-start space-x-3">
                         <div className="w-2 h-2 bg-orange-400 rounded-full mt-2 flex-shrink-0" />
-                        <span className="text-gray-700">{requirement}</span>
+                        <FormattedText className="text-gray-700 flex-1">
+                          {requirement}
+                        </FormattedText>
                       </li>
                     ))}
                   </ul>
+                  {project.source === 'time_auction' && (
+                    <div className="mt-4 p-3 bg-orange-50 rounded-lg">
+                      <p className="text-orange-800 text-sm">
+                        <strong>Note:</strong> Extensive experience on the proposed topic is required for this project. Flexible dates and times available!
+                      </p>
+                    </div>
+                  )}
                 </CardContent>
               </Card>
             )}
@@ -454,6 +706,29 @@ export default function ProjectDetailPage() {
                       </>
                     )}
                   </div>
+                ) : project.source === 'time_auction' ? (
+                  <div className="text-center">
+                    <div className="mb-4">
+                      <div className="w-12 h-12 bg-gradient-to-br from-orange-500 to-red-600 rounded-full flex items-center justify-center mx-auto mb-3">
+                        <Heart className="w-6 h-6 text-white" />
+                      </div>
+                      <p className="text-orange-800 font-medium mb-2">Time Auction项目</p>
+                      <p className="text-sm text-gray-600 mb-4">
+                        这是来自我们合作伙伴Time Auction的项目，请访问他们的官方网站申请参与
+                      </p>
+                    </div>
+                    {project.subtasks && project.subtasks[0]?.resources && project.subtasks[0].resources[0] && (
+                      <Link href={project.subtasks[0].resources[0]} target="_blank" rel="noopener noreferrer">
+                        <Button className="w-full bg-gradient-to-r from-orange-500 to-red-600 hover:from-orange-600 hover:to-red-700 text-white">
+                          <ExternalLink className="w-4 h-4 mr-2" />
+                          访问Time Auction申请
+                        </Button>
+                      </Link>
+                    )}
+                    <p className="text-xs text-gray-500 mt-2">
+                      将在新窗口中打开Time Auction官网
+                    </p>
+                  </div>
                 ) : canJoinProject() ? (
                   <div className="text-center">
                     <Button
@@ -496,23 +771,42 @@ export default function ProjectDetailPage() {
               </CardContent>
             </Card>
 
-            {/* Project Tags */}
+            {/* Project Tags and Skills */}
             {project.tags && project.tags.length > 0 && (
               <Card>
                 <CardHeader>
                   <CardTitle className="flex items-center space-x-2 text-lg">
                     <Tag className="w-5 h-5 text-purple-600" />
-                    <span>Project Tags</span>
+                    <span>{project.source === 'time_auction' ? 'Required Skills & Tags' : 'Project Tags'}</span>
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
                   <div className="flex flex-wrap gap-2">
                     {project.tags.map((tag, index) => (
-                      <span key={index} className="px-3 py-1 bg-purple-100 text-purple-700 text-sm rounded-full">
+                      <span 
+                        key={index} 
+                        className={`px-3 py-1 text-sm rounded-full ${
+                          project.source === 'time_auction' && 
+                          ['Technology', 'No-Code Tools', 'Artificial Intelligence', 'Business Process Improvement', 'Data Management', 'Website Development'].includes(tag)
+                            ? 'bg-orange-100 text-orange-700 border border-orange-200'
+                            : 'bg-purple-100 text-purple-700'
+                        }`}
+                      >
                         {tag}
                       </span>
                     ))}
                   </div>
+                  {project.source === 'time_auction' && (
+                    <div className="mt-4 p-3 bg-gray-50 rounded-lg">
+                      <h5 className="text-sm font-medium text-gray-900 mb-2">Additional Requirements:</h5>
+                      <div className="space-y-1 text-xs text-gray-600">
+                        <div>• Languages: Chinese (Cantonese), English</div>
+                        <div>• Experience Level: Extensive experience required</div>
+                        <div>• Location: Remote</div>
+                        <div>• Time Commitment: 4 hours in total</div>
+                      </div>
+                    </div>
+                  )}
                 </CardContent>
               </Card>
             )}
@@ -522,7 +816,7 @@ export default function ProjectDetailPage() {
               <CardHeader>
                 <CardTitle className="flex items-center space-x-2 text-lg">
                   <Heart className="w-5 h-5 text-red-600" />
-                  <span>Initiated Organization</span>
+                  <span>{project.source === 'time_auction' ? 'Partner Organization' : 'Initiated Organization'}</span>
                 </CardTitle>
               </CardHeader>
               <CardContent>
@@ -534,12 +828,26 @@ export default function ProjectDetailPage() {
                   />
                   <div>
                     <h4 className="font-medium text-gray-900">{project.ngoName}</h4>
-                    <p className="text-sm text-gray-600">Non-profit Organization</p>
+                    <p className="text-sm text-gray-600">
+                      {project.source === 'time_auction' ? 'Volunteer Platform & Charity' : 'Non-profit Organization'}
+                    </p>
                   </div>
                 </div>
-                <p className="text-sm text-gray-600">
-                  Dedicated to promoting social positive change and providing students with practical learning opportunities.
-                </p>
+                <FormattedText className="text-sm text-gray-600">
+                  {project.source === 'time_auction' 
+                    ? "Time Auction is a charity that advocates volunteerism. We encourage volunteering with inspiring experiences, while connecting skilled-volunteers with NGOs. Over 100,000 volunteer hours have been contributed to date since 2014."
+                    : "Dedicated to promoting social positive change and providing students with practical learning opportunities."
+                  }
+                </FormattedText>
+                {project.source === 'time_auction' && (
+                  <div className="mt-3 pt-3 border-t border-gray-100">
+                    <div className="flex items-center space-x-4 text-xs text-gray-500">
+                      <span>• 880+ NGO Partners</span>
+                      <span>• 100,000+ Volunteer Hours</span>
+                      <span>• Since 2014</span>
+                    </div>
+                  </div>
+                )}
               </CardContent>
             </Card>
 
@@ -582,6 +890,8 @@ export default function ProjectDetailPage() {
             )}
           </div>
         </div>
+          </>
+        )}
       </div>
     </MainLayout>
   );
