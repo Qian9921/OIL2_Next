@@ -8,7 +8,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Avatar } from "@/components/ui/avatar";
 import { getProject, getParticipations, createParticipation, getCertificates, getUser, joinClass } from "@/lib/firestore";
-import { Project, Participation, Certificate, User } from "@/lib/types";
+import { Project, Participation, Certificate, User, TimeAuctionProject } from "@/lib/types";
+import { TimeAuctionDetail } from "@/components/project/time-auction-detail";
 import { generateAvatar, getDifficultyColor, formatDeadline } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { 
@@ -49,6 +50,7 @@ export default function ProjectDetailPage() {
   const { data: session } = useSession();
   const { toast } = useToast();
   const [project, setProject] = useState<Project | null>(null);
+  const [timeAuctionProject, setTimeAuctionProject] = useState<TimeAuctionProject | null>(null);
   const [participations, setParticipations] = useState<Participation[]>([]);
   const [myParticipation, setMyParticipation] = useState<Participation | null>(null);
   const [myCertificate, setMyCertificate] = useState<Certificate | null>(null);
@@ -77,6 +79,13 @@ export default function ProjectDetailPage() {
         if (timeAuctionResponse.ok) {
           const timeAuctionProjects = await timeAuctionResponse.json();
           projectData = timeAuctionProjects.find((p: Project) => p.id === params.id);
+        }
+        
+        // Also load the raw Time Auction data for specialized display
+        const rawTimeAuctionResponse = await fetch(`/api/time-auction/projects/${params.id}`);
+        if (rawTimeAuctionResponse.ok) {
+          const rawTimeAuctionData = await rawTimeAuctionResponse.json();
+          setTimeAuctionProject(rawTimeAuctionData);
         }
       } else {
         // Load regular project from Firebase
@@ -193,7 +202,30 @@ export default function ProjectDetailPage() {
         return;
       }
 
-      // If class join was successful, join the project
+      // Check if student has already joined this project to prevent duplicates
+      const { getParticipationByProjectAndStudent } = await import("@/lib/firestore");
+      const existingParticipation = await getParticipationByProjectAndStudent(
+        project.id, 
+        session.user.id
+      );
+
+      if (existingParticipation && (existingParticipation.status === 'active' || existingParticipation.status === 'completed')) {
+        toast({
+          title: "Already Joined",
+          description: "You have already joined this project!",
+          variant: "default"
+        });
+        
+        // Close dialogs and reset state
+        setShowClassDialog(false);
+        setInviteCode("");
+        
+        // Reload data to reflect changes
+        await loadProjectData();
+        return;
+      }
+
+      // If class join was successful and no existing participation, join the project
       await createParticipation({
         projectId: project.id,
         studentId: session.user.id,
@@ -362,7 +394,12 @@ export default function ProjectDetailPage() {
           </AlertDialogContent>
         </AlertDialog>
 
-        {/* Header */}
+        {/* Time Auction Project - Use specialized component */}
+        {project?.source === 'time_auction' && timeAuctionProject ? (
+          <TimeAuctionDetail project={timeAuctionProject} />
+        ) : (
+          <>
+            {/* Header */}
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-4">
             <Link href={
@@ -853,6 +890,8 @@ export default function ProjectDetailPage() {
             )}
           </div>
         </div>
+          </>
+        )}
       </div>
     </MainLayout>
   );

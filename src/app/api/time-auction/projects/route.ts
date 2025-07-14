@@ -17,18 +17,20 @@ export async function GET() {
       const fileContent = await fs.readFile(filePath, 'utf8');
       const timeAuctionProject: TimeAuctionProject = JSON.parse(fileContent);
       
+      // 构建完整的项目描述
+      const fullDescription = buildFullDescription(timeAuctionProject);
+      
       // 转换为标准Project格式
       const standardProject: Project = {
         id: `time-auction-${timeAuctionProject.project_id}`,
         title: timeAuctionProject.project_title,
-        description: timeAuctionProject.project_description,
-        shortDescription: timeAuctionProject.project_details.background.substring(0, 200) + '...',
+        description: fullDescription,
+        shortDescription: buildShortDescription(timeAuctionProject),
         ngoId: 'time-auction',
         ngoName: timeAuctionProject.organization.name,
         status: timeAuctionProject.posting_info.application_status === 'Application closed' ? 'archived' : 'published',
         createdAt: Timestamp.fromDate(new Date(timeAuctionProject.scraped_at)),
         updatedAt: Timestamp.fromDate(new Date(timeAuctionProject.scraped_at)),
-        maxParticipants: undefined, // Time Auction项目通常没有参与者限制
         currentParticipants: 0,
         tags: [
           ...timeAuctionProject.organization.causes,
@@ -41,22 +43,26 @@ export async function GET() {
         deadline: parseProjectPeriod(timeAuctionProject.project_details.project_period),
         subtasks: [{
           id: 'ta-main-task',
-          title: '参与Time Auction项目',
-          description: timeAuctionProject.project_details.what_we_need.join('\n'),
+          title: 'Participate in Time Auction Project',
+          description: buildTaskDescription(timeAuctionProject),
           order: 1,
           estimatedHours: parseTimeRequirement(timeAuctionProject.requirements.time),
-          resources: [timeAuctionProject.project_url],
+          resources: [
+            timeAuctionProject.project_url,
+            timeAuctionProject.organization.website
+          ].filter(Boolean),
           completionCriteria: [
-            '完成项目要求的所有任务',
-            '与NGO保持良好沟通',
-            '按时完成项目交付'
+            'Complete all listed responsibilities',
+            'Provide quality consultation sessions',
+            'Meet volunteer time commitment'
           ]
         }],
-        requirements: timeAuctionProject.project_details.what_we_need,
+        requirements: buildDetailedRequirements(timeAuctionProject),
         learningGoals: [
-          '获得实际的志愿服务经验',
-          '为NGO组织提供专业技能支持',
-          '建立社会影响力项目作品集'
+          'Apply your expertise to help NGOs',
+          'Gain experience in nonprofit consulting',
+          'Make meaningful social impact through skills sharing',
+          'Build connections with social impact organizations'
         ],
         source: 'time_auction'
       };
@@ -112,4 +118,99 @@ function parseTimeRequirement(time: string): number {
   } catch (error) {
     return 8;
   }
+}
+
+// 构建简短描述
+function buildShortDescription(project: TimeAuctionProject): string {
+  const parts = [];
+  
+  // 基本描述
+  if (project.project_description) {
+    parts.push(project.project_description);
+  }
+  
+  // 添加项目周期和地点信息
+  const practicalInfo = [];
+  if (project.project_details.project_period) {
+    practicalInfo.push(`Period: ${project.project_details.project_period}`);
+  }
+  if (project.project_details.location) {
+    practicalInfo.push(`Location: ${project.project_details.location}`);
+  }
+  
+  if (practicalInfo.length > 0) {
+    parts.push(practicalInfo.join(' • '));
+  }
+  
+  return parts.join('\n\n');
+}
+
+// 构建项目描述 - 只包含核心描述，不重复要求
+function buildFullDescription(project: TimeAuctionProject): string {
+  const sections = [];
+  
+  // 基本描述
+  if (project.project_description) {
+    sections.push(project.project_description);
+  }
+  
+  // 背景信息
+  if (project.project_details.background) {
+    sections.push(`**Background**\n${project.project_details.background}`);
+  }
+  
+  // 我们提供什么
+  if (project.project_details.what_we_have) {
+    sections.push(`**What We Provide**\n${project.project_details.what_we_have}`);
+  }
+  
+  // 为什么重要
+  if (project.project_details.why_important) {
+    sections.push(`**Why This is Important**\n${project.project_details.why_important}`);
+  }
+  
+  // 特殊项目信息
+  if (project.special_program) {
+    sections.push(`**${project.special_program.name}**\n${project.special_program.description}`);
+  }
+  
+  return sections.join('\n\n');
+}
+
+// 构建任务描述 - 只包含"what we need"
+function buildTaskDescription(project: TimeAuctionProject): string {
+  if (project.project_details.what_we_need && project.project_details.what_we_need.length > 0) {
+    return '**What We Need:**\n' + project.project_details.what_we_need
+      .map((item, index) => `${index + 1}. ${item}`)
+      .join('\n');
+  }
+  return 'Complete the project requirements as specified.';
+}
+
+// 构建要求列表 - 按照官方页面格式
+function buildDetailedRequirements(project: TimeAuctionProject): string[] {
+  const requirements = [];
+  
+  // 按照官方页面的顺序和格式
+  if (project.requirements.time) {
+    requirements.push(`Time: ${project.requirements.time}`);
+  }
+  
+  if (project.requirements.skills && project.requirements.skills.length > 0) {
+    requirements.push(`Skills: ${project.requirements.skills.join(', ')}`);
+  }
+  
+  if (project.requirements.experience_level && project.requirements.experience_level.length > 0) {
+    requirements.push(`Experience Level: ${project.requirements.experience_level.join(', ')}`);
+  }
+  
+  if (project.requirements.language && project.requirements.language.length > 0) {
+    requirements.push(`Language: ${project.requirements.language.join(', ')}`);
+  }
+  
+  if (project.requirements.age_range && project.requirements.age_range !== 'No age requirement') {
+    requirements.push(`Age Range: ${project.requirements.age_range}`);
+  }
+  
+  return requirements;
 } 

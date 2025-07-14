@@ -1282,6 +1282,17 @@ function generateInviteCode(): string {
   return Math.random().toString(36).substring(2, 8).toUpperCase();
 }
 
+// 过滤掉undefined值的helper函数
+function filterUndefinedValues(obj: any): any {
+  const filtered: any = {};
+  for (const key in obj) {
+    if (obj[key] !== undefined) {
+      filtered[key] = obj[key];
+    }
+  }
+  return filtered;
+}
+
 // 创建班级
 export async function createClass(classData: Omit<Class, 'id' | 'createdAt' | 'updatedAt' | 'inviteCode' | 'studentIds'>): Promise<string> {
   let inviteCode = generateInviteCode();
@@ -1293,7 +1304,7 @@ export async function createClass(classData: Omit<Class, 'id' | 'createdAt' | 'u
   
   const now = Timestamp.now();
   const classDoc = await addDoc(collection(db, 'classes'), {
-    ...classData,
+    ...filterUndefinedValues(classData),
     inviteCode,
     studentIds: [],
     createdAt: now,
@@ -1511,7 +1522,7 @@ export async function getClassDashboard(classId: string): Promise<ClassDashboard
 // 更新班级信息
 export async function updateClass(classId: string, classData: Partial<Class>): Promise<void> {
   await updateDoc(doc(db, 'classes', classId), {
-    ...classData,
+    ...filterUndefinedValues(classData),
     updatedAt: Timestamp.now()
   });
 }
