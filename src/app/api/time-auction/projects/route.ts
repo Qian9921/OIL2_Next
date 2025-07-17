@@ -1,14 +1,91 @@
 import { NextResponse } from 'next/server';
-import { promises as fs } from 'fs';
-import path from 'path';
 import { TimeAuctionProject, Project } from '@/lib/types';
-import { Timestamp } from 'firebase/firestore';
+import * as admin from 'firebase-admin';
+import path from 'path';
+import { promises as fs } from 'fs';
+
+// 初始化Firebase Admin SDK（如果尚未初始化）
+let dbInstance: admin.firestore.Firestore | null = null;
+
+async function initializeFirebaseAdmin() {
+  if (!admin.apps.length) {
+    try {
+      // 尝试使用环境变量中的服务账户
+      const serviceAccountKey = process.env.FIREBASE_SERVICE_ACCOUNT_KEY;
+      
+      if (serviceAccountKey) {
+        const serviceAccount = JSON.parse(serviceAccountKey);
+        admin.initializeApp({
+          credential: admin.credential.cert(serviceAccount),
+          projectId: 'openimpactlab-v2'
+        });
+             } else {
+         // 回退到本地文件
+         const serviceAccountPath = path.join(process.cwd(), 'openimpactlab-v2-firebase-adminsdk-fbsvc-2ce2ca266c.json');
+         const serviceAccountContent = await fs.readFile(serviceAccountPath, 'utf8');
+         const serviceAccount = JSON.parse(serviceAccountContent);
+         admin.initializeApp({
+           credential: admin.credential.cert(serviceAccount),
+           projectId: 'openimpactlab-v2'
+         });
+       }
+      
+      dbInstance = admin.firestore();
+      return true;
+    } catch (error) {
+      console.error('Firebase Admin initialization error:', error);
+      return false;
+    }
+  } else {
+    dbInstance = admin.firestore();
+    return true;
+  }
+}
 
 export async function GET() {
+  // 尝试从Firebase读取数据
+  const firebaseInitialized = await initializeFirebaseAdmin();
+  
+  if (firebaseInitialized && dbInstance) {
+    try {
+      const snapshot = await dbInstance.collection('timeAuctionProjects').get();
+      
+      if (!snapshot.empty) {
+        const projects: Project[] = [];
+        
+        snapshot.forEach((doc) => {
+          const data = doc.data() as Project;
+          projects.push({
+            ...data,
+            id: data.id || doc.id
+          });
+        });
+        
+        // 按更新时间排序，最新的在前
+        projects.sort((a, b) => {
+          if (a.updatedAt && b.updatedAt) {
+            const aTime = (a.updatedAt as any).seconds || 0;
+            const bTime = (b.updatedAt as any).seconds || 0;
+            return bTime - aTime;
+          }
+          return 0;
+        });
+        
+        console.log(`Successfully loaded ${projects.length} projects from Firebase`);
+        return NextResponse.json(projects);
+      }
+    } catch (error) {
+      console.error('Error reading from Firebase:', error);
+    }
+  }
+  
+  // 如果Firebase失败，回退到本地文件读取
+  console.log('Falling back to local file reading...');
   try {
+    
     const timeAuctionDir = path.join(process.cwd(), 'public/time_auction');
     const files = await fs.readdir(timeAuctionDir);
-    const jsonFiles = files.filter(file => file.endsWith('.json'));
+    const jsonFiles = files.filter((file: string) => file.endsWith('.json'));
     
     const projects: Project[] = [];
     
@@ -29,8 +106,8 @@ export async function GET() {
         ngoId: 'time-auction',
         ngoName: timeAuctionProject.organization.name,
         status: timeAuctionProject.posting_info.application_status === 'Application closed' ? 'archived' : 'published',
-        createdAt: Timestamp.fromDate(new Date(timeAuctionProject.scraped_at)),
-        updatedAt: Timestamp.fromDate(new Date(timeAuctionProject.scraped_at)),
+        createdAt: createTimestamp(new Date(timeAuctionProject.scraped_at)),
+        updatedAt: createTimestamp(new Date(timeAuctionProject.scraped_at)),
         currentParticipants: 0,
         tags: [
           ...timeAuctionProject.organization.causes,
@@ -70,15 +147,24 @@ export async function GET() {
       projects.push(standardProject);
     }
     
+    console.log(`Successfully loaded ${projects.length} projects from local files`);
     return NextResponse.json(projects);
-  } catch (error) {
-    console.error('Error loading Time Auction projects:', error);
+  } catch (fallbackError) {
+    console.error('Error loading Time Auction projects from local files:', fallbackError);
     return NextResponse.json({ error: 'Failed to load projects' }, { status: 500 });
   }
 }
 
+// 创建时间戳的辅助函数
+function createTimestamp(date: Date): any {
+  return {
+    seconds: Math.floor(date.getTime() / 1000),
+    nanoseconds: (date.getTime() % 1000) * 1000000
+  };
+}
+
 // 解析项目周期为截止日期
-function parseProjectPeriod(period: string): Timestamp {
+function parseProjectPeriod(period: string): any {
   try {
     // 解析类似 "31 Jan 2025 - 30 Apr 2025" 的格式
     const endDateMatch = period.match(/- (.+)$/);
@@ -86,18 +172,18 @@ function parseProjectPeriod(period: string): Timestamp {
       const endDateStr = endDateMatch[1].trim();
       const endDate = new Date(endDateStr);
       if (!isNaN(endDate.getTime())) {
-        return Timestamp.fromDate(endDate);
+        return createTimestamp(endDate);
       }
     }
     
     // 如果解析失败，返回3个月后的日期
     const futureDate = new Date();
     futureDate.setMonth(futureDate.getMonth() + 3);
-    return Timestamp.fromDate(futureDate);
+    return createTimestamp(futureDate);
   } catch (error) {
     const futureDate = new Date();
     futureDate.setMonth(futureDate.getMonth() + 3);
-    return Timestamp.fromDate(futureDate);
+    return createTimestamp(futureDate);
   }
 }
 
