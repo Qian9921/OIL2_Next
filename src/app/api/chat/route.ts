@@ -5,7 +5,7 @@ import { Subtask } from '@/lib/types';
 
 const PROJECT_ID = process.env.GOOGLE_CLOUD_PROJECT || 'openimpactlab-v2';
 const LOCATION = process.env.GOOGLE_CLOUD_LOCATION || 'us-central1';
-const MODEL_NAME = 'gemini-2.5-flash-preview-05-20'; // Corrected model name based on common patterns
+const MODEL_NAME = 'gemini-2.5-flash'; // Corrected model name based on common patterns
 
 interface ChatRequestData {
   userId: string;
