@@ -3,7 +3,7 @@ import { VertexAI, HarmCategory, HarmBlockThreshold } from '@google-cloud/vertex
 // Common configuration for Vertex AI
 export const PROJECT_ID = process.env.GOOGLE_CLOUD_PROJECT || 'openimpactlab-v2';
 export const LOCATION = process.env.GOOGLE_CLOUD_LOCATION || 'us-central1';
-export const MODEL_NAME = 'gemini-2.5-flash-preview-05-20';
+export const MODEL_NAME = 'gemini-2.5-flash';
 
 /**
  * Creates and configures a Vertex AI generative model with optimal settings
