@@ -49,50 +49,6 @@ export interface Project {
   source?: 'internal' | 'time_auction'; // 项目来源标识
 }
 
-// Time Auction 项目原始数据结构
-export interface TimeAuctionProject {
-  project_id: string;
-  project_url: string;
-  project_title: string;
-  project_description: string;
-  organization: {
-    name: string;
-    website: string;
-    causes: string[];
-    description: string;
-  };
-  project_details: {
-    what_we_need: string[];
-    background: string;
-    what_we_have: string;
-    why_important: string;
-    project_period: string;
-    location: string;
-  };
-  requirements: {
-    time: string;
-    skills: string[];
-    experience_level: string[];
-    language: string[];
-    age_range: string;
-  };
-  special_program?: {
-    name: string;
-    description: string;
-  };
-  posting_info: {
-    posted: string;
-    application_status: string;
-  };
-  similar_opportunities?: Array<{
-    title: string;
-    organization: string;
-    time: string;
-  }>;
-  scraped_at: string;
-  scraped_content_type: string;
-}
-
 export interface Subtask {
   id: string;
   title: string;

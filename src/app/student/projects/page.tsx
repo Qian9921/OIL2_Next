@@ -378,12 +378,6 @@ export default function StudentProjectsPage() {
               <Filter className="w-4 h-4 mr-2" />
               Clear Filters
             </Button>
-            <Link href="/time-auction">
-              <Button variant="outline" className="bg-gradient-to-r from-orange-50 to-red-50 border-orange-200 text-orange-700 hover:from-orange-100 hover:to-red-100">
-                <Heart className="w-4 h-4 mr-2" />
-                Time Auction
-              </Button>
-            </Link>
             <Link href="/student/my-projects">
               <Button>
                 <BookOpen className="w-4 h-4 mr-2" />

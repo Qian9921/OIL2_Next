@@ -118,12 +118,6 @@ export function ProjectCard({
                 </span>
               )}
               
-              {project.source === 'time_auction' && (
-                <span className="px-2 py-1 rounded-full text-xs font-medium bg-gradient-to-r from-orange-100 to-red-100 text-orange-800 flex items-center">
-                  <Award className="w-3 h-3 mr-1" />
-                  Time Auction
-                </span>
-              )}
             </div>
           </div>
           <Avatar

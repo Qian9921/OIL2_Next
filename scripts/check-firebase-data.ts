@@ -11,13 +11,13 @@ if (!admin.apps.length) {
 
 const db = admin.firestore();
 
-async function checkTimeAuctionData() {
+async function checkProjectData() {
   try {
-    console.log('检查Firebase中的Time Auction数据...');
+    console.log('检查Firebase中的项目数据...');
     
-    // 检查timeAuctionProjects集合
-    const snapshot = await db.collection('timeAuctionProjects').get();
-    console.log(`timeAuctionProjects集合中有 ${snapshot.size} 个文档`);
+    // 检查projects集合
+    const snapshot = await db.collection('projects').get();
+    console.log(`projects集合中有 ${snapshot.size} 个文档`);
     
     if (snapshot.size > 0) {
       console.log('\n项目列表:');
@@ -26,11 +26,11 @@ async function checkTimeAuctionData() {
         console.log(`${index + 1}. ID: ${doc.id}`);
         console.log(`   标题: ${data.title}`);
         console.log(`   状态: ${data.status}`);
-        console.log(`   来源: ${data.source}`);
+        console.log(`   来源: ${data.source || 'internal'}`);
         console.log('---');
       });
     } else {
-      console.log('没有找到任何Time Auction项目数据');
+      console.log('没有找到任何项目数据');
     }
     
   } catch (error) {
@@ -38,12 +38,12 @@ async function checkTimeAuctionData() {
   }
 }
 
-checkTimeAuctionData()
+checkProjectData()
   .then(() => {
     console.log('检查完成');
     process.exit(0);
   })
-  .catch(error => {
-    console.error('检查失败:', error);
+  .catch((error) => {
+    console.error('执行失败:', error);
     process.exit(1);
   }); 

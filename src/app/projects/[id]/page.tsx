@@ -8,8 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Avatar } from "@/components/ui/avatar";
 import { getProject, getParticipations, createParticipation, getCertificates, getUser, joinClass } from "@/lib/firestore";
-import { Project, Participation, Certificate, User, TimeAuctionProject } from "@/lib/types";
-import { TimeAuctionDetail } from "@/components/project/time-auction-detail";
+import { Project, Participation, Certificate, User } from "@/lib/types";
 import { generateAvatar, getDifficultyColor, formatDeadline } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { 
@@ -50,7 +49,6 @@ export default function ProjectDetailPage() {
   const { data: session } = useSession();
   const { toast } = useToast();
   const [project, setProject] = useState<Project | null>(null);
-  const [timeAuctionProject, setTimeAuctionProject] = useState<TimeAuctionProject | null>(null);
   const [participations, setParticipations] = useState<Participation[]>([]);
   const [myParticipation, setMyParticipation] = useState<Participation | null>(null);
   const [myCertificate, setMyCertificate] = useState<Certificate | null>(null);
@@ -70,27 +68,8 @@ export default function ProjectDetailPage() {
 
   const loadProjectData = async () => {
     try {
-      let projectData: Project | null = null;
-      
-      // Check if this is a Time Auction project
-      if ((params.id as string).startsWith('time-auction-')) {
-        // Load Time Auction project from API
-        const timeAuctionResponse = await fetch('/api/time-auction/projects');
-        if (timeAuctionResponse.ok) {
-          const timeAuctionProjects = await timeAuctionResponse.json();
-          projectData = timeAuctionProjects.find((p: Project) => p.id === params.id);
-        }
-        
-        // Also load the raw Time Auction data for specialized display
-        const rawTimeAuctionResponse = await fetch(`/api/time-auction/projects/${params.id}`);
-        if (rawTimeAuctionResponse.ok) {
-          const rawTimeAuctionData = await rawTimeAuctionResponse.json();
-          setTimeAuctionProject(rawTimeAuctionData);
-        }
-      } else {
-        // Load regular project from Firebase
-        projectData = await getProject(params.id as string);
-      }
+      // Load regular project from Firebase
+      const projectData = await getProject(params.id as string);
       
       const participationData = await getParticipations({ projectId: params.id as string });
       
@@ -279,7 +258,6 @@ export default function ProjectDetailPage() {
     if (myParticipation) return false;
     if (project?.status !== 'published') return false;
     if (isProjectFull()) return false;
-    if (project?.source === 'time_auction') return false; // Time Auction projects cannot be joined through our platform
     return true;
   };
 
@@ -319,7 +297,6 @@ export default function ProjectDetailPage() {
           <h1 className="text-2xl font-bold text-gray-900 mb-4">Project Not Found</h1>
           <p className="text-gray-600 mb-6">Please check if the project ID is correct</p>
           <Link href={
-            (params.id as string).startsWith('time-auction-') ? "/time-auction" :
             session?.user?.role === 'student' ? "/student/projects" : 
             session?.user?.role === 'teacher' ? "/teacher/submissions" :
             session?.user?.role === 'ngo' ? "/ngo/projects" : 
@@ -394,16 +371,10 @@ export default function ProjectDetailPage() {
           </AlertDialogContent>
         </AlertDialog>
 
-        {/* Time Auction Project - Use specialized component */}
-        {project?.source === 'time_auction' && timeAuctionProject ? (
-          <TimeAuctionDetail project={timeAuctionProject} />
-        ) : (
-          <>
-            {/* Header */}
+        {/* Header */}
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-4">
             <Link href={
-              project.source === 'time_auction' ? "/time-auction" :
               session?.user?.role === 'student' ? "/student/projects" : 
               session?.user?.role === 'teacher' ? "/teacher/submissions" :
               session?.user?.role === 'ngo' ? "/ngo/projects" : 
@@ -445,12 +416,6 @@ export default function ProjectDetailPage() {
                 <CardTitle className="flex items-center space-x-2">
                   <BookOpen className="w-5 h-5 text-blue-600" />
                   <span>Project Introduction</span>
-                  {project.source === 'time_auction' && (
-                    <span className="px-2 py-1 rounded-full text-xs font-medium bg-gradient-to-r from-orange-100 to-red-100 text-orange-800 flex items-center ml-2">
-                      <Heart className="w-3 h-3 mr-1" />
-                      Time Auction
-                    </span>
-                  )}
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
@@ -573,69 +538,13 @@ export default function ProjectDetailPage() {
               </Card>
             )}
 
-            {/* Time Auction specific content */}
-            {project.source === 'time_auction' && (
-              <>
-                {/* Project Background for Time Auction */}
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="flex items-center space-x-2">
-                      <BookOpen className="w-5 h-5 text-indigo-600" />
-                      <span>Project Background</span>
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <FormattedText className="text-gray-700 leading-relaxed">
-                      {project.subtasks?.[0]?.description?.split('\n').find(line => line.includes('At Time Auction')) ||
-                       "At Time Auction, we're running a pilot program to better connect skilled volunteers with NGOs, and are looking for volunteers to help us with this program in the next 2-4 months."}
-                    </FormattedText>
-                  </CardContent>
-                </Card>
-
-                {/* Why Important */}
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="flex items-center space-x-2">
-                      <Heart className="w-5 h-5 text-red-600" />
-                      <span>Why This Project Matters</span>
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <FormattedText className="text-gray-700 leading-relaxed">
-                      There are 880+ NGOs on our platform now and many more are signing up. Your support will help us reach more skilled-volunteers that can help these NGOs create meaningful social impact.
-                    </FormattedText>
-                  </CardContent>
-                </Card>
-
-                {/* Special Program */}
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="flex items-center space-x-2">
-                      <Award className="w-5 h-5 text-purple-600" />
-                      <span>Special Recognition Program</span>
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="p-4 bg-purple-50 rounded-lg">
-                      <h4 className="font-semibold text-purple-900 mb-2">Swire Trust Go-Givers Program</h4>
-                      <FormattedText className="text-purple-800 text-sm">
-                        This program aims to encourage skilled volunteers to support Swire Trust NGO partners in education, marine conservation, and arts. 
-                        From now until 2025, 10 outstanding volunteers will be selected annually as the 'Swire Trust Go-Givers of the Year' with special and empowering rewards. 
-                        40 volunteers who contribute the highest number of hours annually will also be recognised!
-                      </FormattedText>
-                    </div>
-                  </CardContent>
-                </Card>
-              </>
-            )}
-
             {/* Requirements */}
             {project.requirements && project.requirements.length > 0 && (
               <Card>
                 <CardHeader>
                   <CardTitle className="flex items-center space-x-2">
                     <AlertCircle className="w-5 h-5 text-orange-600" />
-                    <span>{project.source === 'time_auction' ? 'What We Need From You' : 'Participation Requirements'}</span>
+                    <span>Participation Requirements</span>
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
@@ -649,13 +558,6 @@ export default function ProjectDetailPage() {
                       </li>
                     ))}
                   </ul>
-                  {project.source === 'time_auction' && (
-                    <div className="mt-4 p-3 bg-orange-50 rounded-lg">
-                      <p className="text-orange-800 text-sm">
-                        <strong>Note:</strong> Extensive experience on the proposed topic is required for this project. Flexible dates and times available!
-                      </p>
-                    </div>
-                  )}
                 </CardContent>
               </Card>
             )}
@@ -706,29 +608,6 @@ export default function ProjectDetailPage() {
                       </>
                     )}
                   </div>
-                ) : project.source === 'time_auction' ? (
-                  <div className="text-center">
-                    <div className="mb-4">
-                      <div className="w-12 h-12 bg-gradient-to-br from-orange-500 to-red-600 rounded-full flex items-center justify-center mx-auto mb-3">
-                        <Heart className="w-6 h-6 text-white" />
-                      </div>
-                      <p className="text-orange-800 font-medium mb-2">Time Auction项目</p>
-                      <p className="text-sm text-gray-600 mb-4">
-                        这是来自我们合作伙伴Time Auction的项目，请访问他们的官方网站申请参与
-                      </p>
-                    </div>
-                    {project.subtasks && project.subtasks[0]?.resources && project.subtasks[0].resources[0] && (
-                      <Link href={project.subtasks[0].resources[0]} target="_blank" rel="noopener noreferrer">
-                        <Button className="w-full bg-gradient-to-r from-orange-500 to-red-600 hover:from-orange-600 hover:to-red-700 text-white">
-                          <ExternalLink className="w-4 h-4 mr-2" />
-                          访问Time Auction申请
-                        </Button>
-                      </Link>
-                    )}
-                    <p className="text-xs text-gray-500 mt-2">
-                      将在新窗口中打开Time Auction官网
-                    </p>
-                  </div>
                 ) : canJoinProject() ? (
                   <div className="text-center">
                     <Button
@@ -777,7 +656,7 @@ export default function ProjectDetailPage() {
                 <CardHeader>
                   <CardTitle className="flex items-center space-x-2 text-lg">
                     <Tag className="w-5 h-5 text-purple-600" />
-                    <span>{project.source === 'time_auction' ? 'Required Skills & Tags' : 'Project Tags'}</span>
+                    <span>Project Tags</span>
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
@@ -786,27 +665,13 @@ export default function ProjectDetailPage() {
                       <span 
                         key={index} 
                         className={`px-3 py-1 text-sm rounded-full ${
-                          project.source === 'time_auction' && 
-                          ['Technology', 'No-Code Tools', 'Artificial Intelligence', 'Business Process Improvement', 'Data Management', 'Website Development'].includes(tag)
-                            ? 'bg-orange-100 text-orange-700 border border-orange-200'
-                            : 'bg-purple-100 text-purple-700'
+                          'bg-purple-100 text-purple-700'
                         }`}
                       >
                         {tag}
                       </span>
                     ))}
                   </div>
-                  {project.source === 'time_auction' && (
-                    <div className="mt-4 p-3 bg-gray-50 rounded-lg">
-                      <h5 className="text-sm font-medium text-gray-900 mb-2">Additional Requirements:</h5>
-                      <div className="space-y-1 text-xs text-gray-600">
-                        <div>• Languages: Chinese (Cantonese), English</div>
-                        <div>• Experience Level: Extensive experience required</div>
-                        <div>• Location: Remote</div>
-                        <div>• Time Commitment: 4 hours in total</div>
-                      </div>
-                    </div>
-                  )}
                 </CardContent>
               </Card>
             )}
@@ -816,7 +681,7 @@ export default function ProjectDetailPage() {
               <CardHeader>
                 <CardTitle className="flex items-center space-x-2 text-lg">
                   <Heart className="w-5 h-5 text-red-600" />
-                  <span>{project.source === 'time_auction' ? 'Partner Organization' : 'Initiated Organization'}</span>
+                  <span>Initiated Organization</span>
                 </CardTitle>
               </CardHeader>
               <CardContent>
@@ -829,25 +694,13 @@ export default function ProjectDetailPage() {
                   <div>
                     <h4 className="font-medium text-gray-900">{project.ngoName}</h4>
                     <p className="text-sm text-gray-600">
-                      {project.source === 'time_auction' ? 'Volunteer Platform & Charity' : 'Non-profit Organization'}
+                      Non-profit Organization
                     </p>
                   </div>
                 </div>
                 <FormattedText className="text-sm text-gray-600">
-                  {project.source === 'time_auction' 
-                    ? "Time Auction is a charity that advocates volunteerism. We encourage volunteering with inspiring experiences, while connecting skilled-volunteers with NGOs. Over 100,000 volunteer hours have been contributed to date since 2014."
-                    : "Dedicated to promoting social positive change and providing students with practical learning opportunities."
-                  }
+                  Dedicated to promoting social positive change and providing students with practical learning opportunities.
                 </FormattedText>
-                {project.source === 'time_auction' && (
-                  <div className="mt-3 pt-3 border-t border-gray-100">
-                    <div className="flex items-center space-x-4 text-xs text-gray-500">
-                      <span>• 880+ NGO Partners</span>
-                      <span>• 100,000+ Volunteer Hours</span>
-                      <span>• Since 2014</span>
-                    </div>
-                  </div>
-                )}
               </CardContent>
             </Card>
 
@@ -890,8 +743,6 @@ export default function ProjectDetailPage() {
             )}
           </div>
         </div>
-          </>
-        )}
       </div>
     </MainLayout>
   );
