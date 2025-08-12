@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Avatar } from "@/components/ui/avatar";
 import { getProject, getParticipations, createParticipation, getCertificates, getUser, joinClass } from "@/lib/firestore";
 import { Project, Participation, Certificate, User } from "@/lib/types";
-import { generateAvatar, getDifficultyColor, formatDeadline } from "@/lib/utils";
+import { generateAvatar, getDifficultyColor, formatDeadline, isProjectExpired } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { 
   ArrowLeft, 
@@ -258,6 +258,7 @@ export default function ProjectDetailPage() {
     if (myParticipation) return false;
     if (project?.status !== 'published') return false;
     if (isProjectFull()) return false;
+    if (isProjectExpired(project?.deadline)) return false; // Check if project is expired
     return true;
   };
 
@@ -398,6 +399,12 @@ export default function ProjectDetailPage() {
               {project.difficulty === 'beginner' ? 'Beginner' :
                project.difficulty === 'intermediate' ? 'Intermediate' : 'Advanced'}
             </span>
+            {isProjectExpired(project.deadline) && (
+              <span className="px-3 py-1 rounded-full text-sm font-medium bg-gray-100 text-gray-800">
+                <Clock className="w-4 h-4 mr-1 inline" />
+                Expired
+              </span>
+            )}
             {myParticipation && (
               <span className="px-3 py-1 rounded-full text-sm font-medium bg-green-100 text-green-800">
                 <CheckCircle className="w-4 h-4 mr-1 inline" />
@@ -640,6 +647,12 @@ export default function ProjectDetailPage() {
                       <p className="text-gray-600">Only students can join projects</p>
                     ) : project.status !== 'published' ? (
                       <p className="text-gray-600">Project is not published yet</p>
+                    ) : isProjectExpired(project.deadline) ? (
+                      <div className="text-center">
+                        <Clock className="w-8 h-8 text-gray-400 mx-auto mb-2" />
+                        <p className="text-gray-600 font-medium">Project Expired</p>
+                        <p className="text-sm text-gray-500">This project has passed its deadline</p>
+                      </div>
                     ) : isProjectFull() ? (
                       <p className="text-gray-600">Project is full</p>
                     ) : (

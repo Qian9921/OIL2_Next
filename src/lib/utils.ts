@@ -161,12 +161,31 @@ export function calculateEstimatedHours(project: {
  */
 export const formatTimestamp = (timestamp: Timestamp | undefined): string => {
   if (!timestamp) return 'Unknown Date';
-  
+
   const date = timestamp.toDate();
   return new Intl.DateTimeFormat('en-US', {
     dateStyle: 'medium',
     timeStyle: 'short'
   }).format(date);
+};
+
+/**
+ * Check if a project is expired based on its deadline
+ */
+export const isProjectExpired = (deadline: Timestamp | undefined): boolean => {
+  if (!deadline) return false;
+
+  const now = new Date();
+  const deadlineDate = deadline.toDate();
+
+  return deadlineDate < now;
+};
+
+/**
+ * Get the appropriate CSS classes for expired projects
+ */
+export const getExpiredProjectClasses = (isExpired: boolean): string => {
+  return isExpired ? 'opacity-60 grayscale' : '';
 };
 
 // Firebase connection management utilities

@@ -49,7 +49,7 @@ import { Project, Subtask, Participation, ChatMessage } from '@/lib/types';
 import { showSuccessToast, showErrorToast, showStreakToast, showInfoToast, showFeedbackToast } from '@/lib/toast-utils';
 import { GITHUB_SUBMISSION_SUBTASK_ID } from '@/lib/constants';
 import { saveTaskChatHistory, saveGitHubRepoURL } from '@/lib/task-utils';
-import { generateAvatar, formatRelativeTime, getRawBase64 } from '@/lib/utils';
+import { generateAvatar, formatRelativeTime, getRawBase64, isProjectExpired } from '@/lib/utils';
 import { fetchData } from '@/lib/fetch-utils';
 
 // Markdown
@@ -1372,6 +1372,21 @@ export default function ProjectTaskPage() {
         </div>
         </header>
 
+        {/* Expired Project Warning */}
+        {project && isProjectExpired(project.deadline) && (
+          <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-4">
+            <div className="flex items-center">
+              <AlertTriangle className="w-5 h-5 text-yellow-600 mr-3" />
+              <div>
+                <h3 className="text-sm font-medium text-yellow-800">Project Expired</h3>
+                <p className="text-sm text-yellow-700 mt-1">
+                  This project has passed its deadline. You can view the content but cannot complete tasks or submit work.
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+
         <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
           <div className="flex flex-col h-[calc(100vh-12rem)]">
             <Card className="flex flex-col h-full">
@@ -1492,16 +1507,22 @@ export default function ProjectTaskPage() {
               {subtask?.id !== GITHUB_SUBMISSION_SUBTASK_ID && (
                 <div className="mt-auto p-4 pt-3 border-t flex-shrink-0">
                   <div className="flex flex-col space-y-2">
-                    <Button 
-                      onClick={handleCompleteSubtaskIntent} 
-                      disabled={isSubtaskCompletedByStudent || isLoading || !isCurrentSequentially}
+                    <Button
+                      onClick={handleCompleteSubtaskIntent}
+                      disabled={isSubtaskCompletedByStudent || isLoading || !isCurrentSequentially || isProjectExpired(project?.deadline)}
                       className={`w-full ${isSubtaskCompletedByStudent ? '' : 'bg-green-600 hover:bg-green-700 text-white'}`}
                       variant={isSubtaskCompletedByStudent ? "outline" : "default"}
                       size="lg"
-                      title={!isCurrentSequentially && !isSubtaskCompletedByStudent ? "Complete previous tasks first" : isSubtaskCompletedByStudent ? "Task already completed" : "Mark as complete"}
+                      title={
+                        isProjectExpired(project?.deadline) ? "Project has expired" :
+                        !isCurrentSequentially && !isSubtaskCompletedByStudent ? "Complete previous tasks first" :
+                        isSubtaskCompletedByStudent ? "Task already completed" : "Mark as complete"
+                      }
                     >
                       {isSubtaskCompletedByStudent ? (
                           <><CheckCircle className="w-5 h-5 mr-2 text-green-600" /> Task Marked Complete</>
+                      ) : isProjectExpired(project?.deadline) ? (
+                          <><Clock className="w-5 h-5 mr-2 text-gray-500" /> Project Expired</>
                       ) : !isCurrentSequentially ? (
                           <><Lock className="w-5 h-5 mr-2 text-gray-500" /> Task Locked (Complete Previous)</>
                       ) : (

@@ -21,7 +21,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { getParticipations, getProject, updateParticipation, createSubmission, deleteParticipation, getSubmissions, handleRejectedProject, getCertificates } from "@/lib/firestore";
 import { Project, Participation, Submission, Subtask, Certificate } from "@/lib/types";
-import { generateAvatar, getStatusColor, getDifficultyColor, calculateEstimatedHours, formatDeadline } from "@/lib/utils";
+import { generateAvatar, getStatusColor, getDifficultyColor, calculateEstimatedHours, formatDeadline, isProjectExpired } from "@/lib/utils";
 import { Timestamp } from "firebase/firestore";
 import { LoadingState } from "@/components/ui/loading-state";
 import { ProjectCard } from "@/components/project/project-card";
@@ -617,9 +617,9 @@ export default function StudentMyProjectsPage() {
               // Create custom actions for the ProjectCard
               const customActions = (
                 <div className="space-y-2.5">
-                  {projectWithDetails.status === 'active' && projectWithDetails.nextSubtask && (
-                    <Button 
-                      variant="default" 
+                  {projectWithDetails.status === 'active' && projectWithDetails.nextSubtask && !isProjectExpired(project.deadline) && (
+                    <Button
+                      variant="default"
                       size="sm"
                       onClick={() => handleContinueLearning(projectWithDetails)}
                       className="w-full bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white transition-all duration-300 ease-in-out transform hover:scale-105 shadow-md"
@@ -627,6 +627,15 @@ export default function StudentMyProjectsPage() {
                       <Play className="w-4 h-4 mr-2" />
                       Continue Learning
                     </Button>
+                  )}
+
+                  {/* Show expired project message for active projects that are expired */}
+                  {projectWithDetails.status === 'active' && isProjectExpired(project.deadline) && (
+                    <div className="w-full p-3 bg-gray-50 border border-gray-200 rounded-lg text-center">
+                      <Clock className="w-5 h-5 text-gray-400 mx-auto mb-1" />
+                      <p className="text-sm text-gray-600 font-medium">Project Expired</p>
+                      <p className="text-xs text-gray-500">This project has passed its deadline</p>
+                    </div>
                   )}
                   
                   <Button 
@@ -687,9 +696,9 @@ export default function StudentMyProjectsPage() {
                     </Button>
                   )}
 
-                  {canSubmitProject(projectWithDetails) && (
-                     <Button 
-                        variant="default" 
+                  {canSubmitProject(projectWithDetails) && !isProjectExpired(project.deadline) && (
+                     <Button
+                        variant="default"
                         size="sm"
                         onClick={() => openSubmitDialog(projectWithDetails)}
                         className="w-full bg-green-600 hover:bg-green-700 text-white transition-all duration-200"
@@ -706,9 +715,11 @@ export default function StudentMyProjectsPage() {
                   key={projectWithDetails.id}
                   project={project}
                   showJoinButton={false}
+                  isExpired={isProjectExpired(project.deadline)}
                   customActions={customActions}
                   additionalContent={additionalInfo}
                   statusLabel={
+                    isProjectExpired(project.deadline) ? 'Expired' :
                     projectWithDetails.status === 'active' ? 'In Progress' :
                     projectWithDetails.status === 'completed' ? (submission?.status === 'approved' ? 'Approved' : 'Submitted') :
                     projectWithDetails.status === 'dropped' ? 'Dropped' : 'Pending Action'

@@ -22,6 +22,7 @@ import { ProjectCard } from "@/components/project/project-card";
 import { LoadingState } from "@/components/ui/loading-state";
 import { Timestamp } from "firebase/firestore";
 import { Participation } from "@/lib/types";
+import { isProjectExpired } from "@/lib/utils";
 
 export default function StudentProjectsPage() {
   const { data: session } = useSession();
@@ -34,7 +35,7 @@ export default function StudentProjectsPage() {
   const [searchTerm, setSearchTerm] = useState("");
   const [difficultyFilter, setDifficultyFilter] = useState("all");
   const [tagFilter, setTagFilter] = useState("all");
-  const [statusFilter, setStatusFilter] = useState("all");
+  const [statusFilter, setStatusFilter] = useState("available");
   const [joiningProject, setJoiningProject] = useState<string | null>(null);
   const [projectToJoin, setProjectToJoin] = useState<Project | null>(null);
   const [showClassDialog, setShowClassDialog] = useState(false);
@@ -52,9 +53,19 @@ export default function StudentProjectsPage() {
 
   const loadProjects = async () => {
     try {
-      // Load only regular projects
-      const allProjects = await getProjects({ status: 'published' });
-      setProjects(allProjects);
+      // Load published projects and completed projects (which may be expired)
+      const [publishedProjects, completedProjects] = await Promise.all([
+        getProjects({ status: 'published' }),
+        getProjects({ status: 'completed' })
+      ]);
+
+      // Combine and deduplicate projects
+      const allProjects = [...publishedProjects, ...completedProjects];
+      const uniqueProjects = allProjects.filter((project, index, self) =>
+        index === self.findIndex(p => p.id === project.id)
+      );
+
+      setProjects(uniqueProjects);
       
       // Load user participations and user info if logged in
       if (session?.user?.id) {
@@ -98,11 +109,13 @@ export default function StudentProjectsPage() {
     
     if (statusFilter !== "all") {
       if (statusFilter === "available") {
-        filtered = filtered.filter(project => !isProjectJoined(project.id));
+        filtered = filtered.filter(project => !isProjectJoined(project.id) && !isProjectExpired(project.deadline));
       } else if (statusFilter === "joined") {
         filtered = filtered.filter(project => isProjectJoined(project.id) && !isProjectCompleted(project.id));
       } else if (statusFilter === "completed") {
         filtered = filtered.filter(project => isProjectCompleted(project.id));
+      } else if (statusFilter === "expired") {
+        filtered = filtered.filter(project => isProjectExpired(project.deadline));
       }
     }
     
@@ -437,6 +450,7 @@ export default function StudentProjectsPage() {
                 <option value="available">Available</option>
                 <option value="joined">Joined</option>
                 <option value="completed">Completed</option>
+                <option value="expired">Expired</option>
               </select>
               
 
@@ -461,6 +475,7 @@ export default function StudentProjectsPage() {
                 isJoined={isProjectJoined(project.id)}
                 isCompleted={isProjectCompleted(project.id)}
                 isFull={isProjectFull(project) ? true : false}
+                isExpired={isProjectExpired(project.deadline)}
                 isJoining={joiningProject === project.id}
                 onJoinClick={handleJoinProjectIntent}
               />

@@ -17,12 +17,14 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Avatar } from '@/components/ui/avatar';
 import { Project } from '@/lib/types';
-import { 
-  generateAvatar, 
-  getDifficultyColor, 
-  getStatusColor, 
-  calculateEstimatedHours, 
-  formatDeadline 
+import {
+  generateAvatar,
+  getDifficultyColor,
+  getStatusColor,
+  calculateEstimatedHours,
+  formatDeadline,
+  isProjectExpired,
+  getExpiredProjectClasses
 } from '@/lib/utils';
 import { LoadingState } from '@/components/ui/loading-state';
 
@@ -39,6 +41,8 @@ export interface ProjectCardProps {
   showAdminActions?: boolean;
   /** Whether the project is full (maxed participants) */
   isFull?: boolean;
+  /** Whether the project is expired */
+  isExpired?: boolean;
   /** Loading state for join button */
   isJoining?: boolean;
   /** Click handler for join button */
@@ -65,6 +69,7 @@ export function ProjectCard({
   isCompleted = false,
   showAdminActions = false,
   isFull = false,
+  isExpired = false,
   isJoining = false,
   onJoinClick,
   onEditClick,
@@ -76,9 +81,12 @@ export function ProjectCard({
   const handleJoinClick = () => {
     onJoinClick?.(project);
   };
-  
+
+  // Check if project is expired if not explicitly provided
+  const projectIsExpired = isExpired || isProjectExpired(project.deadline);
+
   return (
-    <Card className="card-hover h-full flex flex-col">
+    <Card className={`card-hover h-full flex flex-col ${getExpiredProjectClasses(projectIsExpired)}`}>
       <CardHeader>
         <div className="flex items-start justify-between mb-2">
           <div className="flex-1">
@@ -117,7 +125,14 @@ export function ProjectCard({
                   Completed
                 </span>
               )}
-              
+
+              {projectIsExpired && (
+                <span className="px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-800 flex items-center">
+                  <Clock className="w-3 h-3 mr-1" />
+                  Expired
+                </span>
+              )}
+
             </div>
           </div>
           <Avatar
@@ -214,7 +229,7 @@ export function ProjectCard({
           {showJoinButton && !isJoined && (
             <Button
               onClick={() => onJoinClick?.(project)}
-              disabled={isFull || isJoining}
+              disabled={isFull || isJoining || projectIsExpired}
               className="w-full"
             >
               {isJoining ? (
@@ -222,7 +237,9 @@ export function ProjectCard({
               ) : (
                 <Plus className="w-4 h-4 mr-2" />
               )}
-              {isFull ? 'Project Full' : isJoining ? 'Joining...' : 'Join Project'}
+              {projectIsExpired ? 'Project Expired' :
+               isFull ? 'Project Full' :
+               isJoining ? 'Joining...' : 'Join Project'}
             </Button>
           )}
           
