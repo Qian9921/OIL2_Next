@@ -1,9 +1,27 @@
 import { VertexAI, HarmCategory, HarmBlockThreshold } from '@google-cloud/vertexai';
 
+const CONFIGURED_PROJECT_ID =
+  process.env.GOOGLE_CLOUD_PROJECT ?? process.env.GCLOUD_PROJECT ?? 'openimpactlab-v2';
+const CONFIGURED_LOCATION = process.env.GOOGLE_CLOUD_LOCATION;
+const CONFIGURED_MODEL_NAME = process.env.VERTEX_MODEL_NAME;
+
+const MODEL_ALIASES: Record<string, string> = {
+  'gemini-3.1-pro-preview': 'gemini-3-pro-preview',
+};
+
+// Gemini 3 preview models currently require the global endpoint on Vertex AI.
+const GLOBAL_ONLY_MODELS = new Set([
+  'gemini-3-pro-preview',
+  'gemini-3-flash-preview',
+]);
+
 // Common configuration for Vertex AI
-export const PROJECT_ID = process.env.GOOGLE_CLOUD_PROJECT || 'openimpactlab-v2';
-export const LOCATION = process.env.GOOGLE_CLOUD_LOCATION || 'us-central1';
-export const MODEL_NAME = 'gemini-2.5-flash';
+const requestedModelName = CONFIGURED_MODEL_NAME || 'gemini-3-pro-preview';
+export const MODEL_NAME = MODEL_ALIASES[requestedModelName] || requestedModelName;
+export const PROJECT_ID = CONFIGURED_PROJECT_ID;
+export const LOCATION = GLOBAL_ONLY_MODELS.has(MODEL_NAME)
+  ? 'global'
+  : CONFIGURED_LOCATION || 'us-central1';
 
 /**
  * Creates and configures a Vertex AI generative model with optimal settings
@@ -26,7 +44,7 @@ export function createGenerativeModel(maxOutputTokens = 2048) {
       topP: 0.95,
       topK: 40,
       stopSequences: [],
-      responseMimeType: "text/plain",
+      responseMimeType: 'text/plain',
     },
   });
 }
@@ -84,11 +102,11 @@ export function validateAIResponse(response: any) {
     finishReason: response?.candidates?.[0]?.finishReason || 'unknown',
   };
   
-  console.log("Vertex AI response structure:", JSON.stringify(debugInfo, null, 2));
+  console.log('Vertex AI response structure:', JSON.stringify(debugInfo, null, 2));
   
   // Check for missing candidates
   if (!response || !response.candidates || response.candidates.length === 0) {
-    console.error("Vertex AI response missing candidates:", JSON.stringify(response, null, 2));
+    console.error('Vertex AI response missing candidates:', JSON.stringify(response, null, 2));
     return { 
       isValid: false, 
       error: 'AI response was empty (no candidates). Please try again with simpler input.',
@@ -100,7 +118,7 @@ export function validateAIResponse(response: any) {
   
   // Check for missing content
   if (!candidate.content || !candidate.content.parts || candidate.content.parts.length === 0) {
-    console.error("Vertex AI candidate missing content or parts:", JSON.stringify(candidate, null, 2));
+    console.error('Vertex AI candidate missing content or parts:', JSON.stringify(candidate, null, 2));
     return { 
       isValid: false, 
       error: 'AI response was empty (no content). Please try again with simpler input.',
@@ -111,7 +129,7 @@ export function validateAIResponse(response: any) {
   
   // Check for safety or recitation finish reasons
   if (candidate.finishReason === 'SAFETY' || candidate.finishReason === 'RECITATION') {
-    console.error("Vertex AI response terminated due to:", candidate.finishReason);
+    console.error('Vertex AI response terminated due to:', candidate.finishReason);
     return { 
       isValid: false, 
       error: `AI response was terminated due to ${candidate.finishReason}. Please try modifying your input.`,
@@ -124,7 +142,7 @@ export function validateAIResponse(response: any) {
   
   // Check for empty text
   if (!responseText) {
-    console.error("Vertex AI response text is empty:", JSON.stringify(candidate.content.parts[0], null, 2));
+    console.error('Vertex AI response text is empty:', JSON.stringify(candidate.content.parts[0], null, 2));
     return { 
       isValid: false, 
       error: 'AI response text was empty. Please try again with simpler input.',
@@ -158,7 +176,7 @@ export function parseJsonObjectResponse(responseText: string) {
     
     // Check if response seems to be truncated or malformed
     if (!cleanedResponseText.startsWith('{') || !cleanedResponseText.endsWith('}')) {
-      console.error("Response may be truncated or malformed:", cleanedResponseText);
+      console.error('Response may be truncated or malformed:', cleanedResponseText);
       
       // Try to fix common issues with the response format
       if (!cleanedResponseText.startsWith('{')) {
@@ -180,7 +198,7 @@ export function parseJsonObjectResponse(responseText: string) {
       }
       
       // Log the attempt to recover
-      console.log("Attempting to recover from malformed JSON response:", cleanedResponseText);
+      console.log('Attempting to recover from malformed JSON response:', cleanedResponseText);
     }
     
     // Try to parse the JSON
@@ -190,7 +208,7 @@ export function parseJsonObjectResponse(responseText: string) {
         parsedJson: JSON.parse(cleanedResponseText) 
       };
     } catch (initialParseError) {
-      console.error("Initial parse error:", initialParseError);
+      console.error('Initial parse error:', initialParseError);
       
       // Try to recover by doing a more aggressive cleanup
       let recoverableText = cleanedResponseText
@@ -201,7 +219,7 @@ export function parseJsonObjectResponse(responseText: string) {
         .replace(/(['"])?([a-zA-Z0-9_]+)(['"])?:/g, '"$2":') // Ensure all keys are properly quoted
         .replace(/:\s*'([^']*)'/g, ':"$1"'); // Replace single quotes with double quotes for values
         
-      console.log("Attempting to recover with cleaned text:", recoverableText);
+      console.log('Attempting to recover with cleaned text:', recoverableText);
       
       try {
         return { 
@@ -210,20 +228,20 @@ export function parseJsonObjectResponse(responseText: string) {
           recovered: true
         };
       } catch (secondParseError) {
-        console.error("Second parse attempt failed:", secondParseError);
+        console.error('Second parse attempt failed:', secondParseError);
         return { 
           success: false, 
-          error: "Failed to parse response as JSON object", 
+          error: 'Failed to parse response as JSON object', 
           cleanedText: cleanedResponseText,
           recoverableText
         };
       }
     }
   } catch (error) {
-    console.error("Error in parseJsonObjectResponse:", error);
+    console.error('Error in parseJsonObjectResponse:', error);
     return { 
       success: false, 
-      error: "Unexpected error processing JSON object response" 
+      error: 'Unexpected error processing JSON object response' 
     };
   }
 }
@@ -246,7 +264,7 @@ export function parseJsonArrayResponse(responseText: string) {
     if (!cleanedResponseText.startsWith('[') || !cleanedResponseText.endsWith(']') || 
         cleanedResponseText.includes('...') || 
         (cleanedResponseText.match(/\{/g) || []).length !== (cleanedResponseText.match(/\}/g) || []).length) {
-      console.error("Potentially truncated or incomplete JSON from AI:", cleanedResponseText);
+      console.error('Potentially truncated or incomplete JSON from AI:', cleanedResponseText);
       
       // Try to fix common issues with the response format
       if (!cleanedResponseText.startsWith('[')) {
@@ -274,7 +292,7 @@ export function parseJsonArrayResponse(responseText: string) {
       }
       
       // Log the attempt to recover
-      console.log("Attempting to recover from malformed array JSON:", cleanedResponseText);
+      console.log('Attempting to recover from malformed array JSON:', cleanedResponseText);
     }
     
     // Try to parse the JSON
@@ -284,7 +302,7 @@ export function parseJsonArrayResponse(responseText: string) {
         parsedJson: JSON.parse(cleanedResponseText) 
       };
     } catch (initialParseError) {
-      console.error("Initial parse error for array:", initialParseError);
+      console.error('Initial parse error for array:', initialParseError);
       
       // Try to recover by doing a more aggressive cleanup
       let recoverableText = cleanedResponseText
@@ -296,7 +314,7 @@ export function parseJsonArrayResponse(responseText: string) {
         .replace(/(['"])?([a-zA-Z0-9_]+)(['"])?:/g, '"$2":') // Ensure all keys are properly quoted
         .replace(/:\s*'([^']*)'/g, ':"$1"'); // Replace single quotes with double quotes for values
         
-      console.log("Attempting to recover array with cleaned text:", recoverableText);
+      console.log('Attempting to recover array with cleaned text:', recoverableText);
       
       try {
         return { 
@@ -305,7 +323,7 @@ export function parseJsonArrayResponse(responseText: string) {
           recovered: true
         };
       } catch (secondParseError) {
-        console.error("Second parse attempt failed for array:", secondParseError);
+        console.error('Second parse attempt failed for array:', secondParseError);
         
         // Try to extract individual objects as a last resort
         const objectMatches = cleanedResponseText.match(/\{[^\{\}]*\}/g);
@@ -316,12 +334,12 @@ export function parseJsonArrayResponse(responseText: string) {
             try {
               extractedObjects.push(JSON.parse(objMatch));
             } catch (e) {
-              console.error("Could not parse individual object:", e);
+              console.error('Could not parse individual object:', e);
             }
           }
           
           if (extractedObjects.length > 0) {
-            console.log("Using extracted objects:", extractedObjects);
+            console.log('Using extracted objects:', extractedObjects);
             return { 
               success: true, 
               parsedJson: extractedObjects,
@@ -333,17 +351,17 @@ export function parseJsonArrayResponse(responseText: string) {
         
         return { 
           success: false, 
-          error: "Failed to parse response as JSON array", 
+          error: 'Failed to parse response as JSON array', 
           cleanedText: cleanedResponseText,
           recoverableText
         };
       }
     }
   } catch (error) {
-    console.error("Error in parseJsonArrayResponse:", error);
+    console.error('Error in parseJsonArrayResponse:', error);
     return { 
       success: false, 
-      error: "Unexpected error processing JSON array response" 
+      error: 'Unexpected error processing JSON array response' 
     };
   }
-} 
+}

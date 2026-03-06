@@ -3,11 +3,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { VertexAI, HarmCategory, HarmBlockThreshold, Part } from '@google-cloud/vertexai';
 import { authOptions } from '@/lib/auth-options';
 import { getProject, getParticipationByProjectAndStudent, savePromptEvaluation } from '@/lib/firestore'; // Assuming these exist
+import { LOCATION, MODEL_NAME, PROJECT_ID } from '@/lib/vertex-ai-utils';
 import { Subtask } from '@/lib/types';
-
-const PROJECT_ID = process.env.GOOGLE_CLOUD_PROJECT || 'openimpactlab-v2';
-const LOCATION = process.env.GOOGLE_CLOUD_LOCATION || 'us-central1';
-const MODEL_NAME = 'gemini-2.5-flash'; // Corrected model name based on common patterns
 
 interface ChatRequestData {
   userId: string;
@@ -32,7 +29,7 @@ const generativeModel = vertex_ai.getGenerativeModel({
     { category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT, threshold: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE },
   ],
   generationConfig: {
-    maxOutputTokens: 65535, // Maximum output token limit for Gemini-2.5 Flash
+    maxOutputTokens: 65535,
     temperature: 0.8,
     topP: 0.95,
   },
@@ -401,7 +398,7 @@ async function evaluatePromptWithAI(prompt: string, subtask: Subtask) {
       model: MODEL_NAME,
       generationConfig: {
         temperature: 0.2,
-        maxOutputTokens: 65535, // Maximum output token limit for Gemini-2.5 Flash
+        maxOutputTokens: 65535,
       }
     });
     
