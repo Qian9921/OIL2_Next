@@ -1,0 +1,14 @@
+.git
+.gitignore
+.next
+node_modules
+npm-debug.log*
+Dockerfile*
+README*
+.env*
+*.md
+*.log
+coverage
+openimpactlab-v2-firebase-adminsdk-*.json
+scripts/*-firebase-adminsdk-*.json
+src/app/student/.page.tsx.swp
