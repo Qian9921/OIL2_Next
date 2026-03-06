@@ -6,7 +6,6 @@ import { MonitorLayout } from '@/components/monitor/monitor-layout';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { LoadingState } from '@/components/ui/loading-state';
-import { isMonitorAuthenticated } from '@/lib/monitor-auth';
 import { getMonitorStudents, StudentMonitorData } from '@/lib/monitor-data';
 import { useI18n } from '@/lib/i18n';
 import { 
@@ -30,11 +29,6 @@ export default function RealtimeMonitorPage() {
   const [autoRefresh, setAutoRefresh] = useState(true);
 
   useEffect(() => {
-    if (!isMonitorAuthenticated()) {
-      router.push('/admin/monitor/login');
-      return;
-    }
-
     loadRealtimeData();
 
     // 设置自动刷新
@@ -48,7 +42,7 @@ export default function RealtimeMonitorPage() {
     return () => {
       if (interval) clearInterval(interval);
     };
-  }, [router, autoRefresh]);
+  }, [autoRefresh]);
 
   const loadRealtimeData = async () => {
     try {

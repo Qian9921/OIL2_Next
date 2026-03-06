@@ -13,7 +13,7 @@ export default function RootLayout({
     <html lang="en">
       <head>
         <title>OpenImpactLab - Making a Positive Impact</title>
-        <meta name="description" content="A platform connecting students, teachers, and NGOs to create positive social impact through collaborative projects." />
+        <meta name="description" content="A platform connecting students and NGOs to create positive social impact through collaborative projects." />
       </head>
       <body className="antialiased">
         <SessionProvider>

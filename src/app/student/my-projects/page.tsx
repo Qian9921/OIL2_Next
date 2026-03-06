@@ -167,7 +167,7 @@ export default function StudentMyProjectsPage() {
       
       // Make API call to evaluate the task completion
       try {
-        const response = await fetch('https://tutor-new-827682634474.us-central1.run.app/api/evaluate', {
+        const response = await fetch('/api/evaluate-proxy', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',

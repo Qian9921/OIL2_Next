@@ -1,5 +1,7 @@
+import { getServerSession } from 'next-auth';
 import { NextRequest, NextResponse } from 'next/server';
 import { VertexAI, HarmCategory, HarmBlockThreshold, Part } from '@google-cloud/vertexai';
+import { authOptions } from '@/lib/auth-options';
 import { getProject, getParticipationByProjectAndStudent, savePromptEvaluation } from '@/lib/firestore'; // Assuming these exist
 import { Subtask } from '@/lib/types';
 
@@ -65,8 +67,15 @@ export async function POST(req: NextRequest) {
       console.log(`Image attachment included: ${imageMimeType}`);
     }
 
-    // 1. Verify user authentication (optional, depends on your session management)
-    //    For this example, we'll assume userId is valid.
+    // 1. Verify the signed-in user matches the requested project participant
+    const session = await getServerSession(authOptions);
+    if (!session?.user?.id) {
+      return NextResponse.json({ message: 'Unauthorized' }, { status: 401 });
+    }
+
+    if (session.user.id !== userId) {
+      return NextResponse.json({ message: 'Forbidden' }, { status: 403 });
+    }
 
     // 2. Verify student is enrolled in the project
     const participation = await getParticipationByProjectAndStudent(projectId, userId);

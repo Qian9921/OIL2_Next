@@ -72,7 +72,8 @@ export function ChatMessage({
                 }
                 codeString = codeString.replace(/\n$/, '');
                 
-                const blockKey = `code-${message.id || Date.now()}-${props.key || 'fallback'}`;
+                const keySuffix = props.key != null ? String(props.key) : 'fallback';
+                const blockKey = `code-${message.id || Date.now()}-${keySuffix}`;
                 return (
                   <div className="relative group/codeblock my-2 bg-slate-800 text-white p-3 rounded-md overflow-x-auto">
                     <pre {...props} className="!bg-transparent !p-0 !text-sm" />

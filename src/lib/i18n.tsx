@@ -38,9 +38,9 @@ const translations: Record<Language, Record<string, string>> = {
     'login.error': 'Invalid username or password, please try again',
     'login.button': 'Login',
     'login.loading': 'Logging in...',
-    'login.credentials.title': 'Default Login Credentials:',
-    'login.credentials.username': 'Username: admin',
-    'login.credentials.password': 'Password: monitor123',
+    'login.credentials.title': 'Monitor Access:',
+    'login.credentials.username': 'Configure MONITOR_ADMIN_USERNAME on the server',
+    'login.credentials.password': 'Configure MONITOR_ADMIN_PASSWORD on the server',
     'login.copyright': '© 2024 Student Monitoring System. All rights reserved.',
     
     // Dashboard
@@ -386,9 +386,9 @@ const translations: Record<Language, Record<string, string>> = {
     'login.error': '用户名或密码错误，请重试',
     'login.button': '登录',
     'login.loading': '登录中...',
-    'login.credentials.title': '默认登录凭据：',
-    'login.credentials.username': '用户名：admin',
-    'login.credentials.password': '密码：monitor123',
+    'login.credentials.title': '监控访问：',
+    'login.credentials.username': '请在服务器上配置 MONITOR_ADMIN_USERNAME',
+    'login.credentials.password': '请在服务器上配置 MONITOR_ADMIN_PASSWORD',
     'login.copyright': '© 2024 学生监控系统. 保留所有权利.',
     
     // Dashboard

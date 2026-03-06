@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { loginToMonitor, isMonitorAuthenticated } from '@/lib/monitor-auth';
+import { getMonitorAuthStatus, loginToMonitor } from '@/lib/monitor-auth';
 import { useI18n } from '@/lib/i18n';
 import { LanguageSwitcher } from '@/components/monitor/language-switcher';
 import { 
@@ -26,13 +26,32 @@ export default function MonitorLoginPage() {
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
+  const [configurationMessage, setConfigurationMessage] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {
-    // 如果已经登录，直接跳转到监控首页
-    if (isMonitorAuthenticated()) {
-      router.push('/admin/monitor');
-    }
+    let isMounted = true;
+
+    const checkMonitorAccess = async () => {
+      const status = await getMonitorAuthStatus();
+
+      if (!isMounted) {
+        return;
+      }
+
+      if (status.authenticated) {
+        router.replace('/admin/monitor/dashboard');
+        return;
+      }
+
+      setConfigurationMessage(status.configured ? '' : status.message || '');
+    };
+
+    void checkMonitorAccess();
+
+    return () => {
+      isMounted = false;
+    };
   }, [router]);
 
   const handleLogin = async (e: React.FormEvent) => {
@@ -44,11 +63,15 @@ export default function MonitorLoginPage() {
     await new Promise(resolve => setTimeout(resolve, 500));
 
     try {
-      const success = loginToMonitor(username, password);
-      if (success) {
-        router.push('/admin/monitor');
+      const result = await loginToMonitor(username, password);
+
+      if (result.authenticated) {
+        router.replace('/admin/monitor/dashboard');
+      } else if (!result.configured) {
+        setConfigurationMessage(result.message || '');
+        setError('');
       } else {
-        setError(t('login.error.invalid.credentials'));
+        setError(result.message || t('login.error.invalid.credentials'));
       }
     } catch (error) {
       console.error('Login error:', error);
@@ -150,6 +173,12 @@ export default function MonitorLoginPage() {
                 </div>
               )}
 
+              {configurationMessage && (
+                <div className="text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-lg p-3">
+                  {configurationMessage}
+                </div>
+              )}
+
               <Button 
                 type="submit" 
                 className="w-full" 
@@ -175,20 +204,15 @@ export default function MonitorLoginPage() {
                 <CheckCircle className="h-5 w-5 text-green-600 mt-0.5" />
                 <div>
                   <h3 className="font-medium text-gray-900 mb-2">
-                    {t('login.test.credentials.title')}
+                    Monitor access
                   </h3>
                   <div className="space-y-2 text-sm">
-                    <div className="flex items-center justify-between bg-white rounded px-3 py-2 border">
-                      <span className="text-gray-600">{t('login.username')}:</span>
-                      <code className="font-mono text-gray-900 bg-gray-100 px-2 py-1 rounded">admin</code>
-                    </div>
-                    <div className="flex items-center justify-between bg-white rounded px-3 py-2 border">
-                      <span className="text-gray-600">{t('login.password')}:</span>
-                      <code className="font-mono text-gray-900 bg-gray-100 px-2 py-1 rounded">monitor123</code>
+                    <div className="bg-white rounded px-3 py-3 border text-left text-gray-700">
+                      Configure <code className="font-mono text-gray-900 bg-gray-100 px-2 py-1 rounded">MONITOR_ADMIN_USERNAME</code> and <code className="font-mono text-gray-900 bg-gray-100 px-2 py-1 rounded">MONITOR_ADMIN_PASSWORD</code> on the server, then sign in here with those credentials.
                     </div>
                   </div>
                   <p className="text-xs text-gray-600 mt-2">
-                    {t('login.test.credentials.note')}
+                    Credentials are now validated on the server and stored in a secure HTTP-only session cookie.
                   </p>
                 </div>
               </div>

@@ -73,7 +73,7 @@ export default function StudentCertificatesPage() {
         date: certificate.completionDate.toDate().toISOString().split('T')[0]
       };
 
-      const response = await fetch('https://auto-cert-py-827682634474.us-central1.run.app/generate-certificate', {
+      const response = await fetch('/api/certificates/render', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -112,7 +112,7 @@ export default function StudentCertificatesPage() {
         date: certificate.completionDate.toDate().toISOString().split('T')[0]
       };
 
-      const response = await fetch('https://auto-cert-py-827682634474.us-central1.run.app/generate-certificate', {
+      const response = await fetch('/api/certificates/render', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

@@ -6,7 +6,6 @@ import { MonitorLayout } from '@/components/monitor/monitor-layout';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { LoadingState } from '@/components/ui/loading-state';
-import { isMonitorAuthenticated } from '@/lib/monitor-auth';
 import { getStudentDetails, StudentMonitorData } from '@/lib/monitor-data';
 import { useI18n } from '@/lib/i18n';
 import { 
@@ -28,15 +27,10 @@ export default function StudentDetailPage() {
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    if (!isMonitorAuthenticated()) {
-      router.push('/admin/monitor/login');
-      return;
-    }
-
     if (params.id) {
       loadStudentDetails();
     }
-  }, [router, params.id]);
+  }, [params.id]);
 
   const loadStudentDetails = async () => {
     try {

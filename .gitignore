@@ -35,8 +35,6 @@ yarn-error.log*
 .env.development
 .env.test
 .env.production
-# Excluding .env.local from gitignore to allow committing
-!.env.local
 
 # vercel
 .vercel
@@ -44,3 +42,7 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+.env.local
+*.swp
+*-firebase-adminsdk-*.json

@@ -19,7 +19,6 @@ import {
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { signOut } from "next-auth/react";
-import { Toaster } from "@/components/ui/toaster";
 
 interface MainLayoutProps {
   children: React.ReactNode;
@@ -152,7 +151,6 @@ export function MainLayout({ children }: MainLayoutProps) {
           {children}
         </main>
       </div>
-      <Toaster />
     </div>
   );
 } 

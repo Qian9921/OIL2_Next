@@ -7,7 +7,6 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { LoadingState } from '@/components/ui/loading-state';
-import { isMonitorAuthenticated } from '@/lib/monitor-auth';
 import { getMonitorStudents, StudentMonitorData } from '@/lib/monitor-data';
 import { useI18n } from '@/lib/i18n';
 import { 
@@ -34,13 +33,8 @@ export default function StudentsListPage() {
   const [performanceFilter, setPerformanceFilter] = useState<'all' | 'excellent' | 'good' | 'average' | 'needs_attention'>('all');
 
   useEffect(() => {
-    if (!isMonitorAuthenticated()) {
-      router.push('/admin/monitor/login');
-      return;
-    }
-
     loadStudents();
-  }, [router]);
+  }, []);
 
   useEffect(() => {
     filterStudents();

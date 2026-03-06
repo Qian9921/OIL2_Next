@@ -16,9 +16,11 @@ export const maxDuration = 300; // 5 minute timeout
  */
 export async function GET(request: Request) {
   try {
-    // Get API key from query string
+    // Prefer Authorization: Bearer <CRON_API_KEY> but keep query-string fallback for backward compatibility
     const { searchParams } = new URL(request.url);
-    const apiKey = searchParams.get('apiKey');
+    const authHeader = request.headers.get('authorization');
+    const bearerToken = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : null;
+    const apiKey = bearerToken || searchParams.get('apiKey');
     
     // Verify API key
     const expectedApiKey = process.env.CRON_API_KEY;

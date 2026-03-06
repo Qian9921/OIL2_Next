@@ -11,6 +11,7 @@ import { LoadingState } from "@/components/ui/loading-state";
 import { FeatureBadge } from "@/components/ui/feature-badge";
 import { MetricCard, SimpleProgressBar } from "@/components/ui/metric-card";
 import { InfoBanner } from "@/components/ui/info-banner";
+import { getDefaultRouteForRole } from "@/lib/role-routing";
 
 export default function Home() {
   const { data: session, status } = useSession();
@@ -20,7 +21,7 @@ export default function Home() {
     if (status === "authenticated" && session?.user) {
       if (session.user.role) {
         // Users with a role are redirected to the dashboard
-        router.push(`/${session.user.role}`);
+        router.push(getDefaultRouteForRole(session.user.role));
       } else if (session.user.needsRoleSelection) {
         // Users who need to select a role are redirected to the login page
         router.push("/auth/signin");
@@ -131,7 +132,7 @@ export default function Home() {
                     <ArrowRight className="w-5 h-5 ml-2" />
                   </Button>
                 </Link>
-                <Link href="/projects">
+                <Link href="#prompt-framework">
                   <Button variant="outline" size="lg" className="text-lg px-8 py-4 h-auto border-2 border-indigo-300 text-indigo-700">
                     View Sample Prompts
                   </Button>
@@ -205,7 +206,7 @@ export default function Home() {
       </div>
 
       {/* What You'll Learn Section */}
-      <div className="bg-gradient-to-br from-indigo-100 to-purple-100 py-16 relative overflow-hidden">
+      <div id="prompt-framework" className="bg-gradient-to-br from-indigo-100 to-purple-100 py-16 relative overflow-hidden">
         <div className="absolute inset-0 opacity-10">
           <div className="absolute top-10 left-1/4 w-64 h-64 rounded-full bg-indigo-300 mix-blend-multiply filter blur-3xl animate-blob"></div>
           <div className="absolute bottom-10 right-1/4 w-72 h-72 rounded-full bg-purple-300 mix-blend-multiply filter blur-3xl animation-delay-2000"></div>

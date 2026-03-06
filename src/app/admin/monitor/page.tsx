@@ -2,21 +2,33 @@
 
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { isMonitorAuthenticated } from '@/lib/monitor-auth';
+
 import { LoadingState } from '@/components/ui/loading-state';
 import { I18nProvider, useI18n } from '@/lib/i18n';
+import { isMonitorAuthenticated } from '@/lib/monitor-auth';
 
 const MonitorHomeContent: React.FC = () => {
   const router = useRouter();
   const { t } = useI18n();
 
   useEffect(() => {
-    // 检查认证状态并重定向
-    if (isMonitorAuthenticated()) {
-      router.push('/admin/monitor/dashboard');
-    } else {
-      router.push('/admin/monitor/login');
-    }
+    let isMounted = true;
+
+    const redirectToDestination = async () => {
+      const authenticated = await isMonitorAuthenticated();
+
+      if (!isMounted) {
+        return;
+      }
+
+      router.replace(authenticated ? '/admin/monitor/dashboard' : '/admin/monitor/login');
+    };
+
+    void redirectToDestination();
+
+    return () => {
+      isMounted = false;
+    };
   }, [router]);
 
   return (
@@ -32,4 +44,4 @@ export default function MonitorHomePage() {
       <MonitorHomeContent />
     </I18nProvider>
   );
-} 
+}

@@ -28,8 +28,8 @@ export const MonitorLayout: React.FC<MonitorLayoutProps> = ({ children }) => {
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const { t } = useI18n();
 
-  const handleLogout = () => {
-    logoutFromMonitor();
+  const handleLogout = async () => {
+    await logoutFromMonitor();
     router.push('/admin/monitor/login');
   };
 

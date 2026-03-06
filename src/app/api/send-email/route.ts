@@ -1,5 +1,8 @@
+import { getServerSession } from 'next-auth';
 import { NextRequest, NextResponse } from 'next/server';
 import nodemailer from 'nodemailer';
+
+import { authOptions } from '@/lib/auth-options';
 import { getUsersByRole, getUser } from '@/lib/firestore';
 
 interface EmailRequest {
@@ -11,6 +14,22 @@ interface EmailRequest {
 }
 
 export async function POST(request: NextRequest) {
+  const session = await getServerSession(authOptions);
+
+  if (process.env.ENABLE_LEGACY_TEACHER_EMAIL !== 'true') {
+    return NextResponse.json(
+      { error: 'Legacy teacher email is currently disabled.' },
+      { status: 410 }
+    );
+  }
+
+  if (!session?.user?.id || session.user.role !== 'teacher') {
+    return NextResponse.json(
+      { error: 'Unauthorized' },
+      { status: 401 }
+    );
+  }
+
   try {
     const { senderEmail, senderPassword, subject, content, recipientIds }: EmailRequest = await request.json();
 

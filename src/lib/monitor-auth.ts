@@ -1,24 +1,68 @@
-// 监控系统认证工具
-export const MONITOR_CREDENTIALS = {
-  username: "admin",
-  password: "monitor123"
-};
+export const MONITOR_SESSION_COOKIE_NAME = 'oil_monitor_session';
 
-export const MONITOR_SESSION_KEY = "monitor_session";
+interface MonitorAuthStatus {
+  authenticated: boolean;
+  configured: boolean;
+  message?: string;
+}
 
-export const loginToMonitor = (username: string, password: string): boolean => {
-  if (username === MONITOR_CREDENTIALS.username && password === MONITOR_CREDENTIALS.password) {
-    localStorage.setItem(MONITOR_SESSION_KEY, "authenticated");
-    return true;
+export const loginToMonitor = async (
+  username: string,
+  password: string,
+): Promise<MonitorAuthStatus> => {
+  const response = await fetch('/api/admin/monitor-auth', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ username, password }),
+  });
+
+  const data = (await response.json()) as MonitorAuthStatus;
+
+  if (!response.ok) {
+    return {
+      authenticated: false,
+      configured: data.configured ?? true,
+      message: data.message ?? 'Authentication failed.',
+    };
   }
-  return false;
+
+  return data;
 };
 
-export const isMonitorAuthenticated = (): boolean => {
-  if (typeof window === 'undefined') return false;
-  return localStorage.getItem(MONITOR_SESSION_KEY) === "authenticated";
+export const getMonitorAuthStatus = async (): Promise<MonitorAuthStatus> => {
+  try {
+    const response = await fetch('/api/admin/monitor-auth', {
+      method: 'GET',
+      cache: 'no-store',
+    });
+
+    if (!response.ok) {
+      return {
+        authenticated: false,
+        configured: true,
+        message: 'Unable to verify monitor session.',
+      };
+    }
+
+    return (await response.json()) as MonitorAuthStatus;
+  } catch {
+    return {
+      authenticated: false,
+      configured: true,
+      message: 'Unable to verify monitor session.',
+    };
+  }
 };
 
-export const logoutFromMonitor = (): void => {
-  localStorage.removeItem(MONITOR_SESSION_KEY);
-}; 
+export const isMonitorAuthenticated = async (): Promise<boolean> => {
+  const status = await getMonitorAuthStatus();
+  return status.authenticated;
+};
+
+export const logoutFromMonitor = async (): Promise<void> => {
+  await fetch('/api/admin/monitor-auth', {
+    method: 'DELETE',
+  });
+};

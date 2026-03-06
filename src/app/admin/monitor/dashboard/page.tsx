@@ -6,7 +6,6 @@ import { MonitorLayout } from '@/components/monitor/monitor-layout';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { LoadingState } from '@/components/ui/loading-state';
-import { isMonitorAuthenticated } from '@/lib/monitor-auth';
 import { useI18n } from '@/lib/i18n';
 import { 
   getMonitorDashboardStats, 
@@ -36,14 +35,8 @@ const DashboardContent: React.FC = () => {
   const { t } = useI18n();
 
   useEffect(() => {
-    // 检查认证状态
-    if (!isMonitorAuthenticated()) {
-      router.push('/admin/monitor/login');
-      return;
-    }
-
     loadDashboardData();
-  }, [router]);
+  }, []);
 
   const loadDashboardData = async () => {
     try {
@@ -339,7 +332,7 @@ const DashboardContent: React.FC = () => {
             </Button>
             <Button 
               variant="outline"
-              onClick={() => router.push('/admin/monitor/analytics')}
+              onClick={() => router.push('/admin/analytics')}
               className="flex items-center justify-center space-x-2"
             >
               <TrendingUp className="h-4 w-4" />

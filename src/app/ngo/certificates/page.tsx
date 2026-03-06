@@ -132,7 +132,7 @@ export default function NGOCertificatesPage() {
 
     try {
       // Generate preview PDF
-      const response = await fetch('https://auto-cert-py-827682634474.us-central1.run.app/generate-certificate', {
+      const response = await fetch('/api/certificates/render', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -224,7 +224,7 @@ export default function NGOCertificatesPage() {
       };
 
       // Call the certificate generation API
-      const response = await fetch('https://auto-cert-py-827682634474.us-central1.run.app/generate-certificate', {
+      const response = await fetch('/api/certificates/render', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -602,7 +602,7 @@ export default function NGOCertificatesPage() {
                 No Completed Projects Yet
               </h3>
               <p className="text-gray-600 mb-6">
-                Students who complete your projects and receive teacher approval will appear here for certificate awarding.
+                Students who complete your projects and meet the completion criteria will appear here for certificate awarding.
               </p>
             </CardContent>
           </Card>

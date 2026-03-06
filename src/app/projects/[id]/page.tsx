@@ -8,7 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Avatar } from "@/components/ui/avatar";
 import { getProject, getParticipations, createParticipation, getCertificates } from "@/lib/firestore";
-import { getProjectWorkspaceRoute } from "@/lib/role-routing";
+import { getProjectWorkspaceRoute, isStudentWorkspaceRole } from "@/lib/role-routing";
 import { Project, Participation, Certificate } from "@/lib/types";
 import { generateAvatar, getDifficultyColor, formatDeadline, isProjectExpired } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
@@ -106,8 +106,8 @@ export default function ProjectDetailPage() {
       return;
     }
 
-    if (session.user.role !== 'student') {
-      toast({ title: "Access Denied", description: "Only students can join projects.", variant: "destructive" });
+    if (!isStudentWorkspaceRole(session.user.role)) {
+      toast({ title: "Access Denied", description: "Only student collaborators can join projects.", variant: "destructive" });
       return;
     }
 
@@ -150,7 +150,7 @@ export default function ProjectDetailPage() {
 
   const canJoinProject = () => {
     if (!session?.user) return false;
-    if (session.user.role !== 'student') return false;
+    if (!isStudentWorkspaceRole(session.user.role)) return false;
     if (myParticipation) return false;
     if (project?.status !== 'published') return false;
     if (isProjectFull()) return false;
@@ -488,8 +488,8 @@ export default function ProjectDetailPage() {
                           <Button className="w-full">Login</Button>
                         </Link>
                       </>
-                    ) : session.user.role !== 'student' ? (
-                      <p className="text-gray-600">Only students can join projects</p>
+                    ) : !isStudentWorkspaceRole(session.user.role) ? (
+                      <p className="text-gray-600">Only student collaborators can join projects</p>
                     ) : project.status !== 'published' ? (
                       <p className="text-gray-600">Project is not published yet</p>
                     ) : isProjectExpired(project.deadline) ? (
