@@ -73,7 +73,7 @@ export default function Home() {
               </h1>
 
               <p className="text-xl sm:text-2xl text-gray-600 mb-8 max-w-2xl">
-                Learn how to craft high-quality AI prompts through real-world projects with students, teachers, and NGOs. Get feedback on your prompts and develop in-demand skills for social impact.
+                Learn how to craft high-quality AI prompts through real-world projects where students and NGOs collaborate directly. Get feedback on your prompts and develop in-demand skills for social impact.
               </p>
 
               {/* Benefits Badges */}
@@ -317,11 +317,11 @@ export default function Home() {
             Who Can Join <span className="gradient-text">OpenImpactLab?</span>
           </h2>
           <p className="text-xl text-gray-600 max-w-3xl mx-auto">
-            Our platform connects students, teachers, and NGOs to create social impact through AI prompt engineering
+            Our platform connects students and NGOs to create social impact through AI prompt engineering
           </p>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
           {/* Beginners */}
           <Card className="card-hover border-0 shadow-lg p-6 text-center relative">
             <div className="absolute -top-1 -right-1 bg-indigo-500 text-white text-xs font-bold px-3 py-1 rounded-lg">Students</div>
@@ -384,21 +384,21 @@ export default function Home() {
             </CardContent>
           </Card>
 
-          {/* Experts */}
+          {/* Collaboration */}
           <Card className="card-hover border-0 shadow-lg p-6 text-center relative">
-            <div className="absolute -top-1 -right-1 bg-blue-500 text-white text-xs font-bold px-3 py-1 rounded-lg">Teachers</div>
+            <div className="absolute -top-1 -right-1 bg-blue-500 text-white text-xs font-bold px-3 py-1 rounded-lg">Collaboration</div>
             <CardHeader className="pb-2">
               <div className="w-16 h-16 bg-gradient-to-br from-blue-400 to-blue-600 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-md">
                 <Users className="w-8 h-8 text-white" />
               </div>
-              <CardTitle className="text-xl">Teachers</CardTitle>
+              <CardTitle className="text-xl">Student + NGO Workflow</CardTitle>
             </CardHeader>
             <CardContent>
               <p className="text-gray-600 mb-4">
-                Guide students with our detailed prompt analysis framework. Monitor student progress through comprehensive analytics on prompt quality and provide targeted assistance where needed.
+                Students can now join NGO projects directly, collaborate around deliverables, and keep the workflow focused on real project outcomes without extra classroom setup.
               </p>
-              <Link href="/auth/signin?role=teacher">
-                <Button className="w-full bg-blue-600 hover:bg-blue-700">Join as a Teacher</Button>
+              <Link href="/student/projects">
+                <Button className="w-full bg-blue-600 hover:bg-blue-700">Explore Project Flow</Button>
               </Link>
             </CardContent>
           </Card>

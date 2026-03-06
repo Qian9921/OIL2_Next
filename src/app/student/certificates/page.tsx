@@ -349,7 +349,7 @@ export default function StudentCertificatesPage() {
                 No Certificates Yet
               </h3>
               <p className="text-gray-600 mb-6">
-                Complete projects and receive teacher approval to earn certificates from NGOs.
+                Complete projects and earn certificates issued by partner NGOs.
               </p>
               <Button onClick={() => window.location.href = '/student/projects'}>
                 <School className="w-4 h-4 mr-2" />

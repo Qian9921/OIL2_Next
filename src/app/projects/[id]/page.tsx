@@ -1,14 +1,15 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useParams } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { MainLayout } from "@/components/layout/main-layout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Avatar } from "@/components/ui/avatar";
-import { getProject, getParticipations, createParticipation, getCertificates, getUser, joinClass } from "@/lib/firestore";
-import { Project, Participation, Certificate, User } from "@/lib/types";
+import { getProject, getParticipations, createParticipation, getCertificates } from "@/lib/firestore";
+import { getProjectWorkspaceRoute } from "@/lib/role-routing";
+import { Project, Participation, Certificate } from "@/lib/types";
 import { generateAvatar, getDifficultyColor, formatDeadline, isProjectExpired } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { 
@@ -39,13 +40,11 @@ import {
   AlertDialogTitle 
 } from "@/components/ui/alert-dialog";
 import { LoadingState } from "@/components/ui/loading-state";
-import { Input } from "@/components/ui/input";
 import { FormattedText } from "@/components/ui/formatted-text";
 import { Timestamp } from "firebase/firestore";
 
 export default function ProjectDetailPage() {
   const params = useParams();
-  const router = useRouter();
   const { data: session } = useSession();
   const { toast } = useToast();
   const [project, setProject] = useState<Project | null>(null);
@@ -55,10 +54,6 @@ export default function ProjectDetailPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [isJoining, setIsJoining] = useState(false);
   const [showJoinDialog, setShowJoinDialog] = useState(false);
-  const [showClassDialog, setShowClassDialog] = useState(false);
-  const [inviteCode, setInviteCode] = useState("");
-  const [isJoiningClass, setIsJoiningClass] = useState(false);
-  const [currentUser, setCurrentUser] = useState<User | null>(null);
 
   useEffect(() => {
     if (params.id) {
@@ -78,16 +73,12 @@ export default function ProjectDetailPage() {
       
       // Check if current user has already joined (only consider active participations)
       if (session?.user?.id) {
-        const [userParticipation, userInfo] = await Promise.all([
-          participationData.find(p => 
-            p.studentId === session.user.id && 
-            (p.status === 'active' || p.status === 'completed')
-          ),
-          getUser(session.user.id)
-        ]);
+        const userParticipation = participationData.find(p => 
+          p.studentId === session.user.id && 
+          (p.status === 'active' || p.status === 'completed')
+        );
         
         setMyParticipation(userParticipation || null);
-        setCurrentUser(userInfo);
         
         // Check if user has a certificate for this project
         if (userParticipation) {
@@ -120,14 +111,6 @@ export default function ProjectDetailPage() {
       return;
     }
 
-    // Check if user has a class
-    if (!currentUser?.classId) {
-      // User doesn't have a class, show class join dialog
-      setShowClassDialog(true);
-      return;
-    }
-
-    // User has a class, proceed with normal join dialog
     setShowJoinDialog(true);
   };
 
@@ -159,93 +142,6 @@ export default function ProjectDetailPage() {
       setIsJoining(false);
       setShowJoinDialog(false);
     }
-  };
-
-  const handleJoinClassAndProject = async () => {
-    if (!project || !session?.user?.id || !session?.user?.name || !inviteCode.trim()) {
-      return;
-    }
-
-    setIsJoiningClass(true);
-
-    try {
-      // First, join the class
-      const classResult = await joinClass(session.user.id, inviteCode.trim());
-      
-      if (!classResult.success) {
-        toast({
-          title: "Failed to Join Class",
-          description: classResult.message,
-          variant: "destructive"
-        });
-        return;
-      }
-
-      // Check if student has already joined this project to prevent duplicates
-      const { getParticipationByProjectAndStudent } = await import("@/lib/firestore");
-      const existingParticipation = await getParticipationByProjectAndStudent(
-        project.id, 
-        session.user.id
-      );
-
-      if (existingParticipation && (existingParticipation.status === 'active' || existingParticipation.status === 'completed')) {
-        toast({
-          title: "Already Joined",
-          description: "You have already joined this project!",
-          variant: "default"
-        });
-        
-        // Close dialogs and reset state
-        setShowClassDialog(false);
-        setInviteCode("");
-        
-        // Reload data to reflect changes
-        await loadProjectData();
-        return;
-      }
-
-      // If class join was successful and no existing participation, join the project
-      await createParticipation({
-        projectId: project.id,
-        studentId: session.user.id,
-        studentName: session.user.name,
-        status: 'active',
-        completedSubtasks: [],
-        progress: 0
-      });
-
-      // Reload data to reflect changes
-      await loadProjectData();
-      
-      toast({
-        title: "Success!",
-        description: "Successfully joined class and project!",
-        variant: "default"
-      });
-
-      // Close dialogs and reset state
-      setShowClassDialog(false);
-      setInviteCode("");
-    } catch (error) {
-      console.error("Error joining class and project:", error);
-      toast({
-        title: "Join Failed",
-        description: "Failed to join class and project, please try again",
-        variant: "destructive"
-      });
-    } finally {
-      setIsJoiningClass(false);
-    }
-  };
-
-  const handleSkipClassJoin = () => {
-    setShowClassDialog(false);
-    setInviteCode("");
-    toast({
-      title: "Join Cancelled",
-      description: "You need to join a class first to participate in projects",
-      variant: "default"
-    });
   };
 
   const isProjectFull = () => {
@@ -297,12 +193,7 @@ export default function ProjectDetailPage() {
         <div className="text-center py-12">
           <h1 className="text-2xl font-bold text-gray-900 mb-4">Project Not Found</h1>
           <p className="text-gray-600 mb-6">Please check if the project ID is correct</p>
-          <Link href={
-            session?.user?.role === 'student' ? "/student/projects" : 
-            session?.user?.role === 'teacher' ? "/teacher/submissions" :
-            session?.user?.role === 'ngo' ? "/ngo/projects" : 
-            "/student/projects"
-          }>
+          <Link href={getProjectWorkspaceRoute(session?.user?.role)}>
             <Button>Back to Project List</Button>
           </Link>
         </div>
@@ -331,56 +222,10 @@ export default function ProjectDetailPage() {
           </AlertDialogContent>
         </AlertDialog>
 
-        {/* AlertDialog for joining class first */}
-        <AlertDialog open={showClassDialog} onOpenChange={(open) => !open && setShowClassDialog(false)}>
-          <AlertDialogContent>
-            <AlertDialogHeader>
-              <AlertDialogTitle>Join a Class First</AlertDialogTitle>
-              <AlertDialogDescription>
-                To join "{project?.title}", you need to be part of a class. Please enter your teacher's invite code to join a class and continue with the project.
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <div className="py-4">
-              <label htmlFor="inviteCode" className="block text-sm font-medium text-gray-700 mb-2">
-                Class Invite Code
-              </label>
-              <Input
-                id="inviteCode"
-                type="text"
-                placeholder="Enter 6-digit invite code"
-                value={inviteCode}
-                onChange={(e) => setInviteCode(e.target.value.toUpperCase())}
-                maxLength={6}
-                className="w-full"
-              />
-              <p className="text-xs text-gray-500 mt-1">
-                Ask your teacher for the class invite code
-              </p>
-            </div>
-            <AlertDialogFooter>
-              <AlertDialogCancel onClick={handleSkipClassJoin}>
-                Skip for Now
-              </AlertDialogCancel>
-              <AlertDialogAction 
-                onClick={handleJoinClassAndProject}
-                disabled={!inviteCode.trim() || isJoiningClass}
-                className="bg-blue-600 hover:bg-blue-700 text-white"
-              >
-                {isJoiningClass ? 'Joining...' : 'Join Class & Project'}
-              </AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
-
         {/* Header */}
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-4">
-            <Link href={
-              session?.user?.role === 'student' ? "/student/projects" : 
-              session?.user?.role === 'teacher' ? "/teacher/submissions" :
-              session?.user?.role === 'ngo' ? "/ngo/projects" : 
-              "/student/projects"
-            }>
+            <Link href={getProjectWorkspaceRoute(session?.user?.role)}>
               <Button variant="ghost" size="sm">
                 <ArrowLeft className="w-4 h-4 mr-2" />
                 Back

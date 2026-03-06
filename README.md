@@ -1,10 +1,10 @@
 # OpenImpactLab Beta 🌟
 
-A platform connecting students, teachers, and NGOs to create positive social impact through collaborative projects.
+A platform connecting students and NGOs to create positive social impact through collaborative projects.
 
 ## ✨ Features
 
-- **Three User Roles**: Students, Teachers, and NGOs with tailored experiences
+- **Two Active User Roles**: Students and NGOs with tailored experiences
 - **Google Authentication**: Secure OAuth login with role selection
 - **Project Management**: NGOs create projects, students join and complete them
 - **Progress Tracking**: Real-time monitoring of student progress
@@ -89,7 +89,7 @@ src/
 │   ├── auth/signin/        # Authentication pages
 │   ├── student/            # Student dashboard and pages
 │   ├── ngo/               # NGO dashboard and pages
-│   ├── teacher/           # Teacher dashboard and pages
+│   ├── teacher/           # Legacy routes redirected to student collaboration flows
 │   ├── layout.tsx         # Root layout with SessionProvider
 │   └── globals.css        # Global styles
 ├── components/
@@ -112,11 +112,6 @@ src/
 - Chat with AI assistants for guidance
 - Receive prompt quality feedback and build streaks
 - Earn certificates upon completion
-
-### Teachers
-- Monitor student progress
-- Review submissions and provide feedback
-- Access learning analytics and chat histories
 
 ### NGOs
 - Create and manage impactful projects

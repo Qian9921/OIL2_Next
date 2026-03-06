@@ -4,19 +4,17 @@ import React from "react";
 import { useSession } from "next-auth/react";
 import { Avatar } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
+import { getDefaultRouteForRole } from "@/lib/role-routing";
 import { generateAvatar } from "@/lib/utils";
 import { 
   Home, 
   FolderOpen, 
-  Users, 
   BookOpen, 
   Settings, 
   LogOut,
   Heart,
   Sparkles,
   Award,
-  UserPlus,
-  GraduationCap
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -36,12 +34,11 @@ interface NavItem {
 const getNavItems = (role: string): NavItem[] => {
   switch (role) {
     case "student":
+    case "teacher":
       return [
         { label: "Dashboard", href: "/student", icon: Home },
         { label: "Browse Projects", href: "/student/projects", icon: FolderOpen },
         { label: "My Projects", href: "/student/my-projects", icon: BookOpen },
-        { label: "My Class", href: "/student/class", icon: GraduationCap },
-        { label: "Join Class", href: "/student/join-class", icon: UserPlus },
         { label: "Profile", href: "/student/profile", icon: Settings },
       ];
     case "ngo":
@@ -50,15 +47,6 @@ const getNavItems = (role: string): NavItem[] => {
         { label: "Projects", href: "/ngo/projects", icon: FolderOpen },
         { label: "Certificates", href: "/ngo/certificates", icon: Award },
         { label: "Profile", href: "/ngo/profile", icon: Settings },
-      ];
-    case "teacher":
-      return [
-        { label: "Dashboard", href: "/teacher", icon: Home },
-        { label: "My Classes", href: "/teacher/classes", icon: GraduationCap },
-        { label: "Students", href: "/teacher/students", icon: Users },
-        { label: "Submissions", href: "/teacher/submissions", icon: BookOpen },
-        { label: "Reports", href: "/teacher/reports", icon: FolderOpen },
-        { label: "Profile", href: "/teacher/profile", icon: Settings },
       ];
     default:
       return [];
@@ -70,6 +58,7 @@ export function MainLayout({ children }: MainLayoutProps) {
   const pathname = usePathname();
   
   const navItems = getNavItems(session?.user?.role || "");
+  const homeRoute = getDefaultRouteForRole(session?.user?.role);
 
   const handleSignOut = async () => {
     await signOut({ callbackUrl: "/" });
@@ -85,7 +74,9 @@ export function MainLayout({ children }: MainLayoutProps) {
             <div className="w-8 h-8 bg-gradient-to-br from-pink-500 to-purple-600 rounded-lg flex items-center justify-center">
               <Heart className="w-5 h-5 text-white" />
             </div>
-            <span className="text-xl font-bold gradient-text">OpenImpactLab</span>
+            <Link href={homeRoute} className="text-xl font-bold gradient-text">
+              OpenImpactLab
+            </Link>
           </div>
         </div>
 

@@ -5,9 +5,9 @@ import { signIn, useSession } from "next-auth/react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { createUser } from "@/lib/firestore";
+import { getDefaultRouteForRole, SignupRole } from "@/lib/role-routing";
 import { generateAvatar } from "@/lib/utils";
-import { Heart, Users, GraduationCap, Building } from "lucide-react";
-import { UserRole } from "@/lib/types";
+import { Heart, GraduationCap, Building } from "lucide-react";
 import { useRouter } from "next/navigation";
 
 export default function SignIn() {
@@ -21,22 +21,11 @@ export default function SignIn() {
   const router = useRouter();
   const { data: session, status } = useSession();
 
-  // 使用useSession监听session变化，而不是手动调用getSession
   useEffect(() => {
-    console.log("Session状态变化:", status, session);
-    
     if (status === "authenticated" && session?.user) {
-      console.log("用户已认证:", {
-        role: session.user.role,
-        needsRoleSelection: session.user.needsRoleSelection,
-        email: session.user.email
-      });
-      
       if (session.user.role) {
-        console.log("用户有角色，跳转到:", session.user.role);
-        router.push(`/${session.user.role}`);
+        router.push(getDefaultRouteForRole(session.user.role));
       } else if (session.user.needsRoleSelection) {
-        console.log("用户需要选择角色，显示选择界面");
         setUserInfo({
           name: session.user.name || "",
           email: session.user.email || "",
@@ -50,20 +39,15 @@ export default function SignIn() {
   const handleGoogleSignIn = async () => {
     setIsLoading(true);
     setError(null);
-    setShowRoleSelection(false); // 重置状态
+    setShowRoleSelection(false);
     
     try {
-      console.log("开始谷歌登录...");
       const result = await signIn("google", { redirect: false });
-      console.log("登录结果:", result);
-      
-      // 不在这里处理session，让useEffect处理
+
       if (result?.error) {
-        console.error("登录错误:", result.error);
         setError("登录失败：" + result.error);
         setIsLoading(false);
       }
-      // 如果成功，useEffect会处理后续逻辑
     } catch (error) {
       console.error("Sign in error:", error);
       setError("登录过程中出现错误：" + error);
@@ -71,14 +55,12 @@ export default function SignIn() {
     }
   };
 
-  const handleRoleSelection = async (role: UserRole) => {
+  const handleRoleSelection = async (role: SignupRole) => {
     if (!userInfo) return;
     
     setIsLoading(true);
     setError(null);
     try {
-      console.log("创建用户，角色:", role);
-      // Create user in database with selected role
       await createUser({
         name: userInfo.name,
         email: userInfo.email,
@@ -86,14 +68,7 @@ export default function SignIn() {
         avatar: generateAvatar(userInfo.email),
       });
 
-      console.log("用户创建成功，等待session更新...");
-      
-      // 等待一下让数据库更新完成
       await new Promise(resolve => setTimeout(resolve, 1500));
-      
-      // session会通过useEffect自动更新并重定向
-      console.log("等待session自动更新...");
-      
     } catch (error) {
       console.error("Role selection error:", error);
       setError("创建用户失败，请重试：" + error);
@@ -101,9 +76,7 @@ export default function SignIn() {
     }
   };
 
-  // 显示角色选择界面
   if (showRoleSelection && userInfo) {
-    console.log("渲染角色选择界面");
     return (
       <div className="min-h-screen bg-gradient-to-br from-purple-50 via-pink-50 to-cyan-50 flex items-center justify-center p-4">
         <Card className="w-full max-w-lg">
@@ -137,19 +110,6 @@ export default function SignIn() {
             </Button>
 
             <Button
-              onClick={() => handleRoleSelection("teacher")}
-              disabled={isLoading}
-              variant="outline"
-              className="w-full h-20 flex flex-col items-center justify-center space-y-2 hover:bg-green-50 hover:border-green-300"
-            >
-              <Users className="w-8 h-8 text-green-600" />
-              <div>
-                <div className="font-semibold">Teacher</div>
-                <div className="text-xs text-gray-500">Monitor and guide students</div>
-              </div>
-            </Button>
-
-            <Button
               onClick={() => handleRoleSelection("ngo")}
               disabled={isLoading}
               variant="outline"
@@ -167,8 +127,6 @@ export default function SignIn() {
     );
   }
 
-  // 显示登录界面
-  console.log("渲染登录界面");
   return (
     <div className="min-h-screen bg-gradient-to-br from-purple-50 via-pink-50 to-cyan-50 flex items-center justify-center p-4">
       <Card className="w-full max-w-md">

@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { updateProjectStatuses } from '@/lib/firestore';
 
-export const runtime = 'edge';
+export const runtime = 'nodejs';
 export const maxDuration = 300; // 5 minute timeout
 
 /**
