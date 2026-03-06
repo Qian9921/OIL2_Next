@@ -44,7 +44,7 @@ const DEFAULT_FAST_MODEL = 'gemini-3-flash-preview';
 const DEFAULT_COMPLEX_MODEL = 'gemini-3.1-pro-preview';
 const DEFAULT_FAST_FALLBACK_MODEL = 'gemini-2.5-flash';
 const DEFAULT_COMPLEX_FALLBACK_MODEL = 'gemini-2.5-pro';
-const DEFAULT_REGIONAL_LOCATION = 'us-central1';
+const DEFAULT_REGIONAL_LOCATION = 'asia-east1';
 
 const SAFETY_SETTINGS = [
   { category: HarmCategory.HARM_CATEGORY_HARASSMENT, threshold: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE },
@@ -60,16 +60,8 @@ function normalizeModelName(modelName: string | undefined | null, fallback: stri
   return MODEL_ALIASES[requestedModel] || requestedModel;
 }
 
-function requiresGlobalEndpoint(modelName: string) {
-  return modelName.startsWith('gemini-3');
-}
-
-function resolveLocationForModel(modelName: string) {
-  if (requiresGlobalEndpoint(modelName)) {
-    return 'global';
-  }
-
-  return CONFIGURED_REGIONAL_LOCATION || CONFIGURED_LOCATION || DEFAULT_REGIONAL_LOCATION;
+function resolveLocationForModel(_modelName: string) {
+  return CONFIGURED_LOCATION || CONFIGURED_REGIONAL_LOCATION || DEFAULT_REGIONAL_LOCATION;
 }
 
 function getPrimaryModelForTask(taskType: LLMTaskType) {
