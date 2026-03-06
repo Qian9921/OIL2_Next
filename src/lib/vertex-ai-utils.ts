@@ -1,52 +1,214 @@
 import { VertexAI, HarmCategory, HarmBlockThreshold } from '@google-cloud/vertexai';
 
+export type LLMTaskType =
+  | 'chat'
+  | 'prompt-evaluation'
+  | 'project-refinement'
+  | 'subtask-refinement';
+
+interface GenerationOverrides {
+  maxOutputTokens?: number;
+  temperature?: number;
+  topP?: number;
+  topK?: number;
+  stopSequences?: string[];
+  responseMimeType?: string;
+}
+
+export type GenerativeModelInstance = ReturnType<VertexAI['getGenerativeModel']>;
+
+interface GenerativeModelBundle {
+  primary: GenerativeModelInstance;
+  fallback: GenerativeModelInstance | null;
+  primaryModel: string;
+  fallbackModel: string | null;
+  primaryLocation: string;
+  fallbackLocation: string | null;
+}
+
 const CONFIGURED_PROJECT_ID =
   process.env.GOOGLE_CLOUD_PROJECT ?? process.env.GCLOUD_PROJECT ?? 'openimpactlab-v2';
 const CONFIGURED_LOCATION = process.env.GOOGLE_CLOUD_LOCATION;
-const CONFIGURED_MODEL_NAME = process.env.VERTEX_MODEL_NAME;
+const CONFIGURED_FAST_MODEL = process.env.VERTEX_FAST_MODEL;
+const CONFIGURED_COMPLEX_MODEL = process.env.VERTEX_COMPLEX_MODEL;
+const CONFIGURED_FAST_FALLBACK_MODEL = process.env.VERTEX_FAST_FALLBACK_MODEL;
+const CONFIGURED_COMPLEX_FALLBACK_MODEL = process.env.VERTEX_COMPLEX_FALLBACK_MODEL;
+const CONFIGURED_GENERIC_MODEL = process.env.VERTEX_MODEL_NAME;
+const CONFIGURED_REGIONAL_LOCATION = process.env.VERTEX_REGIONAL_LOCATION;
 
 const MODEL_ALIASES: Record<string, string> = {
-  'gemini-3.1-pro-preview': 'gemini-3-pro-preview',
+  'gemini-3-pro-preview': 'gemini-3.1-pro-preview',
 };
 
-// Gemini 3 preview models currently require the global endpoint on Vertex AI.
-const GLOBAL_ONLY_MODELS = new Set([
-  'gemini-3-pro-preview',
-  'gemini-3-flash-preview',
-]);
+const DEFAULT_FAST_MODEL = 'gemini-3-flash-preview';
+const DEFAULT_COMPLEX_MODEL = 'gemini-3.1-pro-preview';
+const DEFAULT_FAST_FALLBACK_MODEL = 'gemini-2.5-flash';
+const DEFAULT_COMPLEX_FALLBACK_MODEL = 'gemini-2.5-pro';
+const DEFAULT_REGIONAL_LOCATION = 'us-central1';
 
-// Common configuration for Vertex AI
-const requestedModelName = CONFIGURED_MODEL_NAME || 'gemini-3-pro-preview';
-export const MODEL_NAME = MODEL_ALIASES[requestedModelName] || requestedModelName;
+const SAFETY_SETTINGS = [
+  { category: HarmCategory.HARM_CATEGORY_HARASSMENT, threshold: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE },
+  { category: HarmCategory.HARM_CATEGORY_HATE_SPEECH, threshold: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE },
+  { category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT, threshold: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE },
+  { category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT, threshold: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE },
+];
+
 export const PROJECT_ID = CONFIGURED_PROJECT_ID;
-export const LOCATION = GLOBAL_ONLY_MODELS.has(MODEL_NAME)
-  ? 'global'
-  : CONFIGURED_LOCATION || 'us-central1';
 
-/**
- * Creates and configures a Vertex AI generative model with optimal settings
- * @param maxOutputTokens Maximum tokens for the response
- * @returns Configured generative model instance
- */
-export function createGenerativeModel(maxOutputTokens = 2048) {
-  const vertex_ai = new VertexAI({ project: PROJECT_ID, location: LOCATION });
-  return vertex_ai.getGenerativeModel({
-    model: MODEL_NAME,
-    safetySettings: [
-      { category: HarmCategory.HARM_CATEGORY_HARASSMENT, threshold: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE },
-      { category: HarmCategory.HARM_CATEGORY_HATE_SPEECH, threshold: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE },
-      { category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT, threshold: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE },
-      { category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT, threshold: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE },
-    ],
+function normalizeModelName(modelName: string | undefined | null, fallback: string) {
+  const requestedModel = modelName?.trim() || fallback;
+  return MODEL_ALIASES[requestedModel] || requestedModel;
+}
+
+function requiresGlobalEndpoint(modelName: string) {
+  return modelName.startsWith('gemini-3');
+}
+
+function resolveLocationForModel(modelName: string) {
+  if (requiresGlobalEndpoint(modelName)) {
+    return 'global';
+  }
+
+  return CONFIGURED_REGIONAL_LOCATION || CONFIGURED_LOCATION || DEFAULT_REGIONAL_LOCATION;
+}
+
+function getPrimaryModelForTask(taskType: LLMTaskType) {
+  if (CONFIGURED_GENERIC_MODEL) {
+    return normalizeModelName(CONFIGURED_GENERIC_MODEL, DEFAULT_COMPLEX_MODEL);
+  }
+
+  if (taskType === 'chat' || taskType === 'prompt-evaluation') {
+    return normalizeModelName(CONFIGURED_FAST_MODEL, DEFAULT_FAST_MODEL);
+  }
+
+  return normalizeModelName(CONFIGURED_COMPLEX_MODEL, DEFAULT_COMPLEX_MODEL);
+}
+
+function getFallbackModelForTask(taskType: LLMTaskType) {
+  if (CONFIGURED_GENERIC_MODEL) {
+    return normalizeModelName(CONFIGURED_COMPLEX_FALLBACK_MODEL, DEFAULT_COMPLEX_FALLBACK_MODEL);
+  }
+
+  if (taskType === 'chat' || taskType === 'prompt-evaluation') {
+    return normalizeModelName(CONFIGURED_FAST_FALLBACK_MODEL, DEFAULT_FAST_FALLBACK_MODEL);
+  }
+
+  return normalizeModelName(CONFIGURED_COMPLEX_FALLBACK_MODEL, DEFAULT_COMPLEX_FALLBACK_MODEL);
+}
+
+export function getTaskModelConfig(taskType: LLMTaskType) {
+  const primaryModel = getPrimaryModelForTask(taskType);
+  const fallbackModel = getFallbackModelForTask(taskType);
+
+  return {
+    taskType,
+    primaryModel,
+    fallbackModel,
+    primaryLocation: resolveLocationForModel(primaryModel),
+    fallbackLocation: fallbackModel ? resolveLocationForModel(fallbackModel) : null,
+  };
+}
+
+function createGenerativeModelInstance(modelName: string, location: string, overrides: GenerationOverrides = {}) {
+  const vertexAI = new VertexAI({
+    project: PROJECT_ID,
+    location,
+  });
+
+  return vertexAI.getGenerativeModel({
+    model: modelName,
+    safetySettings: SAFETY_SETTINGS,
     generationConfig: {
-      maxOutputTokens,
-      temperature: 0.4,
-      topP: 0.95,
-      topK: 40,
-      stopSequences: [],
-      responseMimeType: 'text/plain',
+      maxOutputTokens: overrides.maxOutputTokens ?? 2048,
+      temperature: overrides.temperature ?? 0.4,
+      topP: overrides.topP ?? 0.95,
+      topK: overrides.topK ?? 40,
+      stopSequences: overrides.stopSequences ?? [],
+      responseMimeType: overrides.responseMimeType ?? 'text/plain',
     },
   });
+}
+
+export function createGenerativeModelBundle(taskType: LLMTaskType, overrides: GenerationOverrides = {}): GenerativeModelBundle {
+  const config = getTaskModelConfig(taskType);
+
+  const primary = createGenerativeModelInstance(
+    config.primaryModel,
+    config.primaryLocation,
+    overrides,
+  );
+
+  const fallback = config.fallbackModel
+    ? createGenerativeModelInstance(
+        config.fallbackModel,
+        config.fallbackLocation || DEFAULT_REGIONAL_LOCATION,
+        overrides,
+      )
+    : null;
+
+  return {
+    primary,
+    fallback,
+    primaryModel: config.primaryModel,
+    fallbackModel: config.fallbackModel,
+    primaryLocation: config.primaryLocation,
+    fallbackLocation: config.fallbackLocation,
+  };
+}
+
+/**
+ * Backward-compatible helper. Defaults to the complex-task routing tier.
+ */
+export function createGenerativeModel(maxOutputTokens = 2048) {
+  return createGenerativeModelBundle('project-refinement', { maxOutputTokens }).primary;
+}
+
+export async function withGenerativeModelFallback<T>(
+  bundle: GenerativeModelBundle,
+  operation: (model: GenerativeModelInstance) => Promise<T>,
+): Promise<{ value: T; usedModel: string; usedFallback: boolean }> {
+  try {
+    const value = await operation(bundle.primary);
+
+    return {
+      value,
+      usedModel: bundle.primaryModel,
+      usedFallback: false,
+    };
+  } catch (error) {
+    if (!bundle.fallback || !shouldRetryWithFallback(error)) {
+      throw error;
+    }
+
+    console.warn(
+      `Primary model ${bundle.primaryModel} failed for location ${bundle.primaryLocation}; retrying with fallback ${bundle.fallbackModel} in ${bundle.fallbackLocation}.`,
+      error,
+    );
+
+    const value = await operation(bundle.fallback);
+
+    return {
+      value,
+      usedModel: bundle.fallbackModel || bundle.primaryModel,
+      usedFallback: true,
+    };
+  }
+}
+
+function shouldRetryWithFallback(error: unknown) {
+  const errorMessage = error instanceof Error ? error.message.toLowerCase() : String(error).toLowerCase();
+
+  return [
+    'could not find location',
+    'model',
+    'not found',
+    'resource_exhausted',
+    'quota',
+    '429',
+    '503',
+    'unavailable',
+    'deadline exceeded',
+  ].some((signal) => errorMessage.includes(signal));
 }
 
 /**
@@ -211,7 +373,7 @@ export function parseJsonObjectResponse(responseText: string) {
       console.error('Initial parse error:', initialParseError);
       
       // Try to recover by doing a more aggressive cleanup
-      let recoverableText = cleanedResponseText
+      const recoverableText = cleanedResponseText
         .replace(/,\s*\}/g, '}') // Remove trailing commas
         .replace(/,\s*,/g, ',')  // Remove duplicate commas
         .replace(/"\s*:/g, '":') // Fix spacing in key-value pairs
@@ -305,7 +467,7 @@ export function parseJsonArrayResponse(responseText: string) {
       console.error('Initial parse error for array:', initialParseError);
       
       // Try to recover by doing a more aggressive cleanup
-      let recoverableText = cleanedResponseText
+      const recoverableText = cleanedResponseText
         .replace(/,\s*\}/g, '}') // Remove trailing commas in objects
         .replace(/,\s*\]/g, ']') // Remove trailing commas in arrays
         .replace(/,\s*,/g, ',')  // Remove duplicate commas

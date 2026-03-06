@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import {
-  createGenerativeModel,
+  createGenerativeModelBundle,
   sanitizeInput,
   sanitizeArrayInput,
   validateAIResponse,
-  parseJsonArrayResponse
+  parseJsonArrayResponse,
+  withGenerativeModelFallback
 } from '@/lib/vertex-ai-utils';
 
 // Helper to sanitize subtask data
@@ -49,7 +50,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Use shared generative model with configured token limit
-    const generativeModel = createGenerativeModel(4096);
+    const generativeModelBundle = createGenerativeModelBundle('subtask-refinement', { maxOutputTokens: 4096 });
 
     // Sanitize all input data using shared helpers
     const sanitizedProjectTitle = sanitizeInput(body.projectTitle);
@@ -130,7 +131,11 @@ If refining existing subtasks, improve their clarity, detail, estimated hours, a
 Provide ONLY the JSON array in your response, without any surrounding text, explanations, or markdown. Ensure the JSON is valid and complete.`;
 
     // Generate content using the AI model
-    const result = await generativeModel.generateContent(prompt);
+    const { value: result, usedModel } = await withGenerativeModelFallback(
+      generativeModelBundle,
+      (model) => model.generateContent(prompt),
+    );
+    console.log(`Subtask refinement model used: ${usedModel}`);
     
     // Validate the AI response using shared helper
     const validationResult = validateAIResponse(result.response);

@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import {
-  createGenerativeModel,
+  createGenerativeModelBundle,
   sanitizeInput,
   sanitizeArrayInput,
   validateAIResponse,
-  parseJsonObjectResponse
+  parseJsonObjectResponse,
+  withGenerativeModelFallback
 } from '@/lib/vertex-ai-utils';
 
 interface RefineRequestData {
@@ -43,7 +44,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Use shared generative model with configured token limit
-    const generativeModel = createGenerativeModel(2048);
+    const generativeModelBundle = createGenerativeModelBundle('project-refinement', { maxOutputTokens: 2048 });
 
     // Sanitize all input fields using shared helpers
     const sanitizedTitle = sanitizeInput(body.title);
@@ -142,7 +143,11 @@ Learning Goals: ${JSON.stringify(sanitizedLearningGoals)}
 Please provide only the JSON object in your response, without any surrounding text or explanations. Ensure the JSON is valid and complete. Remember to focus exclusively on digital, technology-based projects that encourage but don't mandate the use of open-source software and resources.`;
 
     // Generate content using the AI model
-    const result = await generativeModel.generateContent(prompt);
+    const { value: result, usedModel } = await withGenerativeModelFallback(
+      generativeModelBundle,
+      (model) => model.generateContent(prompt),
+    );
+    console.log(`Project refinement model used: ${usedModel}`);
     
     // Validate the AI response using shared helper
     const validationResult = validateAIResponse(result.response);

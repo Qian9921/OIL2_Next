@@ -1,9 +1,13 @@
 import { getServerSession } from 'next-auth';
 import { NextRequest, NextResponse } from 'next/server';
-import { VertexAI, HarmCategory, HarmBlockThreshold, Part } from '@google-cloud/vertexai';
+import { Part } from '@google-cloud/vertexai';
 import { authOptions } from '@/lib/auth-options';
 import { getProject, getParticipationByProjectAndStudent, savePromptEvaluation } from '@/lib/firestore'; // Assuming these exist
-import { LOCATION, MODEL_NAME, PROJECT_ID } from '@/lib/vertex-ai-utils';
+import {
+  createGenerativeModelBundle,
+  getTaskModelConfig,
+  withGenerativeModelFallback,
+} from '@/lib/vertex-ai-utils';
 import { Subtask } from '@/lib/types';
 
 interface ChatRequestData {
@@ -18,21 +22,16 @@ interface ChatRequestData {
   requestPersonalizedFeedback?: boolean; // Whether to generate personalized feedback for the prompt
 }
 
-// Initialize Vertex AI and model (consider caching or initializing outside the handler for efficiency)
-const vertex_ai = new VertexAI({ project: PROJECT_ID, location: LOCATION });
-const generativeModel = vertex_ai.getGenerativeModel({
-  model: MODEL_NAME,
-  safetySettings: [
-    { category: HarmCategory.HARM_CATEGORY_HARASSMENT, threshold: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE },
-    { category: HarmCategory.HARM_CATEGORY_HATE_SPEECH, threshold: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE },
-    { category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT, threshold: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE },
-    { category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT, threshold: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE },
-  ],
-  generationConfig: {
-    maxOutputTokens: 65535,
-    temperature: 0.8,
-    topP: 0.95,
-  },
+const chatModelBundle = createGenerativeModelBundle('chat', {
+  maxOutputTokens: 65535,
+  temperature: 0.8,
+  topP: 0.95,
+});
+
+const promptEvaluationModelBundle = createGenerativeModelBundle('prompt-evaluation', {
+  maxOutputTokens: 65535,
+  temperature: 0.2,
+  topP: 0.95,
 });
 
 export async function POST(req: NextRequest) {
@@ -179,7 +178,10 @@ export async function POST(req: NextRequest) {
         }
     };
 
-    const result = await generativeModel.generateContentStream(streamRequest);
+    const { value: result, usedModel } = await withGenerativeModelFallback(
+      chatModelBundle,
+      (model) => model.generateContentStream(streamRequest),
+    );
 
     // Handle prompt evaluation if requested
     let promptQualityScore: number | null = null;
@@ -189,6 +191,7 @@ export async function POST(req: NextRequest) {
     // Initialize headers
     const headers: HeadersInit = { 
       'Content-Type': 'text/plain',
+      'X-LLM-Model': usedModel,
       'Cache-Control': 'no-cache',
       'Connection': 'keep-alive',
       'Access-Control-Allow-Origin': '*',
@@ -340,7 +343,8 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ message: 'Vertex AI Authentication Error for chat. Check credentials and permissions.' }, { status: 500 });
     }
     if (errorMessage.includes('Could not find location')) {
-        return NextResponse.json({ message: `Vertex AI Location Error for chat: The location '${LOCATION}' or model '${MODEL_NAME}' may be invalid.` }, { status: 500 });
+        const chatConfig = getTaskModelConfig('chat');
+        return NextResponse.json({ message: `Vertex AI Location Error for chat: primary model ${chatConfig.primaryModel} expects location ${chatConfig.primaryLocation}.` }, { status: 500 });
     }
     if (errorCode === 7 && errorMessage.includes('Please ensure that project')) { // Quota error example
         return NextResponse.json({ message: 'Vertex AI quota exceeded. Please check your Google Cloud project quotas.'}, { status: 429 });
@@ -394,15 +398,11 @@ async function evaluatePromptWithAI(prompt: string, subtask: Subtask) {
     `;
     
     console.log("evaluatePromptWithAI: Sending combined prompt to Gemini for evaluation and feedback.");
-    const model = vertex_ai.getGenerativeModel({ 
-      model: MODEL_NAME,
-      generationConfig: {
-        temperature: 0.2,
-        maxOutputTokens: 65535,
-      }
-    });
-    
-    const result = await model.generateContent(combinedEvaluationPrompt);
+    const { value: result, usedModel } = await withGenerativeModelFallback(
+      promptEvaluationModelBundle,
+      (model) => model.generateContent(combinedEvaluationPrompt),
+    );
+    console.log(`evaluatePromptWithAI: model used -> ${usedModel}`);
     const textResult = result.response.candidates?.[0]?.content?.parts?.[0]?.text || '';
     console.log("evaluatePromptWithAI: Received raw textResult from Gemini:", textResult);
     
