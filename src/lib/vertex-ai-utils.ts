@@ -385,7 +385,7 @@ export function parseJsonObjectResponse(responseText: string) {
         console.error('Second parse attempt failed:', secondParseError);
         return { 
           success: false, 
-          error: 'Failed to parse response as JSON object', 
+          error: cleanedResponseText.startsWith('<!DOCTYPE') ? 'Model returned HTML instead of JSON object' : 'Failed to parse response as JSON object', 
           cleanedText: cleanedResponseText,
           recoverableText
         };
@@ -505,7 +505,7 @@ export function parseJsonArrayResponse(responseText: string) {
         
         return { 
           success: false, 
-          error: 'Failed to parse response as JSON array', 
+          error: cleanedResponseText.startsWith('<!DOCTYPE') ? 'Model returned HTML instead of JSON array' : 'Failed to parse response as JSON array', 
           cleanedText: cleanedResponseText,
           recoverableText
         };
