@@ -140,6 +140,31 @@ export default function StudentMyProjectsPage() {
     }
   };
 
+  const pollEvaluationUntilComplete = async (evaluationId: string) => {
+    const maxAttempts = 40;
+
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+      const response = await fetch(`/api/evaluate-proxy?evaluationId=${evaluationId}&timeoutMs=15000&pollIntervalMs=3000`, {
+        method: 'GET',
+        cache: 'no-store',
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.error || result.details || 'Failed to fetch evaluation status');
+      }
+
+      if (response.status !== 202 && typeof result.score === 'number') {
+        return result;
+      }
+
+      await new Promise((resolve) => setTimeout(resolve, 3000));
+    }
+
+    throw new Error('Evaluation is still processing. Please try again in a moment.');
+  };
+
   const handleCompleteSubtask = async (participationId: string, subtaskId: string) => {
     setUpdatingSubtask(subtaskId);
     
@@ -187,8 +212,17 @@ export default function StudentMyProjectsPage() {
           throw new Error(`API error: ${response.status}`);
         }
         
-        const result = await response.json();
-        
+        let result = await response.json();
+
+        if (response.status === 202 && result.evaluationId) {
+          toast({
+            title: 'Evaluation in Progress',
+            description: "We're still reviewing your work. Please wait a little longer…",
+            variant: 'default'
+          });
+          result = await pollEvaluationUntilComplete(result.evaluationId);
+        }
+
         // Convert score from 0-1 range to 0-100% range if needed
         let finalScore = result.score;
         if (typeof result.score === 'number' && result.score <= 1) {
