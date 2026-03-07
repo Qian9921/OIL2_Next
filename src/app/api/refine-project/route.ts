@@ -156,6 +156,7 @@ Please provide only the JSON object in your response, without any surrounding te
       return NextResponse.json({ message: validationResult.error }, { status: 500 });
     }
     
+    console.log('AI raw response preview:', validationResult.responseText.slice(0, 1200));
     // Parse the JSON response using shared helper
     const parseResult = parseJsonObjectResponse(validationResult.responseText);
     
