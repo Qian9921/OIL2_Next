@@ -1,11 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import {
-  createGenerativeModelBundle,
+  generateJsonContentForTask,
   sanitizeInput,
   sanitizeArrayInput,
   validateAIResponse,
   parseJsonObjectResponse,
-  withGenerativeModelFallback
 } from '@/lib/vertex-ai-utils';
 
 interface RefineRequestData {
@@ -44,7 +43,6 @@ export async function POST(req: NextRequest) {
     }
 
     // Use shared generative model with configured token limit
-    const generativeModelBundle = createGenerativeModelBundle('project-refinement', { maxOutputTokens: 2048, responseMimeType: 'application/json' });
 
     // Sanitize all input fields using shared helpers
     const sanitizedTitle = sanitizeInput(body.title);
@@ -142,23 +140,14 @@ Learning Goals: ${JSON.stringify(sanitizedLearningGoals)}
 
 Please provide only the JSON object in your response, without any surrounding text or explanations. Ensure the JSON is valid and complete. Remember to focus exclusively on digital, technology-based projects that encourage but don't mandate the use of open-source software and resources.`;
 
-    // Generate content using the AI model
-    const { value: result, usedModel } = await withGenerativeModelFallback(
-      generativeModelBundle,
-      (model) => model.generateContent(prompt),
+    const { text: responseText, usedModel } = await generateJsonContentForTask(
+      'project-refinement',
+      prompt,
+      { maxOutputTokens: 2048, temperature: 0.4, topP: 0.95 },
     );
     console.log(`Project refinement model used: ${usedModel}`);
-    
-    // Validate the AI response using shared helper
-    const validationResult = validateAIResponse(result.response);
-    
-    if (!validationResult.isValid) {
-      return NextResponse.json({ message: validationResult.error }, { status: 500 });
-    }
-    
-    console.log('AI raw response preview:', validationResult.responseText.slice(0, 1200));
-    // Parse the JSON response using shared helper
-    const parseResult = parseJsonObjectResponse(validationResult.responseText);
+    console.log('AI raw response preview:', responseText.slice(0, 1200));
+    const parseResult = parseJsonObjectResponse(responseText);
     
     if (!parseResult.success) {
       console.error("Failed to parse project AI response:", parseResult.error);
