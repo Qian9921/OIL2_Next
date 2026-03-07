@@ -32,6 +32,7 @@ const promptEvaluationModelBundle = createGenerativeModelBundle('prompt-evaluati
   maxOutputTokens: 65535,
   temperature: 0.2,
   topP: 0.95,
+  responseMimeType: 'application/json',
 });
 
 export async function POST(req: NextRequest) {
