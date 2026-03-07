@@ -44,7 +44,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Use shared generative model with configured token limit
-    const generativeModelBundle = createGenerativeModelBundle('project-refinement', { maxOutputTokens: 2048 });
+    const generativeModelBundle = createGenerativeModelBundle('project-refinement', { maxOutputTokens: 2048, responseMimeType: 'application/json' });
 
     // Sanitize all input fields using shared helpers
     const sanitizedTitle = sanitizeInput(body.title);
