@@ -948,6 +948,31 @@ export default function ProjectTaskPage() {
     return project.subtasks.every(task => completedSubtasks.includes(task.id));
   };
 
+  const pollEvaluationUntilComplete = async (evaluationId: string) => {
+    const maxAttempts = 40;
+
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+      const response = await fetch(`/api/evaluate-proxy?evaluationId=${evaluationId}&timeoutMs=15000&pollIntervalMs=3000`, {
+        method: 'GET',
+        cache: 'no-store',
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.error || result.details || 'Failed to fetch evaluation status');
+      }
+
+      if (response.status !== 202 && typeof result.score === 'number') {
+        return result;
+      }
+
+      await new Promise((resolve) => setTimeout(resolve, 3000));
+    }
+
+    throw new Error('Evaluation is still processing. Please try again in a moment.');
+  };
+
   const handleCompleteTask = async () => {
     if (!participation || !project || !subtask) return;
     
@@ -1000,14 +1025,21 @@ export default function ProjectTaskPage() {
             throw new Error(`API error: ${response.status} - ${errorText}`);
           }
             
-          const result = await response.json();
+          let result = await response.json();
           console.log("Evaluation result (full response):", JSON.stringify(result, null, 2));
+
+          if (response.status === 202 && result.evaluationId) {
+            showFeedbackToast(toast, 'info', 'Evaluation in Progress', "We're still reviewing your work. Please wait a few more seconds…", 3000);
+            result = await pollEvaluationUntilComplete(result.evaluationId);
+            console.log("Evaluation result after polling:", JSON.stringify(result, null, 2));
+          }
+
           setEvaluationFeedback(result);
-          
+
           // Ensure the score is a valid number
           const score = typeof result.score === 'number' ? result.score : 0;
-          
-          // Save evaluation history
+
+          // Save evaluation history only after we have a completed result
           const historyUpdate = await updateEvaluationHistory(
             participation.id, 
             subtask.id, 
