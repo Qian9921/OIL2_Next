@@ -65,7 +65,13 @@ export const EvaluationHistoryItem = ({
             <span className="text-sm text-gray-500">{formattedDate}</span>
           </div>
           <div className="flex items-center">
-            <ScoreBadge score={evaluation.score} />
+            {typeof evaluation.score === 'number' && Number.isFinite(evaluation.score) ? (
+              <ScoreBadge score={evaluation.score} />
+            ) : evaluation.status && evaluation.status !== 'completed' ? (
+              <span className="px-2 py-1 text-xs font-medium rounded-full bg-yellow-100 text-yellow-800">Processing</span>
+            ) : (
+              <span className="px-2 py-1 text-xs font-medium rounded-full bg-gray-100 text-gray-700">No Score</span>
+            )}
             <ChevronDown className="h-5 w-5 text-gray-400 ml-2 transform transition-transform duration-200 group-data-[state=open]:rotate-180" />
           </div>
         </div>
