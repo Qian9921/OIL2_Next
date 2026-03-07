@@ -76,24 +76,15 @@ function buildPublisherModelEndpoint(modelName: string, location: string) {
   return `https://aiplatform.googleapis.com/v1/projects/${PROJECT_ID}/locations/${location}/publishers/google/models/${modelName}:generateContent`;
 }
 
-export async function generateJsonContentForTask(
+export async function generateTextContentForTask(
   taskType: LLMTaskType,
-  prompt: string,
+  requestBody: {
+    contents: Array<{ role: string; parts: Array<Record<string, unknown>> }>;
+    systemInstruction?: { role: string; parts: Array<Record<string, unknown>> };
+  },
   overrides: GenerationOverrides = {},
 ) {
   const config = getTaskModelConfig(taskType);
-  const requestBody = {
-    contents: [{ role: 'user', parts: [{ text: prompt }] }],
-    generationConfig: {
-      maxOutputTokens: overrides.maxOutputTokens ?? 2048,
-      temperature: overrides.temperature ?? 0.4,
-      topP: overrides.topP ?? 0.95,
-      topK: overrides.topK ?? 40,
-      stopSequences: overrides.stopSequences ?? [],
-      responseMimeType: 'application/json',
-    },
-  };
-
   const token = await getVertexAccessToken();
 
   const attempt = async (modelName: string, location: string) => {
@@ -103,7 +94,17 @@ export async function generateJsonContentForTask(
         Authorization: `Bearer ${token}`,
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify(requestBody),
+      body: JSON.stringify({
+        ...requestBody,
+        generationConfig: {
+          maxOutputTokens: overrides.maxOutputTokens ?? 2048,
+          temperature: overrides.temperature ?? 0.4,
+          topP: overrides.topP ?? 0.95,
+          topK: overrides.topK ?? 40,
+          stopSequences: overrides.stopSequences ?? [],
+          responseMimeType: overrides.responseMimeType ?? 'text/plain',
+        },
+      }),
       cache: 'no-store',
     });
 
@@ -113,12 +114,12 @@ export async function generateJsonContentForTask(
       throw new Error(JSON.stringify(payload));
     }
 
-    const text = payload?.candidates?.[0]?.content?.parts?.[0]?.text;
-    if (!text || typeof text !== 'string') {
-      throw new Error('Vertex AI returned an empty JSON response body.');
+    const resultText = payload?.candidates?.[0]?.content?.parts?.[0]?.text;
+    if (!resultText || typeof resultText !== 'string') {
+      throw new Error('Vertex AI returned an empty response body.');
     }
 
-    return text;
+    return resultText;
   };
 
   try {
@@ -137,6 +138,18 @@ export async function generateJsonContentForTask(
     const text = await attempt(config.fallbackModel, config.fallbackLocation || DEFAULT_REGIONAL_LOCATION);
     return { text, usedModel: config.fallbackModel, usedFallback: true };
   }
+}
+
+export async function generateJsonContentForTask(
+  taskType: LLMTaskType,
+  prompt: string,
+  overrides: GenerationOverrides = {},
+) {
+  return generateTextContentForTask(
+    taskType,
+    { contents: [{ role: 'user', parts: [{ text: prompt }] }] },
+    { ...overrides, responseMimeType: 'application/json' },
+  );
 }
 
 function normalizeModelName(modelName: string | undefined | null, fallback: string) {
