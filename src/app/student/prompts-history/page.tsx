@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useSession } from 'next-auth/react';
 import { MainLayout } from '@/components/layout/main-layout';
+import { PageHero } from '@/components/layout/page-hero';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { getStudentDashboard } from '@/lib/firestore';
 import { StudentDashboard } from '@/lib/types';
@@ -11,6 +12,7 @@ import { Brain, ArrowLeft, Filter, Search, BookOpen } from 'lucide-react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { StatTile } from '@/components/ui/stat-tile';
 import { ScoreBadge, ScoreProgressBar, MetricScoreCard } from '@/components/task/score-components';
 import { PromptTipsCard } from '@/components/task/dashboard-components';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -136,11 +138,18 @@ export default function PromptHistoryPage() {
           </Link>
         </div>
 
-        <div className="bg-gradient-to-r from-purple-500 to-indigo-600 rounded-2xl p-6 text-white">
-          <h1 className="text-2xl font-bold mb-2">Your Prompt History</h1>
-          <p className="text-purple-100">
-            Review your AI interactions and improve your prompting skills
-          </p>
+        <PageHero
+          eyebrow="Prompt coaching"
+          icon={Brain}
+          title="Your Prompt History"
+          description="Review how you’ve prompted the system, spot patterns in your feedback, and improve the quality of your next Tutor conversation."
+        />
+
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
+          <StatTile label="Average Score" value={`${metrics.averageScore.toFixed(0)}%`} icon={Brain} tone="purple" hint="Your overall prompt quality trend." />
+          <StatTile label="Best Streak" value={metrics.bestStreak} icon={BookOpen} tone="green" hint="How many strong prompts you chained together." />
+          <StatTile label="Total Prompts" value={metrics.totalPrompts} icon={Search} tone="blue" hint="All saved prompt attempts across your work." />
+          <StatTile label="Current View" value={filteredPrompts.length} icon={Filter} tone="amber" hint="Prompts visible after search and sorting." />
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
@@ -243,7 +252,7 @@ export default function PromptHistoryPage() {
                       />
                     </div>
                   </CardHeader>
-                  <CardContent className="max-h-[600px] overflow-y-auto">
+                  <CardContent>
                     <div className="space-y-4">
                       {filteredPrompts.length > 0 ? (
                         filteredPrompts.map(prompt => (

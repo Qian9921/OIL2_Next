@@ -3,7 +3,9 @@
 import { useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
 import { MainLayout } from "@/components/layout/main-layout";
+import { PageHero } from "@/components/layout/page-hero";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { StatTile } from "@/components/ui/stat-tile";
 import { Button } from "@/components/ui/button";
 import { 
   Dialog, 
@@ -212,40 +214,29 @@ export default function StudentCertificatesPage() {
           </DialogContent>
         </Dialog>
 
-        {/* Header */}
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-3xl font-bold text-gray-900">My Certificates</h1>
-            <p className="text-gray-600 mt-2">
-              View and download your earned certificates 🏆
-            </p>
-          </div>
-        </div>
+        <PageHero
+          eyebrow="Achievements"
+          icon={Award}
+          title="My Certificates"
+          description="Review the certificates you've earned and download polished proof of the projects you’ve completed."
+        />
 
         {/* Stats Card */}
-        <Card>
-          <CardContent className="p-6">
-            <div className="flex items-center space-x-4">
-              <div className="p-3 bg-yellow-100 rounded-full">
-                <Award className="w-6 h-6 text-yellow-600" />
-              </div>
-              <div>
-                <p className="text-2xl font-bold text-gray-900">{certificates.length}</p>
-                <p className="text-sm text-gray-600">Total Certificates Earned</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+          <StatTile label="Certificates Earned" value={certificates.length} icon={Award} tone="amber" hint="Verified achievements from completed projects." />
+          <StatTile label="Available to Preview" value={certificates.length} icon={Eye} tone="blue" hint="Every certificate can be previewed before download." />
+          <StatTile label="PDF Ready" value={certificates.length} icon={Download} tone="green" hint="Instantly downloadable as polished PDF files." />
+        </div>
 
         {/* Certificates List */}
         {certificates.length > 0 ? (
           <div className="space-y-4">
             {certificates.map((certificate) => (
-              <Card key={certificate.id} className="overflow-hidden">
+              <Card key={certificate.id} className="overflow-hidden border-white/80 bg-white/90 backdrop-blur-xl">
                 <CardHeader>
                   <div className="flex items-start justify-between">
                     <div className="flex items-center space-x-4">
-                      <div className="p-3 bg-yellow-100 rounded-full">
+                      <div className="p-3 bg-amber-100 rounded-full">
                         <GraduationCap className="w-6 h-6 text-yellow-600" />
                       </div>
                       <div>
@@ -322,7 +313,7 @@ export default function StudentCertificatesPage() {
                     <Button
                       onClick={() => handleDownloadCertificate(certificate)}
                       disabled={downloadingCertId === certificate.id}
-                      className="flex-1 bg-blue-600 hover:bg-blue-700"
+                      className="flex-1"
                     >
                       {downloadingCertId === certificate.id ? (
                         <>
@@ -342,7 +333,7 @@ export default function StudentCertificatesPage() {
             ))}
           </div>
         ) : (
-          <Card>
+          <Card className="border-white/80 bg-white/90 backdrop-blur-xl">
             <CardContent className="p-12 text-center">
               <Award className="w-16 h-16 mx-auto mb-4 text-gray-300" />
               <h3 className="text-xl font-semibold text-gray-900 mb-2">

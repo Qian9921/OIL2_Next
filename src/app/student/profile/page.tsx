@@ -3,7 +3,9 @@
 import { useEffect, useState, useRef } from "react";
 import { useSession, signOut } from "next-auth/react";
 import { MainLayout } from "@/components/layout/main-layout";
+import { PageHero } from "@/components/layout/page-hero";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { StatTile } from "@/components/ui/stat-tile";
 import { Button } from "@/components/ui/button";
 import { Avatar } from "@/components/ui/avatar";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
@@ -288,30 +290,36 @@ export default function StudentProfilePage() {
           </AlertDialogContent>
         </AlertDialog>
         
-        {/* Header */}
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-3xl font-bold text-gray-900">Personal Profile</h1>
-            <p className="text-gray-600 mt-2">
-              Manage your personal information and learning preferences 👤
-            </p>
-          </div>
-          {!isEditing ? (
-            <Button onClick={() => setIsEditing(true)}>
-              <Edit className="w-4 h-4 mr-2" />
-              Edit Profile
-            </Button>
-          ) : (
-            <div className="flex space-x-3">
-              <Button onClick={handleSave}>
-                <Save className="w-4 h-4 mr-2" />
-                Save Changes
+        <PageHero
+          eyebrow="Student profile"
+          icon={UserIcon}
+          title="Personal Profile"
+          description="Manage your personal details, learning identity, and preferences in one calm, friendly place."
+          actions={
+            !isEditing ? (
+              <Button onClick={() => setIsEditing(true)}>
+                <Edit className="w-4 h-4 mr-2" />
+                Edit Profile
               </Button>
-              <Button variant="outline" onClick={() => setIsEditing(false)}>
-                Cancel
-              </Button>
-            </div>
-          )}
+            ) : (
+              <>
+                <Button onClick={handleSave}>
+                  <Save className="w-4 h-4 mr-2" />
+                  Save Changes
+                </Button>
+                <Button variant="outline" onClick={() => setIsEditing(false)}>
+                  Cancel
+                </Button>
+              </>
+            )
+          }
+        />
+
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
+          <StatTile label="Active Projects" value={dashboard?.activeProjects || 0} icon={BookOpen} tone="blue" hint="Projects you're currently exploring or completing." />
+          <StatTile label="Completed Projects" value={dashboard?.completedProjects || 0} icon={Trophy} tone="green" hint="Finished work that already moved you forward." />
+          <StatTile label="Learning Hours" value={dashboard?.totalHours || 0} icon={Clock} tone="purple" hint="Time invested in real-world learning." />
+          <StatTile label="Certificates" value={dashboard?.certificates || 0} icon={Award} tone="amber" hint="Verified achievements you can share." />
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -445,13 +453,13 @@ export default function StudentProfilePage() {
                   </label>
                   <div className="flex flex-wrap gap-2 mb-3">
                     {editForm.interests.map((interest, index) => (
-                      <span key={index} className="inline-flex items-center px-3 py-1 rounded-full text-sm bg-purple-100 text-purple-800">
+                      <span key={index} className="inline-flex items-center px-3 py-1 rounded-full text-sm bg-rose-50 text-rose-700 border border-rose-100">
                         <Heart className="w-3 h-3 mr-1" />
                         {interest}
                         {isEditing && (
                           <button
                             onClick={() => handleRemoveInterest(interest)}
-                            className="ml-2 text-purple-600 hover:text-purple-800"
+                            className="ml-2 text-rose-500 hover:text-rose-700"
                           >
                             <X className="w-3 h-3" />
                           </button>
@@ -498,7 +506,7 @@ export default function StudentProfilePage() {
 
           {/* Stats Card */}
           <div>
-            <Card>
+            <Card className="border-white/80 bg-white/88 backdrop-blur-xl">
               <CardHeader>
                 <CardTitle className="flex items-center space-x-2">
                   <Trophy className="w-5 h-5 text-yellow-600" />
@@ -522,9 +530,9 @@ export default function StudentProfilePage() {
                   <div className="text-sm text-gray-600">Completed Projects</div>
                 </div>
 
-                <div className="text-center p-4 bg-purple-50 rounded-lg">
-                  <Clock className="w-8 h-8 text-purple-600 mx-auto mb-2" />
-                  <div className="text-2xl font-bold text-purple-600">
+                <div className="text-center p-4 bg-indigo-50 rounded-lg">
+                  <Clock className="w-8 h-8 text-indigo-500 mx-auto mb-2" />
+                  <div className="text-2xl font-bold text-indigo-500">
                     {dashboard?.totalHours || 0}
                   </div>
                   <div className="text-sm text-gray-600">Learning Hours</div>
