@@ -11,9 +11,9 @@ interface AnimatedGradientTextProps extends React.HTMLAttributes<HTMLSpanElement
 export function AnimatedGradientText({
   children,
   className,
-  colorFrom = "#a855f7",
-  colorVia = "#ec4899",
-  colorTo = "#06b6d4",
+  colorFrom = "#7c8df8",
+  colorVia = "#f3b8b6",
+  colorTo = "#89c7f8",
   style,
   ...props
 }: AnimatedGradientTextProps) {

@@ -3,7 +3,9 @@
 import { useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
 import { MainLayout } from "@/components/layout/main-layout";
+import { PageHero } from "@/components/layout/page-hero";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { StatTile } from "@/components/ui/stat-tile";
 import { Button } from "@/components/ui/button";
 import { getStudentDashboard } from "@/lib/firestore";
 import { StudentDashboard } from "@/lib/types";
@@ -14,7 +16,6 @@ import {
   Clock, 
   Award,
   Calendar,
-  ArrowRight,
   TrendingUp
 } from "lucide-react";
 import Link from "next/link";
@@ -26,7 +27,6 @@ export default function StudentDashboardPage() {
   const { data: session } = useSession();
   const [dashboard, setDashboard] = useState<StudentDashboard | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [showAllPrompts, setShowAllPrompts] = useState(false);
   const router = useRouter();
 
   useEffect(() => {
@@ -61,51 +61,32 @@ export default function StudentDashboardPage() {
   return (
     <MainLayout>
       <div className="space-y-6">
-        {/* Welcome Section */}
-        <div className="bg-gradient-to-r from-pink-500 to-purple-600 rounded-2xl p-8 text-white">
-          <h1 className="text-3xl font-bold mb-2">
-            Welcome back, {session?.user?.name}! 🌟
-          </h1>
-          <p className="text-pink-100">
-            Ready to make a positive impact today? Let's continue your learning journey!
-          </p>
-        </div>
+        <PageHero
+          eyebrow="Student workspace"
+          icon={BookOpen}
+          title={`Welcome back, ${session?.user?.name || "learner"}`}
+          description="This is your calm learning home: track live projects, keep momentum with Tutor, and pick the clearest next step without getting overwhelmed."
+          actions={
+            <>
+              <Link href="/student/my-projects">
+                <Button variant="outline">
+                  <BookOpen className="mr-2 h-4 w-4" />
+                  My Projects
+                </Button>
+              </Link>
+              <Link href="/student/projects">
+                <Button>
+                  Browse Projects
+                </Button>
+              </Link>
+            </>
+          }
+        />
 
         {/* Stats Cards */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-          <Card className="card-hover">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium text-gray-600">
-                Active Projects
-              </CardTitle>
-              <BookOpen className="h-4 w-4 text-blue-600" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-blue-600">
-                {dashboard?.activeProjects || 0}
-              </div>
-              <p className="text-xs text-gray-500">
-                Projects in progress
-              </p>
-            </CardContent>
-          </Card>
-
-          <Card className="card-hover">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium text-gray-600">
-                Learning Hours
-              </CardTitle>
-              <Clock className="h-4 w-4 text-purple-600" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-purple-600">
-                {dashboard?.totalHours || 0}
-              </div>
-              <p className="text-xs text-gray-500">
-                Hours invested
-              </p>
-            </CardContent>
-          </Card>
+          <StatTile label="Active Projects" value={dashboard?.activeProjects || 0} icon={BookOpen} tone="blue" hint="Continue the work you already started." />
+          <StatTile label="Learning Hours" value={dashboard?.totalHours || 0} icon={Clock} tone="purple" hint="Time you've invested in real projects." />
 
           {hasPromptMetrics ? (
             <PromptQualitySummary
@@ -115,41 +96,13 @@ export default function StudentDashboardPage() {
               goodPromptsPercentage={dashboard!.promptQualityMetrics!.goodPromptsPercentage}
             />
           ) : (
-            <Card className="card-hover">
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium text-gray-600">
-                  Completed Projects
-                </CardTitle>
-                <Trophy className="h-4 w-4 text-green-600" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold text-green-600">
-                  {dashboard?.completedProjects || 0}
-                </div>
-                <p className="text-xs text-gray-500">
-                  Successfully finished
-                </p>
-              </CardContent>
-            </Card>
+            <StatTile label="Completed Projects" value={dashboard?.completedProjects || 0} icon={Trophy} tone="green" hint="Finished projects that built real skills." />
           )}
 
           <Link href="/student/certificates">
-            <Card className="card-hover cursor-pointer transition-all hover:shadow-lg hover:shadow-yellow-200 border-yellow-200">
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium text-yellow-700">
-                  My Certificates 🏆
-                </CardTitle>
-                <Award className="h-4 w-4 text-yellow-600" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold text-yellow-600">
-                  {dashboard?.certificates || 0}
-                </div>
-                <p className="text-xs text-yellow-600">
-                  {dashboard?.certificates ? 'View & Download →' : 'None earned yet'}
-                </p>
-              </CardContent>
-            </Card>
+            <div className="h-full">
+              <StatTile label="Certificates" value={dashboard?.certificates || 0} icon={Award} tone="amber" hint={dashboard?.certificates ? "Your achievements are ready to open." : "Finish projects to unlock certificates."} />
+            </div>
           </Link>
         </div>
 

@@ -32,7 +32,7 @@ const MonitorHomeContent: React.FC = () => {
   }, [router]);
 
   return (
-    <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+    <div className="flex min-h-screen items-center justify-center bg-[radial-gradient(circle_at_top_left,rgba(255,248,246,0.98),rgba(255,255,255,0.95)_38%,rgba(244,248,255,0.97)_100%)]">
       <LoadingState text={t('common.loading')} />
     </div>
   );

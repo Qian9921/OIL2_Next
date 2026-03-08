@@ -9,11 +9,9 @@ import { Timestamp } from 'firebase/firestore';
 
 // UI Components
 import { MainLayout } from '@/components/layout/main-layout';
-import { PageHero } from '@/components/layout/page-hero';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { StatTile } from '@/components/ui/stat-tile';
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
@@ -1589,139 +1587,97 @@ ${draft}` : draft);
         </div>
       )}
       
-      <div className="mx-auto flex w-full max-w-7xl flex-col space-y-6 px-4 pb-6 md:px-6">
-        <PageHero
-          eyebrow="Task workspace"
-          icon={subtask.id === GITHUB_SUBMISSION_SUBTASK_ID ? Github : Bot}
-          title={subtask.title}
-          description={`${project.title} · ${taskStateSummary}. Keep everything in one continuous workspace: understand the task, work with Tutor, review feedback, and move forward without context switching.`}
-          actions={
-            <>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => router.push('/student/my-projects')}
-              >
-                <ChevronLeft className="mr-2 h-4 w-4" />
-                Back to My Projects
-              </Button>
-              <GitHubInfoButton />
-              <Link href={`/projects/${currentProjectId}`} passHref>
-                <Button variant="outline" size="sm">
-                  <BookOpen className="mr-2 h-4 w-4" />
-                  Project Details
+      <div className="mx-auto flex w-full max-w-7xl flex-col space-y-5 px-4 pb-6 md:px-6 xl:h-[calc(100vh-6.5rem)] xl:overflow-hidden">
+        <Card className="overflow-hidden border-white/80 bg-white/88 shadow-[0_18px_40px_-30px_rgba(15,23,42,0.18)]">
+          <CardContent className="space-y-4 p-5">
+            <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+              <div className="min-w-0 space-y-3">
+                <div className="flex flex-wrap items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
+                  <span className="rounded-full border border-slate-200 bg-white px-3 py-1 shadow-sm">
+                    {subtask.id === GITHUB_SUBMISSION_SUBTASK_ID ? 'Repository onboarding' : `Task ${currentTaskNumber}`}
+                  </span>
+                  <span className="rounded-full border border-slate-200 bg-white px-3 py-1 shadow-sm">
+                    {taskStateSummary}
+                  </span>
+                  {project && isProjectExpired(project.deadline) && (
+                    <span className="rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-amber-700 shadow-sm">
+                      Project expired
+                    </span>
+                  )}
+                </div>
+
+                <div className="space-y-1">
+                  <h1 className="text-2xl font-semibold tracking-tight text-slate-900 sm:text-3xl">
+                    {subtask.title}
+                  </h1>
+                  <p className="max-w-3xl text-sm leading-6 text-slate-600">
+                    {project.title} · A stable split workspace for task detail on the left and Tutor guidance on the right.
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2 xl:justify-end">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => router.push('/student/my-projects')}
+                >
+                  <ChevronLeft className="mr-2 h-4 w-4" />
+                  Back
                 </Button>
-              </Link>
-              {participation?.studentGitHubRepo && subtask?.id !== GITHUB_SUBMISSION_SUBTASK_ID && (
-                <Link href={participation.studentGitHubRepo} target="_blank" rel="noopener noreferrer">
+                <GitHubInfoButton />
+                <Link href={`/projects/${currentProjectId}`} passHref>
                   <Button variant="outline" size="sm">
-                    <Github className="mr-2 h-4 w-4" />
-                    View Repository
+                    <BookOpen className="mr-2 h-4 w-4" />
+                    Project Details
                   </Button>
                 </Link>
-              )}
-            </>
-          }
-        />
-
-        <Card className="overflow-hidden border-white/70 bg-white/82 backdrop-blur-xl">
-          <CardContent className="flex flex-col gap-5 p-5 lg:flex-row lg:items-center lg:justify-between">
-            <div className="space-y-3">
-              <div className="flex flex-wrap items-center gap-2 text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
-                <span className="rounded-full border border-white/70 bg-white/80 px-3 py-1 shadow-sm">
-                  {subtask.id === GITHUB_SUBMISSION_SUBTASK_ID ? 'Repository onboarding' : `Task ${currentTaskNumber}`}
-                </span>
-                <span className="rounded-full border border-white/70 bg-white/80 px-3 py-1 shadow-sm">
-                  {taskStateSummary}
-                </span>
-              </div>
-              <div className="space-y-1">
-                <h2 className="text-lg font-semibold text-slate-900">Stay in one continuous flow</h2>
-                <p className="max-w-3xl text-sm leading-6 text-slate-600">
-                  Everything on this page now follows the main browser scroll, so the task brief, Tutor guidance, and completion actions feel like one complete workspace.
-                </p>
+                {participation?.studentGitHubRepo && subtask?.id !== GITHUB_SUBMISSION_SUBTASK_ID && (
+                  <Link href={participation.studentGitHubRepo} target="_blank" rel="noopener noreferrer">
+                    <Button variant="outline" size="sm">
+                      <Github className="mr-2 h-4 w-4" />
+                      Repository
+                    </Button>
+                  </Link>
+                )}
               </div>
             </div>
 
-            <div className="w-full max-w-xl rounded-[1.4rem] border border-white/70 bg-white/82 p-4 shadow-sm">
-              <div className="mb-3 flex items-center justify-between gap-3">
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">Project progress</p>
-                  <p className="mt-1 text-sm font-medium text-slate-700">
-                    {completedRealSubtasks} of {Math.max(totalRealSubtasks, 1)} core tasks complete
-                  </p>
+            <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_auto] xl:items-center">
+              <div className="rounded-[1.2rem] border border-slate-200 bg-slate-50/90 p-4 shadow-sm">
+                <div className="mb-3 flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">Project progress</p>
+                    <p className="mt-1 text-sm font-medium text-slate-700">
+                      {completedRealSubtasks} of {Math.max(totalRealSubtasks, 1)} core tasks complete · Latest evaluation {latestEvaluationScore !== null ? `${latestEvaluationScore}%` : 'pending'}
+                    </p>
+                  </div>
+                  <div className="rounded-full bg-white px-3 py-1 text-sm font-semibold text-slate-700 shadow-sm">
+                    {taskProgress}%
+                  </div>
                 </div>
-                <div className="rounded-full bg-slate-100 px-3 py-1 text-sm font-semibold text-slate-700">
-                  {taskProgress}%
-                </div>
+                <ProgressBar
+                  progress={taskProgress}
+                  completedTasks={completedRealSubtasks}
+                  totalTasks={Math.max(totalRealSubtasks, 1)}
+                  className="mb-0"
+                />
               </div>
-              <ProgressBar
-                progress={taskProgress}
-                completedTasks={completedRealSubtasks}
-                totalTasks={Math.max(totalRealSubtasks, 1)}
-                className="mb-0"
-              />
+
+              <div className="rounded-[1.2rem] border border-slate-200 bg-white/90 p-2 shadow-sm">
+                <TaskNavigation 
+                  project={project}
+                  participation={participation}
+                  currentSubtaskId={subtaskId}
+                />
+              </div>
             </div>
           </CardContent>
         </Card>
 
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
-          <StatTile
-            label="Task Position"
-            value={currentTaskNumber}
-            icon={BookOpen}
-            tone="blue"
-            hint="Where this task sits in the full learner workflow."
-          />
-          <StatTile
-            label="Workflow Progress"
-            value={`${taskProgress}%`}
-            icon={CheckCircle}
-            tone="green"
-            hint="Overall completion across your real project tasks."
-          />
-          <StatTile
-            label="Latest Evaluation"
-            value={latestEvaluationScore !== null ? `${latestEvaluationScore}%` : 'Pending'}
-            icon={MessageCircleQuestion}
-            tone="purple"
-            hint="The freshest score visible in this workspace."
-          />
-          <StatTile
-            label="Prompt Momentum"
-            value={promptStreak?.currentStreak ?? 0}
-            icon={MessageSquare}
-            tone="amber"
-            hint="Your live streak of strong prompts in this task."
-          />
-        </div>
-
-        <div className="rounded-[1.6rem] border border-white/70 bg-white/80 p-3 shadow-sm backdrop-blur-xl">
-          <TaskNavigation 
-            project={project}
-            participation={participation}
-            currentSubtaskId={subtaskId}
-          />
-        </div>
-
-        {/* Expired Project Warning */}
-        {project && isProjectExpired(project.deadline) && (
-          <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-4">
-            <div className="flex items-center">
-              <AlertTriangle className="w-5 h-5 text-yellow-600 mr-3" />
-              <div>
-                <h3 className="text-sm font-medium text-yellow-800">Project Expired</h3>
-                <p className="text-sm text-yellow-700 mt-1">
-                  This project has passed its deadline. You can view the content but cannot complete tasks or submit work.
-                </p>
-              </div>
-            </div>
-          </div>
-        )}
-
-        <div className="grid grid-cols-1 items-start gap-6 xl:grid-cols-[minmax(340px,0.82fr)_minmax(620px,1.18fr)] 2xl:grid-cols-[minmax(360px,0.78fr)_minmax(720px,1.22fr)]">
-          <div className="flex flex-col self-start xl:sticky xl:top-24">
-            <Card className="overflow-hidden">
+        <div className="grid grid-cols-1 items-start gap-5 xl:min-h-0 xl:flex-1 xl:grid-cols-[minmax(340px,0.82fr)_minmax(620px,1.18fr)] 2xl:grid-cols-[minmax(360px,0.78fr)_minmax(720px,1.22fr)]">
+          <div className="flex flex-col self-start xl:h-full xl:min-h-0">
+            <Card className="overflow-hidden xl:flex xl:h-full xl:min-h-0 xl:flex-col">
               <CardHeader className="flex-shrink-0 pb-2">
                 <div className="flex items-center justify-between">
                   <CardTitle className="flex items-center text-xl">
@@ -1744,7 +1700,7 @@ ${draft}` : draft);
                   isLocked={!isCurrentSequentially && !isSubtaskCompletedByStudent} 
                 />
               </CardHeader>
-              <CardContent className="py-4">
+              <CardContent className="py-4 xl:min-h-0 xl:flex-1 xl:overflow-y-auto">
                 <div className="space-y-4">
                   {subtask?.id === GITHUB_SUBMISSION_SUBTASK_ID ? (
                   <div className="space-y-4 py-4">
@@ -1837,7 +1793,7 @@ ${draft}` : draft);
                 </div>
               </CardContent>
               {subtask?.id !== GITHUB_SUBMISSION_SUBTASK_ID && (
-                <div className="border-t p-4 pt-3">
+                <div className="border-t p-4 pt-3 xl:flex-shrink-0">
                   <div className="flex flex-col space-y-2">
                     <Button
                       onClick={handleCompleteSubtaskIntent}
@@ -1891,8 +1847,8 @@ ${draft}` : draft);
             </Card>
           </div>
 
-          <div className={`flex flex-col ${subtask?.id === GITHUB_SUBMISSION_SUBTASK_ID ? 'hidden' : ''}`}>
-            <Card className="overflow-hidden">
+          <div className={`flex flex-col ${subtask?.id === GITHUB_SUBMISSION_SUBTASK_ID ? 'hidden xl:hidden' : ''} xl:h-full xl:min-h-0`}>
+            <Card className="overflow-hidden xl:flex xl:h-full xl:min-h-0 xl:flex-col">
               <CardHeader className="space-y-4 border-b border-slate-100 pb-4">
                 <div className="flex items-start justify-between gap-4">
                   <div className="space-y-2">
@@ -1953,7 +1909,7 @@ ${draft}` : draft);
               
               <CardContent 
                 ref={chatContainerRef} 
-                className="rounded-b-none bg-slate-50/85 px-4 py-4 pb-4"
+                className="rounded-b-none bg-slate-50/85 px-4 py-4 pb-4 xl:min-h-0 xl:flex-1 xl:overflow-y-auto"
               >
                 <div className="space-y-4">
                   {chatMessages.map((msg, index) => (
@@ -1990,7 +1946,7 @@ ${draft}` : draft);
                 </div>
               </CardContent>
               
-              <div className="space-y-3 rounded-b-lg border-t bg-white p-3">
+              <div className="space-y-3 rounded-b-lg border-t bg-white p-3 xl:flex-shrink-0">
                 {selectedFilePreview && (
                   <div className="mb-2 flex items-center justify-between rounded-md border border-slate-300 bg-slate-50 p-2">
                     <div className="flex items-center space-x-2">

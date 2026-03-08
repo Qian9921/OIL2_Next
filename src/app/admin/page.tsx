@@ -111,13 +111,13 @@ export default function AdminPage() {
   ];
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-[radial-gradient(circle_at_top_left,rgba(255,248,246,0.98),rgba(255,255,255,0.95)_38%,rgba(244,248,255,0.97)_100%)]">
       {/* 页面头部 */}
-      <div className="bg-white shadow-sm border-b">
+      <div className="border-b border-white/70 bg-white/78 shadow-sm backdrop-blur-xl">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16">
             <div className="flex items-center space-x-4">
-              <Shield className="h-8 w-8 text-blue-600" />
+              <Shield className="h-8 w-8 text-indigo-400" />
               <div>
                 <h1 className="text-xl font-bold text-gray-900">{t('admin.title')}</h1>
                 <p className="text-sm text-gray-600">{t('admin.subtitle')}</p>
@@ -125,7 +125,7 @@ export default function AdminPage() {
             </div>
             <div className="flex items-center space-x-3">
               <LanguageSwitcher />
-              <div className="flex items-center space-x-2 text-sm text-gray-600">
+              <div className="flex items-center space-x-2 text-sm text-slate-600">
                 <div className="w-2 h-2 bg-green-500 rounded-full"></div>
                 <span>{t('admin.system.online')}</span>
               </div>
@@ -185,7 +185,7 @@ export default function AdminPage() {
             return (
               <Card key={index} className="hover:shadow-lg transition-shadow cursor-pointer">
                 <CardHeader className="pb-3">
-                  <div className={`w-12 h-12 ${feature.bgColor} rounded-lg flex items-center justify-center mb-3`}>
+                  <div className={`w-12 h-12 ${feature.bgColor} rounded-2xl flex items-center justify-center mb-3`}>
                     <IconComponent className={`h-6 w-6 ${feature.color}`} />
                   </div>
                   <CardTitle className="text-lg">{feature.title}</CardTitle>

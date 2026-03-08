@@ -7,7 +7,6 @@ export type CollaborationRole = "student" | "ngo";
 
 export function getCollaborationRole(role: SessionRole): CollaborationRole | null {
   switch (role) {
-    case "teacher":
     case "student":
       return "student";
     case "ngo":
@@ -28,7 +27,7 @@ export function getDefaultRouteForRole(role: SessionRole): string {
     case "ngo":
       return "/ngo";
     case "student":
-      return role === "teacher" ? "/student/projects" : "/student";
+      return "/student";
     default:
       return "/";
   }

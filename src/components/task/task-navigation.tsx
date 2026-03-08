@@ -2,7 +2,8 @@ import React from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
-import { Project, Participation, Subtask } from '@/lib/types';
+import { Project, Participation } from '@/lib/types';
+import { GITHUB_SUBMISSION_SUBTASK_ID } from '@/lib/constants';
 
 interface TaskNavigationProps {
   project: Project | null;
@@ -20,7 +21,9 @@ export const TaskNavigation: React.FC<TaskNavigationProps> = ({
   if (!project || !participation) return null;
   
   // Sort subtasks by order
-  const sortedSubtasks = [...project.subtasks].sort((a, b) => a.order - b.order);
+  const sortedSubtasks = [...project.subtasks]
+    .filter((subtask) => subtask.id !== GITHUB_SUBMISSION_SUBTASK_ID)
+    .sort((a, b) => a.order - b.order);
   
   // Find the current subtask index
   const currentIndex = sortedSubtasks.findIndex(subtask => subtask.id === currentSubtaskId);
@@ -36,14 +39,14 @@ export const TaskNavigation: React.FC<TaskNavigationProps> = ({
   // Navigate to previous task
   const goToPrevious = () => {
     if (previousSubtask) {
-      router.push(`/projects/${project.id}/task/${previousSubtask.id}`);
+      router.push(`/projects/${project.id}/task/${previousSubtask.id}`, { scroll: false });
     }
   };
   
   // Navigate to next task
   const goToNext = () => {
     if (nextSubtask) {
-      router.push(`/projects/${project.id}/task/${nextSubtask.id}`);
+      router.push(`/projects/${project.id}/task/${nextSubtask.id}`, { scroll: false });
     }
   };
   

@@ -75,13 +75,13 @@ export function ProjectCard({
 
   return (
     <div className="group relative h-full rounded-[1.9rem]">
-      <ShineBorder borderWidth={1} duration={14} />
+      <ShineBorder borderWidth={1} duration={14} shineColor={["rgba(129,140,248,0.1)", "rgba(251,191,186,0.08)", "rgba(125,211,252,0.08)"]} />
 
       <Card
-        className={`relative flex h-full flex-col overflow-hidden rounded-[1.9rem] border-white/70 bg-white/88 shadow-[0_30px_80px_-35px_rgba(15,23,42,0.35)] backdrop-blur-xl ${getExpiredProjectClasses(projectIsExpired)}`}
+        className={`relative flex h-full flex-col overflow-hidden rounded-[1.9rem] border-white/80 bg-white/90 shadow-[0_20px_50px_-34px_rgba(15,23,42,0.18)] backdrop-blur-xl ${getExpiredProjectClasses(projectIsExpired)}`}
       >
-        <div className="pointer-events-none absolute inset-x-0 top-0 h-32 bg-gradient-to-br from-fuchsia-100/70 via-transparent to-cyan-100/70 opacity-90 transition-opacity duration-300 group-hover:opacity-100" />
-        <div className="pointer-events-none absolute inset-y-0 right-0 w-32 bg-gradient-to-l from-violet-100/40 to-transparent" />
+        <div className="pointer-events-none absolute inset-x-0 top-0 h-32 bg-gradient-to-br from-rose-100/60 via-transparent to-sky-100/60 opacity-80 transition-opacity duration-300 group-hover:opacity-100" />
+        <div className="pointer-events-none absolute inset-y-0 right-0 w-32 bg-gradient-to-l from-indigo-50/50 to-transparent" />
 
         <CardHeader className="relative pb-4">
           <div className="mb-4 flex flex-wrap gap-2">
@@ -154,7 +154,7 @@ export function ProjectCard({
           </div>
 
           <div className="mt-4 flex items-center gap-2 text-sm text-slate-500">
-            <Users className="h-4 w-4 text-violet-500" />
+            <Users className="h-4 w-4 text-indigo-400" />
             <span className="truncate font-medium">Led by {project.ngoName}</span>
           </div>
         </CardHeader>

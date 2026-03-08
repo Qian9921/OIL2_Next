@@ -3,7 +3,9 @@
 import { useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
 import { MainLayout } from "@/components/layout/main-layout";
+import { PageHero } from "@/components/layout/page-hero";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { StatTile } from "@/components/ui/stat-tile";
 import { Button } from "@/components/ui/button";
 import { getNGODashboard } from "@/lib/firestore";
 import { NGODashboard } from "@/lib/types";
@@ -52,91 +54,27 @@ export default function NGODashboardPage() {
   return (
     <MainLayout>
       <div className="space-y-6">
-        {/* Welcome Section */}
-        <div className="bg-gradient-to-r from-purple-600 to-pink-600 rounded-2xl p-8 text-white">
-          <h1 className="text-3xl font-bold mb-2">
-            Welcome back, {session?.user?.name}! 🚀
-          </h1>
-          <p className="text-purple-100 mb-4">
-            Monitor your projects and see the impact you're creating in the community.
-          </p>
-          <Link href="/ngo/projects/create">
-            <Button variant="secondary" className="bg-white text-purple-600 hover:bg-gray-100">
-              <Plus className="w-4 h-4 mr-2" />
-              Create New Project
-            </Button>
-          </Link>
-        </div>
+        <PageHero
+          eyebrow="NGO workspace"
+          icon={TrendingUp}
+          title={`Welcome back, ${session?.user?.name || "builder"}`}
+          description="Track the projects your organization has launched, understand learner engagement, and create new opportunities with a calm, student-friendly experience."
+          actions={
+            <Link href="/ngo/projects/create">
+              <Button>
+                <Plus className="w-4 h-4 mr-2" />
+                Create New Project
+              </Button>
+            </Link>
+          }
+        />
 
         {/* Stats Cards */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-          <Card className="card-hover">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium text-gray-600">
-                Published Projects
-              </CardTitle>
-              <FolderOpen className="h-4 w-4 text-blue-600" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-blue-600">
-                {dashboard?.publishedProjects || 0}
-              </div>
-              <p className="text-xs text-gray-500">
-                Active projects
-              </p>
-            </CardContent>
-          </Card>
-
-          <Card className="card-hover">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium text-gray-600">
-                Total Participants
-              </CardTitle>
-              <Users className="h-4 w-4 text-green-600" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-green-600">
-                {dashboard?.totalParticipants || 0}
-              </div>
-              <p className="text-xs text-gray-500">
-                Students engaged
-              </p>
-            </CardContent>
-          </Card>
-
-          <Card className="card-hover">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium text-gray-600">
-                Completed Projects
-              </CardTitle>
-              <Trophy className="h-4 w-4 text-purple-600" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-purple-600">
-                {dashboard?.completedProjects || 0}
-              </div>
-              <p className="text-xs text-gray-500">
-                Successfully finished
-              </p>
-            </CardContent>
-          </Card>
-
-          <Card className="card-hover">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium text-gray-600">
-                Pending Reviews
-              </CardTitle>
-              <AlertCircle className="h-4 w-4 text-yellow-600" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-yellow-600">
-                {dashboard?.pendingReviews || 0}
-              </div>
-              <p className="text-xs text-gray-500">
-                Need attention
-              </p>
-            </CardContent>
-          </Card>
+          <StatTile label="Published Projects" value={dashboard?.publishedProjects || 0} icon={FolderOpen} tone="blue" hint="Projects that students can join right now." />
+          <StatTile label="Total Participants" value={dashboard?.totalParticipants || 0} icon={Users} tone="green" hint="Students currently learning with your organization." />
+          <StatTile label="Completed Projects" value={dashboard?.completedProjects || 0} icon={Trophy} tone="purple" hint="Projects students have successfully finished." />
+          <StatTile label="Pending Reviews" value={dashboard?.pendingReviews || 0} icon={AlertCircle} tone="amber" hint="Submissions that still need your attention." />
         </div>
 
         {/* Project Statistics */}

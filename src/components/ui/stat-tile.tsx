@@ -14,10 +14,10 @@ interface StatTileProps {
 }
 
 const TONE_MAP: Record<NonNullable<StatTileProps['tone']>, string> = {
-  blue: 'from-blue-100 to-cyan-100 text-blue-700',
-  green: 'from-green-100 to-emerald-100 text-green-700',
-  purple: 'from-purple-100 to-fuchsia-100 text-purple-700',
-  amber: 'from-amber-100 to-yellow-100 text-amber-700',
+  blue: 'from-indigo-100 to-sky-100 text-indigo-600',
+  green: 'from-emerald-100 to-teal-100 text-emerald-700',
+  purple: 'from-violet-100 to-indigo-100 text-violet-700',
+  amber: 'from-amber-100 to-orange-100 text-amber-700',
 };
 
 export function StatTile({
@@ -48,12 +48,12 @@ export function StatTile({
   };
 
   return (
-    <Card className="relative overflow-hidden border-white/70 bg-white/85 backdrop-blur-xl">
-      <ShineBorder borderWidth={1} duration={12} />
+    <Card className="relative overflow-hidden border-white/80 bg-white/88 backdrop-blur-xl">
+      <ShineBorder borderWidth={1} duration={12} shineColor={["rgba(129,140,248,0.1)", "rgba(251,191,186,0.1)", "rgba(125,211,252,0.08)"]} />
       <div className={`pointer-events-none absolute inset-x-0 top-0 h-20 bg-gradient-to-br ${TONE_MAP[tone]} opacity-20 blur-2xl`} />
       <CardContent className="relative p-5">
         <div className="flex items-start gap-4">
-          <div className={`flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br ${TONE_MAP[tone]} shadow-md shadow-slate-200/70`}>
+          <div className={`flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br ${TONE_MAP[tone]} shadow-sm shadow-slate-200/70`}>
             <Icon className="h-5 w-5" />
           </div>
           <div className="min-w-0 space-y-1.5">
