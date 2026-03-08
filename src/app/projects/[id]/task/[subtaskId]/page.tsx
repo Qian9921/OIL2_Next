@@ -36,10 +36,14 @@ import {
 
 // Project-specific components
 import { ChatMessage as ChatMessageComponent } from '@/components/chat/chat-message';
+import { TutorInsightsStrip } from '@/components/chat/tutor-insights-strip';
+import { TutorQuickActions } from '@/components/chat/tutor-quick-actions';
+import { TutorContextPills } from '@/components/chat/tutor-context-pills';
 import { LoadingState } from '@/components/ui/loading-state';
 import { ScoreDisplay, ScoreProgressBar, ScoreBadge, MetricScoreCard, StreakBadge } from '@/components/task/score-components';
 import { SafeAlertDialogDescription, EvaluationLoadingState, ConfirmationDialog, RequirementCheckpoint } from '@/components/task/dialog-components';
-import { EvaluationHistoryItem, PromptHistoryItem, EmptyPromptHistory, EmptyEvaluationHistory, PromptHistoryEntry } from '@/components/task/history-components';
+import { EvaluationProgressPanel, EvaluationProgressData } from '@/components/task/evaluation-progress-panel';
+import { EvaluationHistoryItem, EvaluationHistoryEntry, PromptHistoryItem, EmptyPromptHistory, EmptyEvaluationHistory, PromptHistoryEntry } from '@/components/task/history-components';
 import { PromptFeedbackDisplay, PromptFeedbackMessage } from '@/components/task/feedback-components';
 import { DimensionScoreDisplay } from '@/components/task/score-components';
 
@@ -51,6 +55,7 @@ import { GITHUB_SUBMISSION_SUBTASK_ID } from '@/lib/constants';
 import { saveTaskChatHistory, saveGitHubRepoURL } from '@/lib/task-utils';
 import { generateAvatar, formatRelativeTime, getRawBase64, isProjectExpired } from '@/lib/utils';
 import { fetchData } from '@/lib/fetch-utils';
+import { buildEvaluationChatDraft, buildPromptFeedbackChatDraft, buildQuickActionDraft, TutorContextPill } from '@/lib/tutor-chat-context';
 
 // Markdown
 import ReactMarkdown from 'react-markdown';
@@ -59,6 +64,39 @@ import remarkGfm from 'remark-gfm';
 // Navigation
 import { TaskNavigation } from '@/components/task/task-navigation';
 import { GitHubInfoButton } from '@/components/task/github-info-button';
+
+interface TeachingFeedback {
+  strengths?: string[];
+  missingRequirements?: string[];
+  nextSteps?: string[];
+  minimumToPass?: string[];
+}
+
+interface TaskEvaluationResult {
+  rawContent?: {
+    summary?: string;
+    assessment?: number;
+    checkpoints?: Array<{
+      status: string;
+      details: string;
+      requirement: string;
+    }>;
+    improvements?: string[];
+  };
+  comments?: string;
+  suggestions?: string[];
+  teachingFeedback?: TeachingFeedback;
+}
+
+interface TaskEvaluationResponse extends EvaluationProgressData {
+  score: number;
+  feedback: string;
+  success?: boolean;
+  message?: string;
+  evaluationId?: string;
+  status?: string;
+  result?: TaskEvaluationResult;
+}
 
 /**
  * Page component for individual project tasks.
@@ -76,6 +114,7 @@ export default function ProjectTaskPage() {
   const { data: session } = useSession();
   const { toast } = useToast();
   const chatContainerRef = useRef<HTMLDivElement>(null);
+  const chatInputRef = useRef<HTMLTextAreaElement>(null);
 
   const currentProjectId = params.id as string;
   const subtaskId = params.subtaskId as string;
@@ -105,26 +144,11 @@ export default function ProjectTaskPage() {
   const [currentPromptFeedback, setCurrentPromptFeedback] = useState<{
     feedback?: string;
   } | null>(null);
-  const [evaluationFeedback, setEvaluationFeedback] = useState<{
-    score: number;
-    feedback: string;
-    success?: boolean;
-    message?: string;
-    evaluationId?: string;
-    status?: string;
-    result?: {
-      rawContent?: {
-        summary?: string;
-        assessment?: number;
-        checkpoints?: Array<{
-          status: string;
-          details: string;
-          requirement: string;
-        }>;
-        improvements?: string[];
-      }
-    }
-  } | null>(null);
+  const [evaluationFeedback, setEvaluationFeedback] = useState<TaskEvaluationResponse | null>(null);
+  const [evaluationProgress, setEvaluationProgress] = useState<EvaluationProgressData | null>(null);
+  const [tutorContextPills, setTutorContextPills] = useState<TutorContextPill[]>([]);
+  const [showTutorGuidance, setShowTutorGuidance] = useState(true);
+  const [showTutorQuickActions, setShowTutorQuickActions] = useState(true);
   const [isEvaluating, setIsEvaluating] = useState(false);
   const [isPageDisabled, setIsPageDisabled] = useState(false);
   
@@ -137,18 +161,7 @@ export default function ProjectTaskPage() {
     message?: string;
     evaluationId?: string;
     status?: string;
-    result?: {
-      rawContent?: {
-        summary?: string;
-        assessment?: number;
-        checkpoints?: Array<{
-          status: string;
-          details: string;
-          requirement: string;
-        }>;
-        improvements?: string[];
-      }
-    }
+    result?: TaskEvaluationResult;
   }> | null>(null);
   const [showHistoryDialog, setShowHistoryDialog] = useState(false);
   const [promptHistory, setPromptHistory] = useState<PromptHistoryEntry[] | null>(null);
@@ -246,7 +259,13 @@ export default function ProjectTaskPage() {
       // Create a reliable way to scroll to bottom after content is rendered
       const timer = setTimeout(() => {
         if (chatContainerRef.current) {
-          chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
+          const lastChild = chatContainerRef.current.lastElementChild;
+
+          if (lastChild instanceof HTMLElement) {
+            lastChild.scrollIntoView({ behavior: 'smooth', block: 'end' });
+          } else {
+            chatContainerRef.current.scrollIntoView({ behavior: 'smooth', block: 'end' });
+          }
         }
       }, 50);
       
@@ -520,12 +539,156 @@ export default function ProjectTaskPage() {
     }
   };
 
+  const updateEvaluationProgressState = (payload: Partial<EvaluationProgressData> | null | undefined) => {
+    if (!payload) return null;
+
+    const nextProgress: EvaluationProgressData = {
+      status: payload.status,
+      statusMessage: payload.statusMessage,
+      progressPercent: typeof payload.progressPercent === 'number' ? payload.progressPercent : undefined,
+      stageKey: payload.stageKey,
+      stageTitle: payload.stageTitle,
+      stageDetail: payload.stageDetail,
+      progressStats: payload.progressStats,
+    };
+
+    setEvaluationProgress(nextProgress);
+    return nextProgress;
+  };
+
+  const focusTutorComposer = () => {
+    window.setTimeout(() => {
+      chatInputRef.current?.focus();
+      chatInputRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }, 120);
+  };
+
+  const queueTutorDraft = (draft: string, contextPills: TutorContextPill[]) => {
+    setTutorContextPills(contextPills);
+    setShowTutorGuidance(false);
+    setShowTutorQuickActions(false);
+    setUserInput((currentValue) => currentValue.trim().length > 0 ? `${currentValue}
+
+${draft}` : draft);
+    setShowEvaluationFeedbackDialog(false);
+    setShowHistoryDialog(false);
+    showInfoToast(toast, 'Tutor draft ready', {
+      description: 'We added this guidance to your Tutor chat. You can edit it before sending.',
+    });
+    focusTutorComposer();
+  };
+
+  const handleTutorQuickAction = (action: Parameters<typeof buildQuickActionDraft>[1]) => {
+    if (!subtask) return;
+    const { draft, contextPills } = buildQuickActionDraft(subtask.title, action);
+    queueTutorDraft(draft, contextPills);
+  };
+
+  const handleTutorSuggestion = ({
+    suggestion,
+    requirement,
+    details,
+  }: {
+    suggestion?: string;
+    requirement?: string;
+    details?: string;
+  }) => {
+    if (!subtask) return;
+
+    const { draft, contextPills } = buildEvaluationChatDraft({
+      currentTask: subtask.title,
+      suggestion,
+      requirement,
+      details,
+      summary: evaluationFeedback?.result?.rawContent?.summary,
+    });
+
+    queueTutorDraft(draft, contextPills);
+  };
+
+  const removeTutorContextPill = (id: string) => {
+    setTutorContextPills((currentItems) => currentItems.filter((item) => item.id !== id));
+  };
+
+  const clearTutorContextPills = () => {
+    setTutorContextPills([]);
+  };
+
+  const handleAskTutorAboutEvaluation = () => {
+    handleTutorSuggestion({
+      details: evaluationFeedback?.feedback,
+    });
+  };
+
+  const handleTutorSuggestionFromHistory = ({
+    evaluation,
+    suggestion,
+    requirement,
+    details,
+  }: {
+    evaluation: EvaluationHistoryEntry;
+    suggestion?: string;
+    requirement?: string;
+    details?: string;
+  }) => {
+    if (!subtask) return;
+
+    const { draft, contextPills } = buildEvaluationChatDraft({
+      currentTask: subtask.title,
+      suggestion,
+      requirement,
+      details,
+      summary: evaluation.result?.rawContent?.summary || evaluation.feedback,
+    });
+
+    queueTutorDraft(draft, contextPills);
+  };
+
+  const handleExplainHistoryAttempt = (evaluation: EvaluationHistoryEntry) => {
+    const fallbackSuggestion = evaluation.result?.rawContent?.improvements?.[0];
+
+    handleTutorSuggestionFromHistory({
+      evaluation,
+      suggestion: fallbackSuggestion,
+      details: evaluation.result?.rawContent?.summary || evaluation.feedback,
+    });
+  };
+
+
+  const handleImprovePromptFromHistory = (prompt: PromptHistoryEntry) => {
+    if (!subtask) return;
+
+    const { draft, contextPills } = buildPromptFeedbackChatDraft({
+      currentTask: subtask.title,
+      promptContent: prompt.content,
+      feedback: prompt.feedback?.feedback,
+      qualityScore: prompt.qualityScore,
+    });
+
+    queueTutorDraft(draft, contextPills);
+  };
+
+  const handleDismissTutorGuidance = () => {
+    setShowTutorGuidance(false);
+  };
+
+  const handleStartFreshTutorChat = () => {
+    setShowTutorGuidance(false);
+    setShowTutorQuickActions(false);
+    setTutorContextPills([]);
+    focusTutorComposer();
+  };
+
+  const hasChatStarted = chatMessages.some((message) => message.role === 'user' || message.role === 'model');
+
   const handleSendMessage = async () => {
     if (!userInput.trim() || isChatLoading) return;
     
-    // Process user input (now supports up to 3000 characters for more detailed prompts)
     const currentInput = userInput.trim();
+    const currentTutorContext = [...tutorContextPills];
     setUserInput('');
+    setTutorContextPills([]);
+    setShowTutorQuickActions(false);
     
     if (!session?.user?.id || !participation?.id || !subtask) {
       showErrorToast(toast, "Error", { description: "User or task information is missing." });
@@ -576,6 +739,7 @@ export default function ProjectTaskPage() {
         chatHistoryLength: chatMessages.length,
         evaluatePromptQuality: true,
         requestPersonalizedFeedback: true,
+        tutorContextCount: currentTutorContext.length,
         hasImageData: !!userMessage.imageData
       });
       
@@ -602,6 +766,7 @@ export default function ProjectTaskPage() {
           subtaskId: subtask.id,
           message: currentInput,
           chatHistory: formattedChatHistory,
+          tutorContext: currentTutorContext.map((item) => item.instruction || `${item.label}: ${item.value}`),
           evaluatePromptQuality: true,
           requestPersonalizedFeedback: true,
           ...(userMessage.imageData && {
@@ -926,6 +1091,8 @@ export default function ProjectTaskPage() {
     } catch (error: any) {
       console.error('Error sending message:', error);
       showErrorToast(toast, "Chat Error", { description: error.message || "Failed to send message. Please try again." });
+      setTutorContextPills(currentTutorContext);
+      setUserInput(currentInput);
       // Remove the placeholder AI message if an error occurred before streaming
       setChatMessages(prevMessages => prevMessages.filter(msg => msg.id !== aiMessageId));
       setIsChatLoading(false);
@@ -958,13 +1125,14 @@ export default function ProjectTaskPage() {
       });
 
       const result = await response.json();
+      updateEvaluationProgressState(result);
 
       if (!response.ok) {
         throw new Error(result.error || result.details || 'Failed to fetch evaluation status');
       }
 
       if (response.status !== 202 && typeof result.score === 'number') {
-        return result;
+        return result as TaskEvaluationResponse;
       }
 
       await new Promise((resolve) => setTimeout(resolve, 3000));
@@ -991,6 +1159,14 @@ export default function ProjectTaskPage() {
         // Disable the entire page during evaluation
         setIsEvaluating(true);
         setIsPageDisabled(true);
+        setEvaluationProgress({
+          status: 'pending',
+          statusMessage: 'Preparing your evaluation…',
+          progressPercent: 8,
+          stageKey: 'queued',
+          stageTitle: 'Evaluation queued',
+          stageDetail: 'We are starting the evaluation workflow for this task.',
+        });
         
         // Make API call to evaluate the task completion
         try {
@@ -1025,7 +1201,8 @@ export default function ProjectTaskPage() {
             throw new Error(`API error: ${response.status} - ${errorText}`);
           }
             
-          let result = await response.json();
+          let result = await response.json() as TaskEvaluationResponse;
+          updateEvaluationProgressState(result);
           console.log("Evaluation result (full response):", JSON.stringify(result, null, 2));
 
           if (response.status === 202 && result.evaluationId) {
@@ -1035,6 +1212,14 @@ export default function ProjectTaskPage() {
           }
 
           setEvaluationFeedback(result);
+          updateEvaluationProgressState({
+            status: result.status,
+            statusMessage: result.statusMessage,
+            progressPercent: 100,
+            stageKey: 'completed',
+            stageTitle: 'Evaluation complete',
+            stageDetail: result.feedback || result.statusMessage || 'The evaluation report is ready.',
+          });
 
           // Ensure the score is a valid number
           const score = typeof result.score === 'number' ? result.score : 0;
@@ -1103,6 +1288,14 @@ export default function ProjectTaskPage() {
           showErrorToast(toast, "Evaluation Error", { 
             description: "We couldn't evaluate your work. Please try again later."
           });
+          setEvaluationProgress({
+            status: 'failed',
+            statusMessage: 'Evaluation failed',
+            progressPercent: 100,
+            stageKey: 'failed',
+            stageTitle: 'Evaluation failed',
+            stageDetail: 'We hit an error while reviewing your work. Please try again.',
+          });
           setIsEvaluating(false);
           setIsPageDisabled(false);
           return;
@@ -1129,6 +1322,7 @@ export default function ProjectTaskPage() {
     if (!isSubtaskCompletedByStudent) {
       // Reset evaluation state when opening dialog
       setEvaluationFeedback(null);
+      setEvaluationProgress(null);
       setShowCompleteDialog(true);
     }
   };
@@ -1141,6 +1335,14 @@ export default function ProjectTaskPage() {
       showFeedbackToast(toast, 'info', "No History", "No evaluation attempts found for this task.", 5000);
     }
   };
+
+  const latestEvaluationAttempt = evaluationHistory && evaluationHistory.length > 0
+    ? [...evaluationHistory].sort((a, b) => b.timestamp.toMillis() - a.timestamp.toMillis())[0]
+    : null;
+
+  const latestPromptAttempt = promptHistory && promptHistory.length > 0
+    ? [...promptHistory].sort((a, b) => b.timestamp.toMillis() - a.timestamp.toMillis())[0]
+    : null;
 
   // Custom component for CardDescription with lock status to avoid hydration errors
   const CardDescriptionWithLock = ({ 
@@ -1240,18 +1442,18 @@ export default function ProjectTaskPage() {
     }
   };
 
-  // Add a floating "View Prompts" button that's more visible
+  // Compact prompt history button for the Tutor workspace
   const FloatingPromptHistoryButton = () => {
     return (
       <Button
         variant="outline"
         size="sm"
         onClick={handleViewPromptHistory}
-        className="flex items-center gap-2 border-purple-200 bg-purple-50 hover:bg-purple-100 text-purple-700"
+        className="h-9 shrink-0 rounded-full border-purple-200/80 bg-white text-purple-700 hover:bg-purple-50"
         title="Review your prompts and get quality feedback to improve your prompt writing skills"
       >
         <Info className="w-4 h-4" />
-        <span>View Prompt Feedback</span>
+        <span>Prompt history</span>
         {promptHistory && promptHistory.length > 0 && (
           <span className="bg-purple-600 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center font-bold">
             {promptHistory.length}
@@ -1367,7 +1569,7 @@ export default function ProjectTaskPage() {
         </div>
       )}
       
-      <div className="max-w-6xl mx-auto p-4 md:p-6 flex flex-col flex-1 h-full space-y-4">
+      <div className="mx-auto flex w-full max-w-7xl flex-col space-y-6 px-4 pb-6 md:px-6">
         <header className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
           <div className="flex items-center">
             <Button 
@@ -1419,9 +1621,9 @@ export default function ProjectTaskPage() {
           </div>
         )}
 
-        <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-          <div className="flex flex-col h-[calc(100vh-12rem)]">
-            <Card className="flex flex-col h-full">
+        <div className="grid grid-cols-1 items-start gap-6 xl:grid-cols-[minmax(340px,0.82fr)_minmax(620px,1.18fr)] 2xl:grid-cols-[minmax(360px,0.78fr)_minmax(720px,1.22fr)]">
+          <div className="flex flex-col self-start xl:sticky xl:top-24">
+            <Card className="overflow-hidden">
               <CardHeader className="flex-shrink-0 pb-2">
                 <div className="flex items-center justify-between">
                   <CardTitle className="flex items-center text-xl">
@@ -1444,7 +1646,7 @@ export default function ProjectTaskPage() {
                   isLocked={!isCurrentSequentially && !isSubtaskCompletedByStudent} 
                 />
               </CardHeader>
-              <CardContent className="flex-grow overflow-y-auto py-4 min-h-0">
+              <CardContent className="py-4">
                 <div className="space-y-4">
                   {subtask?.id === GITHUB_SUBMISSION_SUBTASK_ID ? (
                   <div className="space-y-4 py-4">
@@ -1537,7 +1739,7 @@ export default function ProjectTaskPage() {
                 </div>
               </CardContent>
               {subtask?.id !== GITHUB_SUBMISSION_SUBTASK_ID && (
-                <div className="mt-auto p-4 pt-3 border-t flex-shrink-0">
+                <div className="border-t p-4 pt-3">
                   <div className="flex flex-col space-y-2">
                     <Button
                       onClick={handleCompleteSubtaskIntent}
@@ -1591,39 +1793,69 @@ export default function ProjectTaskPage() {
             </Card>
           </div>
 
-          <div className={`flex flex-col h-[calc(100vh-12rem)] ${subtask?.id === GITHUB_SUBMISSION_SUBTASK_ID ? 'hidden' : ''}`}>
-            <Card className="flex flex-col h-full overflow-hidden">
-              <CardHeader className="flex-shrink-0 pb-2">
-                <CardTitle className="flex items-center justify-between">
-                  <div className="flex items-center">
-                    <Bot className="w-6 h-6 mr-2 text-purple-600" />
-                    AI Task Assistant
+          <div className={`flex flex-col ${subtask?.id === GITHUB_SUBMISSION_SUBTASK_ID ? 'hidden' : ''}`}>
+            <Card className="overflow-hidden">
+              <CardHeader className="space-y-4 border-b border-slate-100 pb-4">
+                <div className="flex items-start justify-between gap-4">
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2">
+                      <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-gradient-to-br from-purple-100 to-blue-100 text-purple-700 shadow-sm">
+                        <Bot className="h-5 w-5" />
+                      </div>
+                      <div>
+                        <CardTitle className="text-lg">Tutor Workspace</CardTitle>
+                        <CardDescription className="mt-0.5 text-sm">
+                          Ask freely, or continue from feedback without leaving the task.
+                        </CardDescription>
+                      </div>
+                    </div>
                   </div>
+
                   <div className="flex items-center gap-2">
                     {!isSubtaskCompletedByStudent && <FloatingPromptHistoryButton />}
-                    
+
+                    {!showTutorGuidance && (latestEvaluationAttempt || latestPromptAttempt) && (
+                      <button
+                        type="button"
+                        onClick={() => setShowTutorGuidance(true)}
+                        className="text-xs font-medium text-slate-500 transition hover:text-slate-700"
+                      >
+                        Show suggestions
+                      </button>
+                    )}
+
                     {chatMessages.some(msg => msg.role === 'user' || msg.role === 'model') && (
-                      <Button 
-                        variant="outline" 
-                        size="sm" 
+                      <Button
+                        variant="outline"
+                        size="sm"
                         onClick={handleClearChatIntent}
                         disabled={isChatLoading || isSubtaskCompletedByStudent}
                         title="Clear chat history"
+                        className="shrink-0"
                       >
-                        <Trash2 className="w-4 h-4 mr-1.5" />
-                        Clear Chat
+                        <Trash2 className="mr-1.5 h-4 w-4" />
+                        Clear
                       </Button>
                     )}
                   </div>
-                </CardTitle>
-                <CardDescription>
-                  Ask questions about this task and get help from our AI assistant
-                </CardDescription>
+                </div>
+
+                {showTutorGuidance && (
+                  <TutorInsightsStrip
+                    latestEvaluationAttempt={latestEvaluationAttempt}
+                    latestPromptAttempt={latestPromptAttempt}
+                    onContinueEvaluation={handleExplainHistoryAttempt}
+                    onImprovePrompt={handleImprovePromptFromHistory}
+                    onDismiss={handleDismissTutorGuidance}
+                    onStartFreshChat={handleStartFreshTutorChat}
+                    compact={hasChatStarted}
+                  />
+                )}
               </CardHeader>
               
               <CardContent 
                 ref={chatContainerRef} 
-                className="flex-grow overflow-y-auto px-4 py-4 bg-slate-50 rounded-b-none min-h-0 pb-4"
+                className="rounded-b-none bg-slate-50/85 px-4 py-4 pb-4"
               >
                 <div className="space-y-4">
                   {chatMessages.map((msg, index) => (
@@ -1641,21 +1873,28 @@ export default function ProjectTaskPage() {
                     </React.Fragment>
                   ))}
                   {isChatLoading && (
-                      <div className="flex items-center space-x-2 py-2 px-4 rounded-lg bg-gray-50 w-fit">
-                        <div className="text-sm text-gray-600">AI is typing</div>
-                        <div className="flex space-x-1">
-                          <div className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
-                          <div className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
-                          <div className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
+                    <div className="w-fit rounded-2xl rounded-bl-sm border border-purple-100 bg-white px-4 py-3 shadow-sm">
+                      <div className="flex items-center gap-3">
+                        <div className="flex h-8 w-8 items-center justify-center rounded-full bg-purple-100 text-purple-700">
+                          <Bot className="h-4 w-4" />
+                        </div>
+                        <div>
+                          <div className="text-sm font-medium text-slate-800">Tutor is thinking</div>
+                          <div className="mt-1 flex space-x-1">
+                            <div className="h-1.5 w-1.5 rounded-full bg-purple-400 animate-bounce" style={{ animationDelay: '0ms' }}></div>
+                            <div className="h-1.5 w-1.5 rounded-full bg-indigo-400 animate-bounce" style={{ animationDelay: '150ms' }}></div>
+                            <div className="h-1.5 w-1.5 rounded-full bg-blue-400 animate-bounce" style={{ animationDelay: '300ms' }}></div>
+                          </div>
                         </div>
                       </div>
+                    </div>
                   )}
                 </div>
               </CardContent>
               
-              <div className="p-3 border-t bg-white rounded-b-lg mt-auto flex-shrink-0 space-y-2">
+              <div className="space-y-3 rounded-b-lg border-t bg-white p-3">
                 {selectedFilePreview && (
-                  <div className="mb-2 p-2 border border-slate-300 rounded-md bg-slate-50 flex items-center justify-between">
+                  <div className="mb-2 flex items-center justify-between rounded-md border border-slate-300 bg-slate-50 p-2">
                     <div className="flex items-center space-x-2">
                       <Image 
                         src={selectedFilePreview} 
@@ -1664,79 +1903,126 @@ export default function ProjectTaskPage() {
                         height={40}
                         className="object-cover rounded"
                       />
-                      <span className="text-xs text-slate-600 truncate max-w-[150px]">{selectedFile?.name}</span>
+                      <span className="max-w-[150px] truncate text-xs text-slate-600">{selectedFile?.name}</span>
                     </div>
                     <Button variant="ghost" size="icon" onClick={removeSelectedFile} className="h-7 w-7 text-slate-500 hover:text-red-500">
                       <XIcon className="h-4 w-4" />
                     </Button>
                   </div>
                 )}
-                <div className="flex items-center space-x-2">
-                  <Button 
-                    variant="ghost" 
-                    size="icon" 
-                    onClick={() => fileInputRef.current?.click()}
-                    disabled={isChatLoading || isSubtaskCompletedByStudent || !!selectedFile}
-                    className="text-slate-500 hover:text-purple-600"
-                    title="Attach image"
-                  >
-                    <Paperclip className="w-5 h-5" />
-                  </Button>
-                  <input 
-                    type="file"
-                    ref={fileInputRef}
-                    accept="image/*" 
-                    onChange={handleFileSelect}
-                    className="hidden"
-                  />
-                  
-                  {/* Display streak badge when streak exists */}
-                  {promptStreak && promptStreak.currentStreak > 0 && (
-                    <StreakBadge 
-                      currentStreak={promptStreak.currentStreak}
-                      bestStreak={promptStreak.bestStreak}
-                      isAnimating={isStreakAnimating}
-                    />
-                  )}
-                  
-                  <Textarea 
-                    placeholder={isSubtaskCompletedByStudent ? "Task completed. Chat disabled." : (!isCurrentSequentially ? "Complete previous tasks to enable chat." : (selectedFile ? "Add a caption..." : "Ask your AI assistant..."))} 
-                    value={userInput}
-                    onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => {
-                      if (e.target.value.length <= MAX_USER_INPUT_LENGTH) {
-                        setUserInput(e.target.value);
-                      }
-                    }}
-                    onKeyDown={(e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-                      if (e.key === 'Enter' && !e.shiftKey) {
-                        e.preventDefault();
-                        if (!isChatLoading && !isSubtaskCompletedByStudent && isCurrentSequentially) {
-                          handleSendMessage();
-                        }
-                      }
-                    }}
-                    disabled={isChatLoading || isSubtaskCompletedByStudent || !isCurrentSequentially}
-                    className="flex-1 text-sm focus-visible:ring-1 focus-visible:ring-purple-500 min-h-[50px] max-h-[200px] resize-y"
-                    autoFocus
-                  />
-                  <Button onClick={handleSendMessage} disabled={isChatLoading || (!userInput.trim() && !selectedFile) || isSubtaskCompletedByStudent || !isCurrentSequentially} size="icon" className="rounded-full w-9 h-9">
-                    <Send className="w-4 h-4" />
-                  </Button>
-                </div>
-                <div className="flex justify-between items-center mt-1">
-                  <div className="text-xs text-gray-500">
-                    {promptStreak?.bestStreak && promptStreak.bestStreak > 0 && (
-                      <span title="Your best streak of good prompts">Best: {promptStreak.bestStreak} 🏆</span>
-                    )}
+
+                <div className="flex items-center justify-between gap-3 px-1">
+                  <div className="text-[11px] text-slate-400">
+                    {showTutorQuickActions ? 'Starter actions are visible below.' : 'Free chat mode is active.'}
                   </div>
-                  <p className={`text-xs text-right ${userInput.length > MAX_USER_INPUT_LENGTH ? 'text-red-500' : 'text-gray-500'}`}>
-                    {userInput.length}/{MAX_USER_INPUT_LENGTH} characters
-                    {userInput.length > 0 && userInput.length < 500 && (
-                      <span className="ml-1 text-blue-500">
-                        • Tip: Longer, detailed prompts often get better responses
-                      </span>
+                  <div className="flex items-center gap-3 text-[11px] font-medium">
+                    <button
+                      type="button"
+                      onClick={() => setShowTutorQuickActions((current) => !current)}
+                      className="text-slate-500 transition hover:text-slate-700"
+                    >
+                      {showTutorQuickActions ? 'Hide starters' : 'Show starters'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleStartFreshTutorChat}
+                      className="text-slate-500 transition hover:text-slate-700"
+                    >
+                      Free chat
+                    </button>
+                  </div>
+                </div>
+
+                {showTutorQuickActions && (
+                  <TutorQuickActions
+                    canReviewEvaluation={Boolean(evaluationFeedback || (evaluationHistory && evaluationHistory.length > 0))}
+                    disabled={isChatLoading || isSubtaskCompletedByStudent || !isCurrentSequentially}
+                    onExplainTask={() => handleTutorQuickAction('explain-task')}
+                    onPlanNextSteps={() => handleTutorQuickAction('plan-next-steps')}
+                    onReviewLatestEvaluation={() => handleTutorQuickAction('review-latest-evaluation')}
+                  />
+                )}
+
+                <TutorContextPills
+                  items={tutorContextPills}
+                  onRemove={removeTutorContextPill}
+                  onClearAll={clearTutorContextPills}
+                />
+
+                <div className="rounded-2xl border border-slate-200 bg-white p-2 shadow-sm shadow-slate-200/70">
+                  <div className="flex items-end space-x-2">
+                    <Button 
+                      variant="ghost" 
+                      size="icon" 
+                      onClick={() => fileInputRef.current?.click()}
+                      disabled={isChatLoading || isSubtaskCompletedByStudent || !!selectedFile}
+                      className="mb-1 text-slate-500 hover:text-purple-600"
+                      title="Attach image"
+                    >
+                      <Paperclip className="w-5 h-5" />
+                    </Button>
+                    <input 
+                      type="file"
+                      ref={fileInputRef}
+                      accept="image/*" 
+                      onChange={handleFileSelect}
+                      className="hidden"
+                    />
+                    
+                    <div className="flex-1 space-y-2">
+                      <Textarea 
+                        ref={chatInputRef}
+                        placeholder={isSubtaskCompletedByStudent ? "Task completed. Chat disabled." : (!isCurrentSequentially ? "Complete previous tasks to enable chat." : (selectedFile ? "Add a caption..." : "Ask Tutor anything about this task, or keep refining your evaluation feedback..."))} 
+                        value={userInput}
+                        onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => {
+                          if (e.target.value.length <= MAX_USER_INPUT_LENGTH) {
+                            setUserInput(e.target.value);
+                          }
+                        }}
+                        onKeyDown={(e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+                          if (e.key === 'Enter' && !e.shiftKey) {
+                            e.preventDefault();
+                            if (!isChatLoading && !isSubtaskCompletedByStudent && isCurrentSequentially) {
+                              handleSendMessage();
+                            }
+                          }
+                        }}
+                        disabled={isChatLoading || isSubtaskCompletedByStudent || !isCurrentSequentially}
+                        className="min-h-[64px] max-h-[220px] resize-y border-0 bg-transparent text-sm shadow-none focus-visible:ring-0 focus-visible:ring-offset-0"
+                        autoFocus
+                      />
+
+                      <div className="flex items-center justify-between gap-3 px-1 pb-1">
+                        <div className="text-xs text-gray-500">
+                          {promptStreak?.bestStreak && promptStreak.bestStreak > 0 && (
+                            <span title="Your best streak of good prompts">Best streak: {promptStreak.bestStreak} 🏆</span>
+                          )}
+                        </div>
+                        <p className={`text-xs text-right ${userInput.length > MAX_USER_INPUT_LENGTH ? 'text-red-500' : 'text-gray-500'}`}>
+                          {userInput.length}/{MAX_USER_INPUT_LENGTH} characters
+                          {userInput.length > 0 && userInput.length < 500 && (
+                            <span className="ml-1 text-blue-500">
+                              • Tip: Detailed prompts usually lead to stronger tutoring
+                            </span>
+                          )}
+                        </p>
+                      </div>
+                    </div>
+
+                    {promptStreak && promptStreak.currentStreak > 0 && (
+                      <div className="mb-1 hidden xl:block">
+                        <StreakBadge 
+                          currentStreak={promptStreak.currentStreak}
+                          bestStreak={promptStreak.bestStreak}
+                          isAnimating={isStreakAnimating}
+                        />
+                      </div>
                     )}
-                  </p>
+
+                    <Button onClick={handleSendMessage} disabled={isChatLoading || (!userInput.trim() && !selectedFile) || isSubtaskCompletedByStudent || !isCurrentSequentially} size="icon" className="mb-1 h-10 w-10 rounded-full bg-gradient-to-r from-blue-600 to-purple-600 text-white shadow-sm hover:from-blue-700 hover:to-purple-700">
+                      <Send className="w-4 h-4" />
+                    </Button>
+                  </div>
                 </div>
               </div>
             </Card>
@@ -1753,103 +2039,236 @@ export default function ProjectTaskPage() {
           confirmVariant="default"
           onConfirm={handleCompleteTask}
           isLoading={isEvaluating}
-          loadingText="Evaluating..."
+          loadingText={evaluationProgress?.stageTitle || "Starting evaluation..."}
           confirmDisabled={isEvaluating}
           cancelDisabled={isEvaluating}
           confirmIcon={<CheckCircle className="w-4 h-4" />}
-        />
+        >
+          {isEvaluating && <EvaluationProgressPanel progress={evaluationProgress} className="mt-2" />}
+        </ConfirmationDialog>
 
         {/* Dialog for displaying evaluation feedback */}
         <AlertDialog 
           open={showEvaluationFeedbackDialog} 
           onOpenChange={setShowEvaluationFeedbackDialog}
         >
-          <AlertDialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
-            <AlertDialogHeader>
-              <AlertDialogTitle>Task Evaluation Results</AlertDialogTitle>
-              <SafeAlertDialogDescription>
-                Review your evaluation results below
-              </SafeAlertDialogDescription>
-            </AlertDialogHeader>
+          <AlertDialogContent className="max-w-5xl max-h-[90vh] overflow-hidden p-0">
+            <div className="flex max-h-[90vh] flex-col">
+              <AlertDialogHeader className="border-b border-slate-200 bg-white px-6 py-5">
+                <AlertDialogTitle>Task Evaluation Results</AlertDialogTitle>
+                <SafeAlertDialogDescription>
+                  Review your evaluation results below and continue improving without losing your place.
+                </SafeAlertDialogDescription>
+              </AlertDialogHeader>
 
-            {evaluationFeedback && (
-              <div className="space-y-4 py-2">
-                {/* Score */}
-                <div className="flex items-center justify-between">
-                  <span className="font-medium">Evaluation Score:</span>
-                  <ScoreDisplay score={evaluationFeedback.score} />
-                </div>
-                <ScoreProgressBar score={evaluationFeedback.score} className="mb-2" />
-                
-                {/* Summary */}
-                {evaluationFeedback.result?.rawContent?.summary && (
-                  <div className="mt-2 p-4 bg-gray-50 rounded-md border border-gray-200">
-                    <h4 className="font-semibold mb-2">Summary:</h4>
-                    <p className="text-sm text-gray-700">{evaluationFeedback.result.rawContent.summary}</p>
-                  </div>
-                )}
-                
-                {/* Requirements and Status */}
-                {evaluationFeedback.result?.rawContent?.checkpoints && evaluationFeedback.result.rawContent.checkpoints.length > 0 && (
-                  <div className="mt-4">
-                    <h4 className="font-semibold mb-2">Requirements Status:</h4>
-                    <div className="space-y-3">
-                      {evaluationFeedback.result.rawContent.checkpoints.map((checkpoint, index) => (
-                        <RequirementCheckpoint
-                          key={index}
-                          status={checkpoint.status}
-                          requirement={checkpoint.requirement}
-                          details={checkpoint.details}
-                        />
-                      ))}
-                    </div>
-                  </div>
-                )}
-                
-                {/* Improvements */}
-                {evaluationFeedback.result?.rawContent?.improvements && evaluationFeedback.result.rawContent.improvements.length > 0 && (
-                  <div className="mt-4">
-                    <h4 className="font-semibold mb-2">Suggested Improvements:</h4>
-                    <ul className="list-disc pl-5 space-y-2">
-                      {evaluationFeedback.result.rawContent.improvements.map((improvement, index) => (
-                        <li key={index} className="text-sm text-gray-700">{improvement}</li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-                
-                {/* General feedback */}
-                {evaluationFeedback.feedback && (
-                  <div className="mt-2">
-                    <h4 className="font-semibold mb-2">Evaluation Result:</h4>
-                    <div className={`p-3 rounded-md text-sm ${
-                      evaluationFeedback.score >= 80 ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'
-                    }`}>
-                      {evaluationFeedback.feedback}
-                    </div>
-                  </div>
-                )}
-                
-                {evaluationFeedback.score < 80 && (
-                  <div className="flex items-start gap-2 text-red-600 text-sm mt-4 p-3 bg-red-50 rounded-md">
-                    <AlertTriangle className="w-5 h-5 flex-shrink-0 mt-0.5" />
-                    <div>
-                      <p className="font-semibold">Your work doesn't meet the required criteria yet.</p>
-                      <p className="mt-1">Please review the feedback above and make the necessary improvements before trying again.</p>
+              <div className="flex-1 overflow-y-auto px-6 py-5">
+                {evaluationFeedback && (
+                  <div className="space-y-5">
+                    <div className="grid grid-cols-1 gap-4 xl:grid-cols-[0.86fr_1.14fr]">
+                      <div className="space-y-4 xl:sticky xl:top-0">
+                        <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                          <div className="flex items-center justify-between gap-4">
+                            <div>
+                              <p className="text-sm font-medium text-slate-700">Evaluation Score</p>
+                              <p className="text-xs text-slate-500">A stronger score means your evidence is more clearly visible in the current task work.</p>
+                            </div>
+                            <ScoreDisplay score={evaluationFeedback.score} />
+                          </div>
+                          <ScoreProgressBar score={evaluationFeedback.score} className="mt-3" />
+                        </div>
+
+                        {evaluationFeedback.feedback && (
+                          <div>
+                            <h4 className="mb-2 font-semibold text-slate-900">Overall Result</h4>
+                            <div className={`rounded-xl p-4 text-sm ${
+                              evaluationFeedback.score >= 80 ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'
+                            }`}>
+                              {evaluationFeedback.feedback}
+                            </div>
+                          </div>
+                        )}
+
+                        {evaluationFeedback.score < 80 && (
+                          <div className="flex items-start gap-2 rounded-xl bg-red-50 p-3 text-sm text-red-600">
+                            <AlertTriangle className="mt-0.5 h-5 w-5 flex-shrink-0" />
+                            <div>
+                              <p className="font-semibold">Your work doesn't meet the required criteria yet.</p>
+                              <p className="mt-1">Use the Tutor actions on this page to turn missing requirements or suggestions into your next draft.</p>
+                            </div>
+                          </div>
+                        )}
+
+                        {evaluationFeedback.result?.rawContent?.summary && (
+                          <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                            <div className="mb-3 flex items-start justify-between gap-3">
+                              <div>
+                                <h4 className="font-semibold text-slate-900">Summary</h4>
+                                <p className="text-xs text-slate-500">A concise explanation of how your current work was interpreted.</p>
+                              </div>
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                onClick={handleAskTutorAboutEvaluation}
+                                className="border-purple-200 text-purple-700 hover:bg-purple-50"
+                              >
+                                <MessageSquare className="mr-1.5 h-4 w-4" />
+                                Ask Tutor to explain
+                              </Button>
+                            </div>
+                            <p className="text-sm leading-6 text-slate-700">{evaluationFeedback.result.rawContent.summary}</p>
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="space-y-4">
+                        {evaluationFeedback.result?.teachingFeedback && (
+                          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                            {evaluationFeedback.result.teachingFeedback.strengths && evaluationFeedback.result.teachingFeedback.strengths.length > 0 && (
+                              <div className="rounded-xl border border-green-200 bg-green-50 p-4">
+                                <h4 className="font-semibold text-green-900">What you already did well</h4>
+                                <ul className="mt-3 space-y-2 text-sm text-green-800">
+                                  {evaluationFeedback.result.teachingFeedback.strengths.map((item, index) => (
+                                    <li key={index} className="flex gap-2"><CheckCircle className="mt-0.5 h-4 w-4 flex-shrink-0" /> <span>{item}</span></li>
+                                  ))}
+                                </ul>
+                              </div>
+                            )}
+
+                            {evaluationFeedback.result.teachingFeedback.missingRequirements && evaluationFeedback.result.teachingFeedback.missingRequirements.length > 0 && (
+                              <div className="rounded-xl border border-amber-200 bg-amber-50 p-4">
+                                <h4 className="font-semibold text-amber-900">What is still missing</h4>
+                                <ul className="mt-3 space-y-2 text-sm text-amber-800">
+                                  {evaluationFeedback.result.teachingFeedback.missingRequirements.map((item, index) => (
+                                    <li key={index} className="flex items-start justify-between gap-3 rounded-lg bg-white/70 px-3 py-2">
+                                      <span className="flex-1">{item}</span>
+                                      <Button
+                                        type="button"
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={() => handleTutorSuggestion({ requirement: item })}
+                                        className="h-8 border-amber-200 text-amber-700 hover:bg-amber-100"
+                                      >
+                                        <MessageCircleQuestion className="mr-1.5 h-3.5 w-3.5" />
+                                        Ask Tutor
+                                      </Button>
+                                    </li>
+                                  ))}
+                                </ul>
+                              </div>
+                            )}
+
+                            {evaluationFeedback.result.teachingFeedback.nextSteps && evaluationFeedback.result.teachingFeedback.nextSteps.length > 0 && (
+                              <div className="rounded-xl border border-blue-200 bg-blue-50 p-4">
+                                <h4 className="font-semibold text-blue-900">Recommended next steps</h4>
+                                <div className="mt-3 space-y-2">
+                                  {evaluationFeedback.result.teachingFeedback.nextSteps.map((item, index) => (
+                                    <div key={index} className="flex items-start justify-between gap-3 rounded-lg bg-white/80 px-3 py-2 text-sm text-blue-800">
+                                      <span className="flex-1">{item}</span>
+                                      <Button
+                                        type="button"
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={() => handleTutorSuggestion({ suggestion: item })}
+                                        className="h-8 border-blue-200 text-blue-700 hover:bg-blue-100"
+                                      >
+                                        <SendHorizonal className="mr-1.5 h-3.5 w-3.5" />
+                                        Use in Tutor
+                                      </Button>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+
+                            {evaluationFeedback.result.teachingFeedback.minimumToPass && evaluationFeedback.result.teachingFeedback.minimumToPass.length > 0 && (
+                              <div className="rounded-xl border border-purple-200 bg-purple-50 p-4">
+                                <h4 className="font-semibold text-purple-900">Minimum needed to pass</h4>
+                                <ul className="mt-3 space-y-2 text-sm text-purple-800">
+                                  {evaluationFeedback.result.teachingFeedback.minimumToPass.map((item, index) => (
+                                    <li key={index} className="rounded-lg bg-white/80 px-3 py-2">{item}</li>
+                                  ))}
+                                </ul>
+                              </div>
+                            )}
+                          </div>
+                        )}
+
+                        {evaluationFeedback.result?.rawContent?.checkpoints && evaluationFeedback.result.rawContent.checkpoints.length > 0 && (
+                          <div>
+                            <h4 className="mb-2 font-semibold text-slate-900">Requirements Status</h4>
+                            <div className="space-y-3">
+                              {evaluationFeedback.result.rawContent.checkpoints.map((checkpoint, index) => (
+                                <div key={index} className="space-y-2">
+                                  <RequirementCheckpoint
+                                    status={checkpoint.status}
+                                    requirement={checkpoint.requirement}
+                                    details={checkpoint.details}
+                                  />
+                                  <div className="flex justify-end">
+                                    <Button
+                                      type="button"
+                                      variant="outline"
+                                      size="sm"
+                                      onClick={() => handleTutorSuggestion({ requirement: checkpoint.requirement, details: checkpoint.details })}
+                                      className="border-slate-200 text-slate-700 hover:bg-slate-50"
+                                    >
+                                      <MessageSquare className="mr-1.5 h-4 w-4" />
+                                      Ask Tutor about this requirement
+                                    </Button>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        {evaluationFeedback.result?.rawContent?.improvements && evaluationFeedback.result.rawContent.improvements.length > 0 && (
+                          <div>
+                            <h4 className="mb-2 font-semibold text-slate-900">Suggested Improvements</h4>
+                            <div className="space-y-2">
+                              {evaluationFeedback.result.rawContent.improvements.map((improvement, index) => (
+                                <div key={index} className="flex items-start justify-between gap-3 rounded-xl border border-slate-200 bg-white p-3 text-sm text-slate-700">
+                                  <span className="flex-1">{improvement}</span>
+                                  <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => handleTutorSuggestion({ suggestion: improvement })}
+                                    className="border-purple-200 text-purple-700 hover:bg-purple-50"
+                                  >
+                                    <SendHorizonal className="mr-1.5 h-3.5 w-3.5" />
+                                    Use in Tutor
+                                  </Button>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
                     </div>
                   </div>
                 )}
               </div>
-            )}
-            
-            <AlertDialogFooter>
-              <AlertDialogAction 
-                onClick={() => setShowEvaluationFeedbackDialog(false)} 
-                className="bg-blue-600 hover:bg-blue-700 text-white"
-              >
-                Review & Try Again
-              </AlertDialogAction>
-            </AlertDialogFooter>
+
+              <AlertDialogFooter className="sticky bottom-0 border-t border-slate-200 bg-white px-6 py-4">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={handleAskTutorAboutEvaluation}
+                  className="border-purple-200 text-purple-700 hover:bg-purple-50"
+                >
+                  <MessageSquare className="mr-2 h-4 w-4" />
+                  Continue in Tutor
+                </Button>
+                <AlertDialogAction 
+                  onClick={() => setShowEvaluationFeedbackDialog(false)} 
+                  className="bg-blue-600 hover:bg-blue-700 text-white"
+                >
+                  Review & Try Again
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </div>
           </AlertDialogContent>
         </AlertDialog>
 
@@ -1884,6 +2303,16 @@ export default function ProjectTaskPage() {
                       evaluation={evaluation}
                       index={index}
                       totalCount={evaluationHistory.length}
+                      onExplainAttempt={handleExplainHistoryAttempt}
+                      onUseImprovement={(historyEvaluation, improvement) => handleTutorSuggestionFromHistory({
+                        evaluation: historyEvaluation,
+                        suggestion: improvement,
+                      })}
+                      onAskRequirement={(historyEvaluation, requirement, details) => handleTutorSuggestionFromHistory({
+                        evaluation: historyEvaluation,
+                        requirement,
+                        details,
+                      })}
                     />
                   ))}
                 </div>
@@ -1917,6 +2346,7 @@ export default function ProjectTaskPage() {
                   <PromptHistoryItem
                     key={`prompt-${index}-${prompt.timestamp.toMillis()}`}
                     prompt={prompt}
+                    onExplainPrompt={handleImprovePromptFromHistory}
                   />
                 ))
               ) : (

@@ -80,7 +80,7 @@ export function MainLayout({ children }: MainLayoutProps) {
   };
 
   return (
-    <div className="relative min-h-screen overflow-hidden bg-[radial-gradient(circle_at_top_left,rgba(250,232,255,0.95),rgba(255,255,255,0.9)_38%,rgba(240,249,255,0.92)_100%)]">
+    <div className="relative min-h-screen overflow-x-hidden bg-[radial-gradient(circle_at_top_left,rgba(250,232,255,0.95),rgba(255,255,255,0.9)_38%,rgba(240,249,255,0.92)_100%)]">
       <ScrollProgress />
 
       <div className="pointer-events-none absolute inset-0">
