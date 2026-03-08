@@ -9,9 +9,11 @@ import { Timestamp } from 'firebase/firestore';
 
 // UI Components
 import { MainLayout } from '@/components/layout/main-layout';
+import { PageHero } from '@/components/layout/page-hero';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { StatTile } from '@/components/ui/stat-tile';
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
@@ -64,6 +66,7 @@ import remarkGfm from 'remark-gfm';
 // Navigation
 import { TaskNavigation } from '@/components/task/task-navigation';
 import { GitHubInfoButton } from '@/components/task/github-info-button';
+import { ProgressBar } from '@/components/ui/progress-bar';
 
 interface TeachingFeedback {
   strengths?: string[];
@@ -1529,6 +1532,23 @@ ${draft}` : draft);
     setShowClearChatDialog(true);
   };
 
+  const projectSubtasks = project?.subtasks ?? [];
+  const totalRealSubtasks = projectSubtasks.filter((taskItem) => taskItem.id !== GITHUB_SUBMISSION_SUBTASK_ID).length;
+  const completedRealSubtasks = (participation?.completedSubtasks || []).filter((completedId) => completedId !== GITHUB_SUBMISSION_SUBTASK_ID).length;
+  const taskProgress = totalRealSubtasks > 0 ? Math.round((completedRealSubtasks / totalRealSubtasks) * 100) : 0;
+  const orderedVisibleSubtasks = projectSubtasks.filter((taskItem) => taskItem.id !== GITHUB_SUBMISSION_SUBTASK_ID);
+  const currentTaskNumber = subtask?.id === GITHUB_SUBMISSION_SUBTASK_ID
+    ? 'Setup'
+    : `${Math.max(1, orderedVisibleSubtasks.findIndex((taskItem) => taskItem.id === subtask?.id) + 1)}/${Math.max(orderedVisibleSubtasks.length, 1)}`;
+  const latestEvaluationScore = evaluationFeedback?.score ?? latestEvaluationAttempt?.score ?? null;
+  const taskStateSummary = isSubtaskCompletedByStudent
+    ? 'Completed and locked in'
+    : (project ? isProjectExpired(project.deadline) : false)
+      ? 'Read-only because the project deadline passed'
+      : !isCurrentSequentially
+        ? 'Locked until previous tasks are complete'
+        : 'Open for focused work right now';
+
   if (isLoading && !project) {
     return (
       <MainLayout>
@@ -1570,41 +1590,119 @@ ${draft}` : draft);
       )}
       
       <div className="mx-auto flex w-full max-w-7xl flex-col space-y-6 px-4 pb-6 md:px-6">
-        <header className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
-          <div className="flex items-center">
-            <Button 
-              variant="outline" 
-              size="sm" 
-              onClick={() => router.push('/student/my-projects')}
-              className="mr-4"
-            >
-              <ChevronLeft className="w-4 h-4 mr-1" />
-              Back to My Projects
-            </Button>
-            <TaskNavigation 
-              project={project}
-              participation={participation}
-              currentSubtaskId={subtaskId}
-            />
-          </div>
-          <div className="flex items-center gap-2">
-            <GitHubInfoButton />
-            <Link href={`/projects/${currentProjectId}`} passHref>
-              <Button variant="outline" size="sm">
-                <BookOpen className="w-4 h-4 mr-2" />
-                Project Details
+        <PageHero
+          eyebrow="Task workspace"
+          icon={subtask.id === GITHUB_SUBMISSION_SUBTASK_ID ? Github : Bot}
+          title={subtask.title}
+          description={`${project.title} · ${taskStateSummary}. Keep everything in one continuous workspace: understand the task, work with Tutor, review feedback, and move forward without context switching.`}
+          actions={
+            <>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => router.push('/student/my-projects')}
+              >
+                <ChevronLeft className="mr-2 h-4 w-4" />
+                Back to My Projects
               </Button>
-            </Link>
-            {participation?.studentGitHubRepo && subtask?.id !== GITHUB_SUBMISSION_SUBTASK_ID && (
-              <Link href={participation.studentGitHubRepo} target="_blank" rel="noopener noreferrer">
+              <GitHubInfoButton />
+              <Link href={`/projects/${currentProjectId}`} passHref>
                 <Button variant="outline" size="sm">
-                  <Github className="w-4 h-4 mr-2" />
-                  View Repository
+                  <BookOpen className="mr-2 h-4 w-4" />
+                  Project Details
                 </Button>
               </Link>
-            )}
+              {participation?.studentGitHubRepo && subtask?.id !== GITHUB_SUBMISSION_SUBTASK_ID && (
+                <Link href={participation.studentGitHubRepo} target="_blank" rel="noopener noreferrer">
+                  <Button variant="outline" size="sm">
+                    <Github className="mr-2 h-4 w-4" />
+                    View Repository
+                  </Button>
+                </Link>
+              )}
+            </>
+          }
+        />
+
+        <Card className="overflow-hidden border-white/70 bg-white/82 backdrop-blur-xl">
+          <CardContent className="flex flex-col gap-5 p-5 lg:flex-row lg:items-center lg:justify-between">
+            <div className="space-y-3">
+              <div className="flex flex-wrap items-center gap-2 text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
+                <span className="rounded-full border border-white/70 bg-white/80 px-3 py-1 shadow-sm">
+                  {subtask.id === GITHUB_SUBMISSION_SUBTASK_ID ? 'Repository onboarding' : `Task ${currentTaskNumber}`}
+                </span>
+                <span className="rounded-full border border-white/70 bg-white/80 px-3 py-1 shadow-sm">
+                  {taskStateSummary}
+                </span>
+              </div>
+              <div className="space-y-1">
+                <h2 className="text-lg font-semibold text-slate-900">Stay in one continuous flow</h2>
+                <p className="max-w-3xl text-sm leading-6 text-slate-600">
+                  Everything on this page now follows the main browser scroll, so the task brief, Tutor guidance, and completion actions feel like one complete workspace.
+                </p>
+              </div>
+            </div>
+
+            <div className="w-full max-w-xl rounded-[1.4rem] border border-white/70 bg-white/82 p-4 shadow-sm">
+              <div className="mb-3 flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">Project progress</p>
+                  <p className="mt-1 text-sm font-medium text-slate-700">
+                    {completedRealSubtasks} of {Math.max(totalRealSubtasks, 1)} core tasks complete
+                  </p>
+                </div>
+                <div className="rounded-full bg-slate-100 px-3 py-1 text-sm font-semibold text-slate-700">
+                  {taskProgress}%
+                </div>
+              </div>
+              <ProgressBar
+                progress={taskProgress}
+                completedTasks={completedRealSubtasks}
+                totalTasks={Math.max(totalRealSubtasks, 1)}
+                className="mb-0"
+              />
+            </div>
+          </CardContent>
+        </Card>
+
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
+          <StatTile
+            label="Task Position"
+            value={currentTaskNumber}
+            icon={BookOpen}
+            tone="blue"
+            hint="Where this task sits in the full learner workflow."
+          />
+          <StatTile
+            label="Workflow Progress"
+            value={`${taskProgress}%`}
+            icon={CheckCircle}
+            tone="green"
+            hint="Overall completion across your real project tasks."
+          />
+          <StatTile
+            label="Latest Evaluation"
+            value={latestEvaluationScore !== null ? `${latestEvaluationScore}%` : 'Pending'}
+            icon={MessageCircleQuestion}
+            tone="purple"
+            hint="The freshest score visible in this workspace."
+          />
+          <StatTile
+            label="Prompt Momentum"
+            value={promptStreak?.currentStreak ?? 0}
+            icon={MessageSquare}
+            tone="amber"
+            hint="Your live streak of strong prompts in this task."
+          />
         </div>
-        </header>
+
+        <div className="rounded-[1.6rem] border border-white/70 bg-white/80 p-3 shadow-sm backdrop-blur-xl">
+          <TaskNavigation 
+            project={project}
+            participation={participation}
+            currentSubtaskId={subtaskId}
+          />
+        </div>
 
         {/* Expired Project Warning */}
         {project && isProjectExpired(project.deadline) && (
