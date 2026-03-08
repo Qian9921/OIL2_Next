@@ -3,7 +3,10 @@
 import React, { useEffect, useState, Fragment } from "react";
 import { useSession } from "next-auth/react";
 import { MainLayout } from "@/components/layout/main-layout";
+import { PageHero } from "@/components/layout/page-hero";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { FilterShell } from "@/components/ui/filter-shell";
+import { StatTile } from "@/components/ui/stat-tile";
 import { Button } from "@/components/ui/button";
 import { Avatar } from "@/components/ui/avatar";
 import { 
@@ -471,93 +474,89 @@ export default function StudentMyProjectsPage() {
           hideFloatingButton={true}
         />
 
-        {/* Header */}
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-3xl font-bold text-gray-900">My Projects</h1>
-            <p className="text-gray-600 mt-2">
-              Track your learning progress and project completion 📚
-            </p>
-          </div>
-          <div className="flex space-x-3">
-            <Link href="/student/certificates">
-              <Button variant="outline">
-                <Award className="w-4 h-4 mr-2" />
-                My Certificates ({certificates.length})
-              </Button>
-            </Link>
-            <Link href="/student/projects">
-              <Button>
-                <BookOpen className="w-4 h-4 mr-2" />
-                Browse More Projects
-              </Button>
-            </Link>
-          </div>
-        </div>
+        <PageHero
+          eyebrow="Student workspace"
+          icon={BookOpen}
+          title="My Projects"
+          description="Track your learning progress, continue active work, and move smoothly from evaluation feedback into focused Tutor guidance."
+          actions={
+            <>
+              <Link href="/student/certificates">
+                <Button variant="outline">
+                  <Award className="w-4 h-4 mr-2" />
+                  My Certificates ({certificates.length})
+                </Button>
+              </Link>
+              <Link href="/student/projects">
+                <Button>
+                  <BookOpen className="w-4 h-4 mr-2" />
+                  Browse More Projects
+                </Button>
+              </Link>
+            </>
+          }
+        />
 
-        {/* Statistics Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-          <Card>
-            <CardContent className="p-6">
-              <div className="flex items-center space-x-4">
-                <div className="p-3 bg-blue-100 rounded-full">
-                  <Play className="w-6 h-6 text-blue-600" />
-                </div>
-                <div>
-                  <p className="text-2xl font-bold text-gray-900">{stats.activeProjects}</p>
-                  <p className="text-sm text-gray-600">Active Projects</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardContent className="p-6">
-              <div className="flex items-center space-x-4">
-                <div className="p-3 bg-green-100 rounded-full">
-                  <CheckCircle className="w-6 h-6 text-green-600" />
-                </div>
-                <div>
-                  <p className="text-2xl font-bold text-gray-900">{stats.completedProjects}</p>
-                  <p className="text-sm text-gray-600">Completed Projects</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
+        <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-4">
+          <StatTile label="Active Projects" value={stats.activeProjects} icon={Play} tone="blue" hint="Projects you can keep working on right now." />
+          <StatTile label="Completed Projects" value={stats.completedProjects} icon={CheckCircle} tone="green" hint="Projects you finished and submitted successfully." />
           <Link href="/student/certificates">
-            <Card className="cursor-pointer hover:shadow-lg transition-shadow">
-              <CardContent className="p-6">
-                <div className="flex items-center space-x-4">
-                  <div className="p-3 bg-yellow-100 rounded-full">
-                    <Award className="w-6 h-6 text-yellow-600" />
-                  </div>
-                  <div>
-                    <p className="text-2xl font-bold text-gray-900">{certificates.length}</p>
-                    <p className="text-sm text-gray-600">Earned Certificates</p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
+            <div className="h-full">
+              <StatTile label="Earned Certificates" value={certificates.length} icon={Award} tone="amber" hint="Open your certificates and download them anytime." />
+            </div>
           </Link>
-
-          <Card>
-            <CardContent className="p-6">
-              <div className="flex items-center space-x-4">
-                <div className="p-3 bg-purple-100 rounded-full">
-                  <BarChart3 className="w-6 h-6 text-purple-600" />
-                </div>
-                <div>
-                  <p className="text-2xl font-bold text-gray-900">{stats.averageProgress}%</p>
-                  <p className="text-sm text-gray-600">Average Progress</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+          <StatTile label="Average Progress" value={`${stats.averageProgress}%`} icon={BarChart3} tone="purple" hint="How far your active projects have progressed overall." />
         </div>
 
-        {/* Filter Tabs */}
-        <div className="flex space-x-1 bg-gray-100 rounded-lg p-1">
+        <Card className="relative overflow-hidden border-white/70 bg-white/85 backdrop-blur-xl">
+          <div className="pointer-events-none absolute inset-y-0 right-0 w-40 bg-gradient-to-l from-fuchsia-100/50 via-transparent to-transparent" />
+          <CardContent className="relative flex flex-col gap-4 p-6 lg:flex-row lg:items-center lg:justify-between">
+            <div className="space-y-2">
+              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Momentum snapshot</p>
+              <h2 className="text-2xl font-semibold tracking-tight text-slate-900">
+                {stats.activeProjects > 0
+                  ? `You have ${stats.activeProjects} active project${stats.activeProjects > 1 ? "s" : ""} in motion.`
+                  : "You’re ready to start your next high-impact project."}
+              </h2>
+              <p className="max-w-2xl text-sm leading-6 text-slate-600">
+                Use the action-focused filters below to jump straight into active work, review requests, and completed project outcomes.
+              </p>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:min-w-[28rem]">
+              <div className="rounded-2xl border border-white/70 bg-white/80 p-3 shadow-sm">
+                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">Needs Action</p>
+                <p className="mt-2 text-xl font-semibold text-slate-900">
+                  {projectsWithDetails.filter((project) => project.submission?.status === 'needs_revision').length}
+                </p>
+              </div>
+              <div className="rounded-2xl border border-white/70 bg-white/80 p-3 shadow-sm">
+                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">Certificates</p>
+                <p className="mt-2 text-xl font-semibold text-slate-900">{certificates.length}</p>
+              </div>
+              <div className="rounded-2xl border border-white/70 bg-white/80 p-3 shadow-sm">
+                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">Completed Tasks</p>
+                <p className="mt-2 text-xl font-semibold text-slate-900">
+                  {projectsWithDetails.reduce((sum, project) => sum + (project.completedSubtasks?.length || 0), 0)}
+                </p>
+              </div>
+              <div className="rounded-2xl border border-white/70 bg-white/80 p-3 shadow-sm">
+                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">Review Queue</p>
+                <p className="mt-2 text-xl font-semibold text-slate-900">
+                  {projectsWithDetails.filter((project) => project.submission?.status === 'pending').length}
+                </p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <FilterShell
+          title="Project views"
+          description="Switch between active work, completed projects, and items that need your attention."
+          icon={ListChecks}
+          meta={<div className="inline-flex items-center rounded-full border border-white/70 bg-white/75 px-3 py-1 text-xs font-medium text-slate-600 shadow-sm">{filteredAndSortedProjects.length} visible</div>}
+        >
+          <div className="flex flex-wrap gap-2">
           {(['active', 'completed', 'action_required', 'rejected'] as ProjectFilter[]).map((filterKey) => {
             const filterLabel = filterKey === "active" ? "Active" : 
                                filterKey === "completed" ? "Completed" : 
@@ -576,17 +575,19 @@ export default function StudentMyProjectsPage() {
               <button
                 key={filterKey}
                 onClick={() => setActiveFilter(filterKey)}
-                className={`flex-1 px-4 py-2 text-sm font-medium rounded-md transition-colors ${
+                className={`min-w-[9rem] flex-1 rounded-2xl border px-4 py-3 text-sm font-medium transition-all ${
                   activeFilter === filterKey
-                    ? 'bg-white text-purple-600 shadow-sm'
-                    : 'text-gray-600 hover:text-gray-900'
+                    ? 'border-white/80 bg-gradient-to-r from-fuchsia-500 via-violet-500 to-cyan-500 text-white shadow-lg shadow-violet-200/60'
+                    : 'border-white/70 bg-white/70 text-gray-600 shadow-sm hover:border-white hover:bg-white hover:text-gray-900'
                 }`}
               >
-                {filterLabel} ({count})
+                <span className="block">{filterLabel}</span>
+                <span className={`mt-1 block text-xs ${activeFilter === filterKey ? 'text-white/80' : 'text-slate-400'}`}>{count} items</span>
               </button>
             );
           })}
-        </div>
+          </div>
+        </FilterShell>
 
         {/* Projects List */}
         {filteredAndSortedProjects.length > 0 ? (
@@ -763,10 +764,12 @@ export default function StudentMyProjectsPage() {
             })}
           </div>
         ) : (
-          <div className="bg-gray-50 border border-gray-200 rounded-lg p-12 text-center">
-            <BookmarkX className="w-12 h-12 mx-auto text-gray-400 mb-4" />
-            <h3 className="text-lg font-medium text-gray-900 mb-2">No Projects Found</h3>
-            <p className="text-gray-600 mb-6">You don't have any {activeFilter.replace('_', ' ')} projects yet.</p>
+          <div className="rounded-[1.75rem] border border-white/70 bg-white/80 p-12 text-center shadow-sm backdrop-blur-xl">
+            <div className="mx-auto mb-4 flex h-20 w-20 items-center justify-center rounded-3xl bg-gradient-to-br from-slate-100 to-cyan-100">
+              <BookmarkX className="h-10 w-10 text-slate-500" />
+            </div>
+            <h3 className="mb-2 text-lg font-medium text-gray-900">No Projects Found</h3>
+            <p className="mb-6 text-gray-600">You don't have any {activeFilter.replace('_', ' ')} projects yet.</p>
                  <Link href="/student/projects">
               <Button>Browse Projects</Button>
                 </Link>

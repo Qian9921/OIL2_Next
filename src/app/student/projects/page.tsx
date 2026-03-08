@@ -3,12 +3,20 @@
 import { useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
 import { MainLayout } from "@/components/layout/main-layout";
+import { PageHero } from "@/components/layout/page-hero";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { FilterShell } from "@/components/ui/filter-shell";
+import { StatTile } from "@/components/ui/stat-tile";
 import { getProjects, createParticipation, getParticipations } from "@/lib/firestore";
 import { Project } from "@/lib/types";
 import { 
   BookOpen, 
+  CheckCircle,
+  Clock,
+  Sparkles,
+  Target,
   Users, 
   Search,
   Filter,
@@ -187,6 +195,19 @@ export default function StudentProjectsPage() {
     return participation?.status === 'completed';
   };
 
+  const stats = {
+    available: projects.filter((project) => !isProjectJoined(project.id) && !isProjectExpired(project.deadline)).length,
+    joined: participationDetails.filter((participation) => participation.status === 'active').length,
+    completed: participationDetails.filter((participation) => participation.status === 'completed').length,
+    expiring: projects.filter((project) => {
+      if (!project.deadline) return false;
+      const deadlineDate = project.deadline instanceof Timestamp ? project.deadline.toDate() : new Date(project.deadline as unknown as string);
+      const now = new Date();
+      const diffDays = (deadlineDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24);
+      return diffDays >= 0 && diffDays <= 7;
+    }).length,
+  };
+
   if (isLoading) {
     return (
       <MainLayout>
@@ -218,99 +239,124 @@ export default function StudentProjectsPage() {
           </AlertDialogContent>
         </AlertDialog>
 
-        {/* Header */}
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-3xl font-bold text-gray-900">Browse Projects</h1>
-            <p className="text-gray-600 mt-2">
-              Discover meaningful social impact projects and join them 🌟
-            </p>
-          </div>
-          <div className="flex space-x-2">
-            <Button 
-              variant="outline" 
-              onClick={() => {
-                setSearchTerm("");
-                setDifficultyFilter("all");
-                setTagFilter("all");
-                setStatusFilter("all");
-              }}
-            >
-              <Filter className="w-4 h-4 mr-2" />
-              Clear Filters
-            </Button>
-            <Link href="/student/my-projects">
-              <Button>
-                <BookOpen className="w-4 h-4 mr-2" />
-                My Projects
+        <PageHero
+          eyebrow="Student workspace"
+          icon={BookOpen}
+          title="Browse Projects"
+          description="Discover meaningful social impact projects, compare difficulty and deadlines, and join the ones that fit your learning goals."
+          actions={
+            <>
+              <Button 
+                variant="outline" 
+                onClick={() => {
+                  setSearchTerm("");
+                  setDifficultyFilter("all");
+                  setTagFilter("all");
+                  setStatusFilter("all");
+                }}
+              >
+                <Filter className="w-4 h-4 mr-2" />
+                Clear Filters
               </Button>
-            </Link>
-          </div>
+              <Link href="/student/my-projects">
+                <Button>
+                  <BookOpen className="w-4 h-4 mr-2" />
+                  My Projects
+                </Button>
+              </Link>
+            </>
+          }
+        />
+
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
+          <StatTile
+            label="Open Opportunities"
+            value={stats.available}
+            icon={Sparkles}
+            tone="purple"
+            hint="Projects that are live and ready for you to join."
+          />
+          <StatTile
+            label="Projects Joined"
+            value={stats.joined}
+            icon={Users}
+            tone="blue"
+            hint="Keep momentum on the work you already started."
+          />
+          <StatTile
+            label="Projects Finished"
+            value={stats.completed}
+            icon={CheckCircle}
+            tone="green"
+            hint="Your strongest work already completed and review-ready."
+          />
+          <StatTile
+            label="Ending Soon"
+            value={stats.expiring}
+            icon={Clock}
+            tone="amber"
+            hint="Live projects closing within the next seven days."
+          />
         </div>
 
-        {/* Filters */}
-        <Card>
-          <CardContent className="p-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-              {/* Search */}
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-                <input
-                  type="text"
-                  placeholder="Search projects..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                />
-              </div>
-
-              {/* Difficulty Filter */}
-              <select
-                value={difficultyFilter}
-                onChange={(e) => setDifficultyFilter(e.target.value)}
-                className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-              >
-                <option value="all">All Difficulties</option>
-                <option value="beginner">Beginner</option>
-                <option value="intermediate">Intermediate</option>
-                <option value="advanced">Advanced</option>
-              </select>
-
-              {/* Tag Filter */}
-              <select
-                value={tagFilter}
-                onChange={(e) => setTagFilter(e.target.value)}
-                className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-              >
-                <option value="all">All Tags</option>
-                {getAllTags().map(tag => (
-                  <option key={tag} value={tag}>{tag}</option>
-                ))}
-              </select>
-
-              {/* Status Filter */}
-              <select
-                value={statusFilter}
-                onChange={(e) => setStatusFilter(e.target.value)}
-                className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-              >
-                <option value="all">All Statuses</option>
-                <option value="available">Available</option>
-                <option value="joined">Joined</option>
-                <option value="completed">Completed</option>
-                <option value="expired">Expired</option>
-              </select>
-              
-
-              
-              {/* Results Count - now spans full width at the bottom */}
-              <div className="col-span-full flex items-center justify-end text-sm text-gray-600 mt-2">
-                <Filter className="w-4 h-4 mr-2" />
-                Found {filteredProjects.length} projects
-              </div>
+        <FilterShell
+          title="Project filters"
+          description="Refine the marketplace by difficulty, topic, and current availability."
+          icon={Filter}
+          meta={
+            <div className="inline-flex items-center rounded-full border border-white/70 bg-white/75 px-3 py-1 text-xs font-medium text-slate-600 shadow-sm">
+              <Target className="mr-1.5 h-3.5 w-3.5 text-violet-500" />
+              {filteredProjects.length} results
             </div>
-          </CardContent>
-        </Card>
+          }
+        >
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                  <Input
+                    type="text"
+                    placeholder="Search projects..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="pl-10"
+                  />
+                </div>
+
+                <select
+                  value={difficultyFilter}
+                  onChange={(e) => setDifficultyFilter(e.target.value)}
+                  className="h-11 w-full rounded-xl border border-slate-200 bg-white px-3.5 text-sm text-slate-700 shadow-sm transition-[border-color,box-shadow] duration-200 focus:border-purple-400 focus:outline-none focus:ring-4 focus:ring-purple-100"
+                >
+                  <option value="all">All Difficulties</option>
+                  <option value="beginner">Beginner</option>
+                  <option value="intermediate">Intermediate</option>
+                  <option value="advanced">Advanced</option>
+                </select>
+
+                <select
+                  value={tagFilter}
+                  onChange={(e) => setTagFilter(e.target.value)}
+                  className="h-11 w-full rounded-xl border border-slate-200 bg-white px-3.5 text-sm text-slate-700 shadow-sm transition-[border-color,box-shadow] duration-200 focus:border-purple-400 focus:outline-none focus:ring-4 focus:ring-purple-100"
+                >
+                  <option value="all">All Tags</option>
+                  {getAllTags().map(tag => (
+                    <option key={tag} value={tag}>{tag}</option>
+                  ))}
+                </select>
+
+                <select
+                  value={statusFilter}
+                  onChange={(e) => setStatusFilter(e.target.value)}
+                  className="h-11 w-full rounded-xl border border-slate-200 bg-white px-3.5 text-sm text-slate-700 shadow-sm transition-[border-color,box-shadow] duration-200 focus:border-purple-400 focus:outline-none focus:ring-4 focus:ring-purple-100"
+                >
+                  <option value="all">All Statuses</option>
+                  <option value="available">Available</option>
+                  <option value="joined">Joined</option>
+                  <option value="completed">Completed</option>
+                  <option value="expired">Expired</option>
+                </select>
+          </div>
+        </FilterShell>
 
         {/* Projects Grid */}
         {filteredProjects.length > 0 ? (
@@ -330,14 +376,16 @@ export default function StudentProjectsPage() {
             ))}
           </div>
         ) : (
-          <Card>
+          <Card className="overflow-hidden border-white/70 bg-white/85 backdrop-blur-xl">
             <CardContent className="p-12 text-center">
-              <BookOpen className="w-16 h-16 mx-auto mb-4 text-gray-300" />
-              <h3 className="text-xl font-semibold text-gray-900 mb-2">
+              <div className="mx-auto mb-4 flex h-20 w-20 items-center justify-center rounded-3xl bg-gradient-to-br from-purple-100 to-cyan-100">
+                <BookOpen className="h-10 w-10 text-violet-500" />
+              </div>
+              <h3 className="mb-2 text-xl font-semibold text-gray-900">
                 No projects found
               </h3>
-              <p className="text-gray-600 mb-6">
-                Try adjusting your search criteria or check back later for new projects!
+              <p className="mb-6 text-gray-600">
+                Try adjusting your filters, or check back soon for newly published impact projects.
               </p>
               <Button
                 onClick={() => {

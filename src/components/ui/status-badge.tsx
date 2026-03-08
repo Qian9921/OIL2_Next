@@ -45,8 +45,8 @@ export function StatusBadge({ status, text, className = '' }: StatusBadgeProps) 
   const Icon = config.icon;
   
   return (
-    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${config.color} ${className}`}>
-      <Icon className="w-3 h-3 mr-1" />
+    <span className={`inline-flex items-center gap-1 rounded-full border border-white/60 px-2.5 py-1 text-xs font-medium shadow-sm ${config.color} ${className}`}>
+      <Icon className="h-3 w-3" />
       {displayText}
     </span>
   );

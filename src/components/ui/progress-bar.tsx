@@ -22,17 +22,17 @@ export function ProgressBar({
     <div className={`mb-3 ${className}`}>
       {completedTasks !== undefined && totalTasks !== undefined && (
         <div className="flex justify-between items-center mb-1">
-          <span className="text-sm font-medium text-gray-700">
+          <span className="text-sm font-medium text-slate-700">
             Progress: {completedTasks}/{totalTasks} tasks
           </span>
-          <span className="text-sm font-medium text-gray-700">
+          <span className="text-sm font-medium text-slate-700">
             {progress}%
           </span>
         </div>
       )}
-      <div className="w-full bg-gray-200 rounded-full h-2.5 overflow-hidden">
+      <div className="h-2.5 w-full overflow-hidden rounded-full bg-slate-200/80">
         <div
-          className="bg-gradient-to-r from-purple-500 to-pink-500 h-2.5 rounded-full transition-all duration-500 ease-in-out"
+          className="h-2.5 rounded-full bg-gradient-to-r from-fuchsia-500 via-violet-500 to-cyan-500 transition-all duration-500 ease-in-out"
           style={{ 
             width: `${progress}%`,
             boxShadow: isComplete ? '0 0 8px rgba(168, 85, 247, 0.5)' : 'none'
@@ -40,7 +40,7 @@ export function ProgressBar({
         />
       </div>
       {isComplete && showCompletionIcon && (
-        <div className="text-xs text-green-600 font-medium flex items-center mt-1">
+        <div className="mt-1 flex items-center text-xs font-medium text-emerald-600">
           <CheckCircle className="w-3 h-3 mr-1" />
           Completed all tasks!
         </div>
