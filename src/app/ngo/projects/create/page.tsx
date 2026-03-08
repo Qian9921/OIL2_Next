@@ -4,8 +4,10 @@ import { useState } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { MainLayout } from "@/components/layout/main-layout";
+import { PageHero } from "@/components/layout/page-hero";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { StatTile } from "@/components/ui/stat-tile";
 import { createProject } from "@/lib/firestore";
 import { Subtask } from "@/lib/types";
 import { useToast } from "@/hooks/use-toast";
@@ -31,6 +33,7 @@ import { GITHUB_SUBMISSION_SUBTASK_ID, GITHUB_SUBMISSION_SUBTASK_PROPS } from "@
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { calculateDeadlineFromDays, estimateDaysFromDifficulty } from "@/lib/utils";
 import { LoadingState } from "@/components/ui/loading-state";
+import { ProjectQualityAssistant } from "@/components/project/project-quality-assistant";
 
 const initialFormData = {
   title: "",
@@ -440,32 +443,78 @@ export default function CreateProjectPage() {
     }
   };
 
+  const validSubtaskCount = subtasks.filter((subtask) => subtask.title.trim() && subtask.description.trim()).length;
+  const totalEstimatedHours = subtasks.reduce((sum, subtask) => sum + (subtask.estimatedHours || 0), 0);
+  const publishingSignals = formData.title.trim().length > 0
+    && formData.description.trim().length > 0
+    && formData.requirements.length > 0
+    && formData.learningGoals.length > 0
+    && validSubtaskCount > 0;
+
   return (
     <MainLayout>
       <div className="space-y-6">
-        {/* Header */}
-        <div className="flex items-center justify-between">
-          <div className="flex items-center space-x-4">
-            <Link href="/ngo/projects">
-              <Button variant="ghost" size="sm">
-                <ArrowLeft className="w-4 h-4 mr-2" />
-                Back to Project List
+        <PageHero
+          eyebrow="NGO authoring workspace"
+          icon={Sparkles}
+          title="Create New Project"
+          description="Design a publish-ready learning project with clear outcomes, strong task structure, and an experience students can understand immediately."
+          actions={
+            <>
+              <Link href="/ngo/projects">
+                <Button variant="outline" size="sm">
+                  <ArrowLeft className="mr-2 h-4 w-4" />
+                  Back to Project List
+                </Button>
+              </Link>
+              <Button
+                onClick={() => handleSubmit('published')}
+                disabled={isLoading || isRefining || isRefiningSubtasks}
+                size="sm"
+              >
+                <Save className="mr-2 h-4 w-4" />
+                Publish Project
               </Button>
-            </Link>
-            <div>
-              <h1 className="text-3xl font-bold text-gray-900">Create New Project</h1>
-              <p className="text-gray-600 mt-2">
-                Create a meaningful social impact project ✨
-              </p>
-            </div>
-          </div>
+            </>
+          }
+        />
+
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
+          <StatTile
+            label="Valid Subtasks"
+            value={validSubtaskCount}
+            icon={Target}
+            tone="green"
+            hint="Subtasks with both a title and a usable description."
+          />
+          <StatTile
+            label="Estimated Hours"
+            value={totalEstimatedHours}
+            icon={Calendar}
+            tone="blue"
+            hint="A rough effort signal students will feel before joining."
+          />
+          <StatTile
+            label="Requirements"
+            value={formData.requirements.length}
+            icon={Users}
+            tone="purple"
+            hint="Participation gates or expectations for learners."
+          />
+          <StatTile
+            label="Publish Readiness"
+            value={publishingSignals ? 'Ready' : 'Drafting'}
+            icon={BookOpen}
+            tone="amber"
+            hint="A quick signal for whether the project has the basics in place."
+          />
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1.18fr)_minmax(320px,0.82fr)]">
           {/* Main Form */}
-          <div className="lg:col-span-2 space-y-6">
+          <div className="space-y-6">
             {/* Basic Information */}
-            <Card>
+            <Card className="border-white/70 bg-white/85 backdrop-blur-xl">
               <CardHeader>
                 <CardTitle className="flex items-center space-x-2">
                   <BookOpen className="w-5 h-5 text-blue-600" />
@@ -578,7 +627,7 @@ export default function CreateProjectPage() {
             </Card>
 
             {/* Tags */}
-            <Card>
+            <Card className="border-white/70 bg-white/85 backdrop-blur-xl">
               <CardHeader>
                 <CardTitle className="flex items-center space-x-2">
                   <Tag className="w-5 h-5 text-purple-600" />
@@ -619,7 +668,7 @@ export default function CreateProjectPage() {
             </Card>
 
             {/* Subtasks */}
-            <Card>
+            <Card className="border-white/70 bg-white/85 backdrop-blur-xl">
               <CardHeader>
                 <CardTitle className="flex items-center space-x-2">
                   <Target className="w-5 h-5 text-green-600" />
@@ -652,7 +701,7 @@ export default function CreateProjectPage() {
               </CardHeader>
               <CardContent className="space-y-4">
                 {subtasks.map((subtask, index) => (
-                  <div key={index} className="border rounded-lg p-4 space-y-3">
+                  <div key={index} className="rounded-2xl border border-slate-200 bg-white/80 p-4 space-y-3 shadow-sm">
                     <div className="flex items-center justify-between">
                       <h4 className="font-medium text-gray-900">Subtask {index + 1}</h4>
                       {subtasks.length > 1 && (
@@ -709,9 +758,14 @@ export default function CreateProjectPage() {
           </div>
 
           {/* Sidebar */}
-          <div className="space-y-6">
+          <div className="space-y-6 lg:sticky lg:top-24 self-start">
+            <ProjectQualityAssistant
+              formData={formData}
+              subtasks={subtasks}
+              mode="create"
+            />
             {/* Requirements */}
-            <Card>
+            <Card className="border-white/70 bg-white/85 backdrop-blur-xl">
               <CardHeader>
                 <CardTitle className="text-lg">Participation Requirements</CardTitle>
               </CardHeader>
@@ -746,7 +800,7 @@ export default function CreateProjectPage() {
             </Card>
 
             {/* Learning Goals */}
-            <Card>
+            <Card className="border-white/70 bg-white/85 backdrop-blur-xl">
               <CardHeader>
                 <CardTitle className="text-lg">Learning Goals</CardTitle>
               </CardHeader>
@@ -781,8 +835,14 @@ export default function CreateProjectPage() {
             </Card>
 
             {/* Action Buttons */}
-            <Card>
+            <Card className="border-white/70 bg-white/90 shadow-lg shadow-slate-200/50 backdrop-blur-xl">
               <CardContent className="p-4 space-y-3">
+                <div className="space-y-1">
+                  <p className="text-sm font-semibold text-slate-900">Ship this project confidently</p>
+                  <p className="text-xs leading-5 text-slate-500">
+                    Publish when the quality panel feels strong, or save a draft and keep iterating.
+                  </p>
+                </div>
                 <Button
                   onClick={() => handleSubmit('published')}
                   disabled={isLoading || isRefining || isRefiningSubtasks}

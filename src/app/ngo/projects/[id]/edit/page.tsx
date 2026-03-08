@@ -4,8 +4,10 @@ import { useState, useEffect } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter, useParams } from "next/navigation";
 import { MainLayout } from "@/components/layout/main-layout";
+import { PageHero } from "@/components/layout/page-hero";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { StatTile } from "@/components/ui/stat-tile";
 import { getProject, updateProject } from "@/lib/firestore";
 import { Project, Subtask } from "@/lib/types";
 import { useToast } from "@/hooks/use-toast";
@@ -31,6 +33,7 @@ import { GITHUB_SUBMISSION_SUBTASK_ID, GITHUB_SUBMISSION_SUBTASK_PROPS } from "@
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { calculateDeadlineFromDays, estimateDaysFromDifficulty } from "@/lib/utils";
 import { LoadingState } from "@/components/ui/loading-state";
+import { ProjectQualityAssistant } from "@/components/project/project-quality-assistant";
 
 const initialFormData = {
   title: "",
@@ -638,32 +641,78 @@ export default function EditProjectPage() {
     );
   }
 
+  const validSubtaskCount = subtasks.filter((subtask) => subtask.title.trim() && subtask.description.trim()).length;
+  const totalEstimatedHours = subtasks.reduce((sum, subtask) => sum + (subtask.estimatedHours || 0), 0);
+  const publishingSignals = formData.title.trim().length > 0
+    && formData.description.trim().length > 0
+    && formData.requirements.length > 0
+    && formData.learningGoals.length > 0
+    && validSubtaskCount > 0;
+
   return (
     <MainLayout>
       <div className="space-y-6">
-        {/* Header */}
-        <div className="flex items-center justify-between">
-          <div className="flex items-center space-x-4">
-            <Link href={`/ngo/projects/${project.id}`}>
-              <Button variant="ghost" size="sm">
-                <ArrowLeft className="w-4 h-4 mr-2" />
-                Back to Project Details
+        <PageHero
+          eyebrow="NGO authoring workspace"
+          icon={Sparkles}
+          title="Edit Project"
+          description="Refine structure, clarity, and learner readiness without losing momentum. This workspace is tuned for fast iteration before you publish updates."
+          actions={
+            <>
+              <Link href={`/ngo/projects/${project.id}`}>
+                <Button variant="outline" size="sm">
+                  <ArrowLeft className="mr-2 h-4 w-4" />
+                  Back to Project Details
+                </Button>
+              </Link>
+              <Button
+                onClick={() => handleSubmit('published')}
+                disabled={isLoading || isRefining || isRefiningSubtasks}
+                size="sm"
+              >
+                <Save className="mr-2 h-4 w-4" />
+                Update & Publish
               </Button>
-            </Link>
-            <div>
-              <h1 className="text-3xl font-bold text-gray-900">Edit Project</h1>
-              <p className="text-gray-600 mt-2">
-                Edit your social impact project ✏️
-              </p>
-            </div>
-          </div>
+            </>
+          }
+        />
+
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
+          <StatTile
+            label="Valid Subtasks"
+            value={validSubtaskCount}
+            icon={Target}
+            tone="green"
+            hint="Structured subtasks students can immediately act on."
+          />
+          <StatTile
+            label="Estimated Hours"
+            value={totalEstimatedHours}
+            icon={Calendar}
+            tone="blue"
+            hint="Approximate total effort implied by your current subtasks."
+          />
+          <StatTile
+            label="Learning Goals"
+            value={formData.learningGoals.length}
+            icon={BookOpen}
+            tone="purple"
+            hint="The capabilities students should walk away with."
+          />
+          <StatTile
+            label="Publish Readiness"
+            value={publishingSignals ? 'Ready' : 'Review'}
+            icon={Users}
+            tone="amber"
+            hint="Whether the current edit feels complete enough to ship."
+          />
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1.18fr)_minmax(320px,0.82fr)]">
           {/* Main Form */}
-          <div className="lg:col-span-2 space-y-6">
+          <div className="space-y-6">
             {/* Basic Information */}
-            <Card>
+            <Card className="border-white/70 bg-white/85 backdrop-blur-xl">
               <CardHeader>
                 <CardTitle className="flex items-center space-x-2">
                   <BookOpen className="w-5 h-5 text-blue-600" />
@@ -776,7 +825,7 @@ export default function EditProjectPage() {
             </Card>
 
             {/* Tags */}
-            <Card>
+            <Card className="border-white/70 bg-white/85 backdrop-blur-xl">
               <CardHeader>
                 <CardTitle className="flex items-center space-x-2">
                   <Tag className="w-5 h-5 text-purple-600" />
@@ -817,7 +866,7 @@ export default function EditProjectPage() {
             </Card>
 
             {/* Subtasks */}
-            <Card>
+            <Card className="border-white/70 bg-white/85 backdrop-blur-xl">
               <CardHeader>
                 <CardTitle className="flex items-center space-x-2">
                   <Target className="w-5 h-5 text-green-600" />
@@ -850,7 +899,7 @@ export default function EditProjectPage() {
               </CardHeader>
               <CardContent className="space-y-4">
                 {subtasks.map((subtask, index) => (
-                  <div key={index} className="border rounded-lg p-4 space-y-3">
+                  <div key={index} className="rounded-2xl border border-slate-200 bg-white/80 p-4 space-y-3 shadow-sm">
                     <div className="flex items-center justify-between">
                       <h4 className="font-medium text-gray-900">Subtask {index + 1}</h4>
                       {subtasks.length > 1 && (
@@ -907,9 +956,14 @@ export default function EditProjectPage() {
           </div>
 
           {/* Sidebar */}
-          <div className="space-y-6">
+          <div className="space-y-6 self-start lg:sticky lg:top-24">
+            <ProjectQualityAssistant
+              formData={formData}
+              subtasks={subtasks}
+              mode="edit"
+            />
             {/* Requirements */}
-            <Card>
+            <Card className="border-white/70 bg-white/85 backdrop-blur-xl">
               <CardHeader>
                 <CardTitle className="text-lg">Participation Requirements</CardTitle>
               </CardHeader>
@@ -944,7 +998,7 @@ export default function EditProjectPage() {
             </Card>
 
             {/* Learning Goals */}
-            <Card>
+            <Card className="border-white/70 bg-white/85 backdrop-blur-xl">
               <CardHeader>
                 <CardTitle className="text-lg">Learning Goals</CardTitle>
               </CardHeader>
@@ -979,8 +1033,14 @@ export default function EditProjectPage() {
             </Card>
 
             {/* Action Buttons */}
-            <Card>
+            <Card className="border-white/70 bg-white/90 shadow-lg shadow-slate-200/50 backdrop-blur-xl">
               <CardContent className="p-4 space-y-3">
+                <div className="space-y-1">
+                  <p className="text-sm font-semibold text-slate-900">Apply changes with confidence</p>
+                  <p className="text-xs leading-5 text-slate-500">
+                    Publish the refreshed version when it feels coherent, or keep iterating safely as a draft.
+                  </p>
+                </div>
                 <Button
                   onClick={() => handleSubmit('published')}
                   disabled={isLoading || isRefining || isRefiningSubtasks}
