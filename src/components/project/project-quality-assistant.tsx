@@ -45,12 +45,12 @@ export function ProjectQualityAssistant({
 
   return (
     <Card className="relative overflow-hidden border-white/70 bg-white/88 shadow-[0_24px_60px_-28px_rgba(15,23,42,0.28)] backdrop-blur-xl">
-      <ShineBorder borderWidth={1} duration={14} />
-      <div className="pointer-events-none absolute inset-x-0 top-0 h-24 bg-gradient-to-br from-fuchsia-100/60 via-transparent to-cyan-100/50" />
+      <ShineBorder borderWidth={1} duration={14} shineColor={["rgba(129,140,248,0.1)", "rgba(251,191,186,0.08)", "rgba(125,211,252,0.08)"]} />
+      <div className="pointer-events-none absolute inset-x-0 top-0 h-24 bg-gradient-to-br from-rose-100/60 via-transparent to-sky-100/50" />
       <CardHeader className="pb-4">
         <CardTitle className="flex items-center justify-between gap-3 text-lg">
           <span className="flex items-center gap-2">
-            <Sparkles className="h-5 w-5 text-purple-600" />
+            <Sparkles className="h-5 w-5 text-indigo-500" />
             Project Quality Assistant
           </span>
           <div className={`rounded-full border px-3 py-1 text-sm font-semibold ${scoreTone}`}>
@@ -79,7 +79,7 @@ export function ProjectQualityAssistant({
           </div>
           <div className="mt-3 h-2 overflow-hidden rounded-full bg-slate-200">
             <div
-              className="h-full rounded-full bg-gradient-to-r from-blue-500 via-indigo-500 to-purple-500 transition-all duration-500"
+              className="h-full rounded-full bg-gradient-to-r from-emerald-400 via-sky-400 to-indigo-400 transition-all duration-500"
               style={{ width: `${analysis.score}%` }}
             />
           </div>
@@ -137,15 +137,15 @@ export function ProjectQualityAssistant({
             </ol>
           </div>
 
-          <div className="rounded-xl border border-purple-200 bg-purple-50 p-4">
-            <h4 className="flex items-center gap-2 text-sm font-semibold text-purple-900">
+          <div className="rounded-xl border border-indigo-200 bg-indigo-50 p-4">
+            <h4 className="flex items-center gap-2 text-sm font-semibold text-indigo-900">
               <GraduationCap className="h-4 w-4" />
               What students will likely experience
             </h4>
-            <ul className="mt-3 space-y-2 text-sm text-purple-800">
+            <ul className="mt-3 space-y-2 text-sm text-indigo-800">
               {analysis.studentPreview.map((item, index) => (
                 <li key={index} className="flex gap-2">
-                  <span className="mt-1 h-1.5 w-1.5 rounded-full bg-purple-600" />
+                  <span className="mt-1 h-1.5 w-1.5 rounded-full bg-indigo-500" />
                   <span>{item}</span>
                 </li>
               ))}

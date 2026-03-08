@@ -305,7 +305,7 @@ export default function StudentProjectsPage() {
           icon={Filter}
           meta={
             <div className="inline-flex items-center rounded-full border border-white/70 bg-white/75 px-3 py-1 text-xs font-medium text-slate-600 shadow-sm">
-              <Target className="mr-1.5 h-3.5 w-3.5 text-violet-500" />
+              <Target className="mr-1.5 h-3.5 w-3.5 text-indigo-400" />
               {filteredProjects.length} results
             </div>
           }
@@ -325,7 +325,7 @@ export default function StudentProjectsPage() {
                 <select
                   value={difficultyFilter}
                   onChange={(e) => setDifficultyFilter(e.target.value)}
-                  className="h-11 w-full rounded-xl border border-slate-200 bg-white px-3.5 text-sm text-slate-700 shadow-sm transition-[border-color,box-shadow] duration-200 focus:border-purple-400 focus:outline-none focus:ring-4 focus:ring-purple-100"
+                  className="h-11 w-full rounded-xl border border-slate-200 bg-white px-3.5 text-sm text-slate-700 shadow-sm transition-[border-color,box-shadow] duration-200 focus:border-indigo-300 focus:outline-none focus:ring-4 focus:ring-indigo-100"
                 >
                   <option value="all">All Difficulties</option>
                   <option value="beginner">Beginner</option>
@@ -336,7 +336,7 @@ export default function StudentProjectsPage() {
                 <select
                   value={tagFilter}
                   onChange={(e) => setTagFilter(e.target.value)}
-                  className="h-11 w-full rounded-xl border border-slate-200 bg-white px-3.5 text-sm text-slate-700 shadow-sm transition-[border-color,box-shadow] duration-200 focus:border-purple-400 focus:outline-none focus:ring-4 focus:ring-purple-100"
+                  className="h-11 w-full rounded-xl border border-slate-200 bg-white px-3.5 text-sm text-slate-700 shadow-sm transition-[border-color,box-shadow] duration-200 focus:border-indigo-300 focus:outline-none focus:ring-4 focus:ring-indigo-100"
                 >
                   <option value="all">All Tags</option>
                   {getAllTags().map(tag => (
@@ -347,7 +347,7 @@ export default function StudentProjectsPage() {
                 <select
                   value={statusFilter}
                   onChange={(e) => setStatusFilter(e.target.value)}
-                  className="h-11 w-full rounded-xl border border-slate-200 bg-white px-3.5 text-sm text-slate-700 shadow-sm transition-[border-color,box-shadow] duration-200 focus:border-purple-400 focus:outline-none focus:ring-4 focus:ring-purple-100"
+                  className="h-11 w-full rounded-xl border border-slate-200 bg-white px-3.5 text-sm text-slate-700 shadow-sm transition-[border-color,box-shadow] duration-200 focus:border-indigo-300 focus:outline-none focus:ring-4 focus:ring-indigo-100"
                 >
                   <option value="all">All Statuses</option>
                   <option value="available">Available</option>
@@ -378,8 +378,8 @@ export default function StudentProjectsPage() {
         ) : (
           <Card className="overflow-hidden border-white/70 bg-white/85 backdrop-blur-xl">
             <CardContent className="p-12 text-center">
-              <div className="mx-auto mb-4 flex h-20 w-20 items-center justify-center rounded-3xl bg-gradient-to-br from-purple-100 to-cyan-100">
-                <BookOpen className="h-10 w-10 text-violet-500" />
+              <div className="mx-auto mb-4 flex h-20 w-20 items-center justify-center rounded-3xl bg-gradient-to-br from-rose-100 to-sky-100">
+                <BookOpen className="h-10 w-10 text-indigo-500" />
               </div>
               <h3 className="mb-2 text-xl font-semibold text-gray-900">
                 No projects found

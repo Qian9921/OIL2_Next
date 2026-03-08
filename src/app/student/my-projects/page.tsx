@@ -509,7 +509,7 @@ export default function StudentMyProjectsPage() {
         </div>
 
         <Card className="relative overflow-hidden border-white/70 bg-white/85 backdrop-blur-xl">
-          <div className="pointer-events-none absolute inset-y-0 right-0 w-40 bg-gradient-to-l from-fuchsia-100/50 via-transparent to-transparent" />
+          <div className="pointer-events-none absolute inset-y-0 right-0 w-40 bg-gradient-to-l from-rose-100/45 via-transparent to-transparent" />
           <CardContent className="relative flex flex-col gap-4 p-6 lg:flex-row lg:items-center lg:justify-between">
             <div className="space-y-2">
               <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Momentum snapshot</p>
@@ -577,7 +577,7 @@ export default function StudentMyProjectsPage() {
                 onClick={() => setActiveFilter(filterKey)}
                 className={`min-w-[9rem] flex-1 rounded-2xl border px-4 py-3 text-sm font-medium transition-all ${
                   activeFilter === filterKey
-                    ? 'border-white/80 bg-gradient-to-r from-fuchsia-500 via-violet-500 to-cyan-500 text-white shadow-lg shadow-violet-200/60'
+                    ? 'border-white/80 bg-gradient-to-r from-indigo-400 to-sky-400 text-white shadow-md shadow-indigo-100/80'
                     : 'border-white/70 bg-white/70 text-gray-600 shadow-sm hover:border-white hover:bg-white hover:text-gray-900'
                 }`}
               >
@@ -657,7 +657,7 @@ export default function StudentMyProjectsPage() {
                       variant="default"
                       size="sm"
                       onClick={() => handleContinueLearning(projectWithDetails)}
-                      className="w-full bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white transition-all duration-300 ease-in-out transform hover:scale-105 shadow-md"
+                      className="w-full bg-gradient-to-r from-indigo-400 to-sky-400 hover:from-indigo-500 hover:to-sky-500 text-white transition-all duration-300 ease-in-out transform hover:scale-[1.02] shadow-sm"
                     >
                       <Play className="w-4 h-4 mr-2" />
                       Continue Learning
@@ -677,7 +677,7 @@ export default function StudentMyProjectsPage() {
                     variant="outline" 
                     size="sm"
                     onClick={() => handleViewTasks(projectWithDetails)}
-                    className="w-full transition-all duration-200 hover:border-purple-300 hover:bg-purple-50"
+                    className="w-full transition-all duration-200 hover:border-indigo-200 hover:bg-indigo-50"
                   >
                     <ListChecks className="w-4 h-4 mr-1.5" />
                     View Task Details

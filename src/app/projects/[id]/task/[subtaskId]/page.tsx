@@ -1450,13 +1450,13 @@ ${draft}` : draft);
         variant="outline"
         size="sm"
         onClick={handleViewPromptHistory}
-        className="h-9 shrink-0 rounded-full border-purple-200/80 bg-white text-purple-700 hover:bg-purple-50"
+        className="h-9 shrink-0 rounded-full border-indigo-200/80 bg-white text-indigo-600 hover:bg-indigo-50"
         title="Review your prompts and get quality feedback to improve your prompt writing skills"
       >
         <Info className="w-4 h-4" />
         <span>Prompt history</span>
         {promptHistory && promptHistory.length > 0 && (
-          <span className="bg-purple-600 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center font-bold">
+          <span className="bg-indigo-400 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center font-bold">
             {promptHistory.length}
           </span>
         )}
@@ -1719,7 +1719,7 @@ ${draft}` : draft);
                         value={githubRepoUrlInput}
                         onChange={(e) => setGithubRepoUrlInput(e.target.value)}
                         disabled={isSubtaskCompletedByStudent || isSavingRepo}
-                        className="focus-visible:ring-1 focus-visible:ring-purple-500"
+                        className="focus-visible:ring-1 focus-visible:ring-indigo-400"
                       />
                     </div>
                     {subtask.resources && subtask.resources.length > 0 && (
@@ -1822,7 +1822,7 @@ ${draft}` : draft);
                     {session?.user?.email === 'openimpactlab@gmail.com' && !isSubtaskCompletedByStudent && (
                       <Button 
                         onClick={handleAdminCompleteTask} 
-                        className="w-full bg-purple-600 hover:bg-purple-700 text-white"
+                        className="w-full bg-indigo-400 hover:bg-indigo-500 text-white"
                         size="sm"
                       >
                         <XCircle className="w-4 h-4 mr-2" />
@@ -1853,7 +1853,7 @@ ${draft}` : draft);
                 <div className="flex items-start justify-between gap-4">
                   <div className="space-y-2">
                     <div className="flex items-center gap-2">
-                      <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-gradient-to-br from-purple-100 to-blue-100 text-purple-700 shadow-sm">
+                      <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-100 to-sky-100 text-indigo-600 shadow-sm">
                         <Bot className="h-5 w-5" />
                       </div>
                       <div>
@@ -1927,15 +1927,15 @@ ${draft}` : draft);
                     </React.Fragment>
                   ))}
                   {isChatLoading && (
-                    <div className="w-fit rounded-2xl rounded-bl-sm border border-purple-100 bg-white px-4 py-3 shadow-sm">
+                    <div className="w-fit rounded-2xl rounded-bl-sm border border-indigo-100 bg-white px-4 py-3 shadow-sm">
                       <div className="flex items-center gap-3">
-                        <div className="flex h-8 w-8 items-center justify-center rounded-full bg-purple-100 text-purple-700">
+                        <div className="flex h-8 w-8 items-center justify-center rounded-full bg-indigo-100 text-indigo-600">
                           <Bot className="h-4 w-4" />
                         </div>
                         <div>
                           <div className="text-sm font-medium text-slate-800">Tutor is thinking</div>
                           <div className="mt-1 flex space-x-1">
-                            <div className="h-1.5 w-1.5 rounded-full bg-purple-400 animate-bounce" style={{ animationDelay: '0ms' }}></div>
+                            <div className="h-1.5 w-1.5 rounded-full bg-indigo-300 animate-bounce" style={{ animationDelay: '0ms' }}></div>
                             <div className="h-1.5 w-1.5 rounded-full bg-indigo-400 animate-bounce" style={{ animationDelay: '150ms' }}></div>
                             <div className="h-1.5 w-1.5 rounded-full bg-blue-400 animate-bounce" style={{ animationDelay: '300ms' }}></div>
                           </div>
@@ -2010,7 +2010,7 @@ ${draft}` : draft);
                       size="icon" 
                       onClick={() => fileInputRef.current?.click()}
                       disabled={isChatLoading || isSubtaskCompletedByStudent || !!selectedFile}
-                      className="mb-1 text-slate-500 hover:text-purple-600"
+                      className="mb-1 text-slate-500 hover:text-indigo-500"
                       title="Attach image"
                     >
                       <Paperclip className="w-5 h-5" />
@@ -2073,7 +2073,7 @@ ${draft}` : draft);
                       </div>
                     )}
 
-                    <Button onClick={handleSendMessage} disabled={isChatLoading || (!userInput.trim() && !selectedFile) || isSubtaskCompletedByStudent || !isCurrentSequentially} size="icon" className="mb-1 h-10 w-10 rounded-full bg-gradient-to-r from-blue-600 to-purple-600 text-white shadow-sm hover:from-blue-700 hover:to-purple-700">
+                    <Button onClick={handleSendMessage} disabled={isChatLoading || (!userInput.trim() && !selectedFile) || isSubtaskCompletedByStudent || !isCurrentSequentially} size="icon" className="mb-1 h-10 w-10 rounded-full bg-gradient-to-r from-indigo-400 to-sky-400 text-white shadow-sm hover:from-indigo-500 hover:to-sky-500">
                       <Send className="w-4 h-4" />
                     </Button>
                   </div>
@@ -2164,7 +2164,7 @@ ${draft}` : draft);
                                 variant="outline"
                                 size="sm"
                                 onClick={handleAskTutorAboutEvaluation}
-                                className="border-purple-200 text-purple-700 hover:bg-purple-50"
+                                className="border-indigo-200 text-indigo-600 hover:bg-indigo-50"
                               >
                                 <MessageSquare className="mr-1.5 h-4 w-4" />
                                 Ask Tutor to explain
@@ -2236,9 +2236,9 @@ ${draft}` : draft);
                             )}
 
                             {evaluationFeedback.result.teachingFeedback.minimumToPass && evaluationFeedback.result.teachingFeedback.minimumToPass.length > 0 && (
-                              <div className="rounded-xl border border-purple-200 bg-purple-50 p-4">
-                                <h4 className="font-semibold text-purple-900">Minimum needed to pass</h4>
-                                <ul className="mt-3 space-y-2 text-sm text-purple-800">
+                              <div className="rounded-xl border border-indigo-200 bg-indigo-50 p-4">
+                                <h4 className="font-semibold text-indigo-900">Minimum needed to pass</h4>
+                                <ul className="mt-3 space-y-2 text-sm text-indigo-800">
                                   {evaluationFeedback.result.teachingFeedback.minimumToPass.map((item, index) => (
                                     <li key={index} className="rounded-lg bg-white/80 px-3 py-2">{item}</li>
                                   ))}
@@ -2289,7 +2289,7 @@ ${draft}` : draft);
                                     variant="outline"
                                     size="sm"
                                     onClick={() => handleTutorSuggestion({ suggestion: improvement })}
-                                    className="border-purple-200 text-purple-700 hover:bg-purple-50"
+                                    className="border-indigo-200 text-indigo-600 hover:bg-indigo-50"
                                   >
                                     <SendHorizonal className="mr-1.5 h-3.5 w-3.5" />
                                     Use in Tutor
@@ -2310,7 +2310,7 @@ ${draft}` : draft);
                   type="button"
                   variant="outline"
                   onClick={handleAskTutorAboutEvaluation}
-                  className="border-purple-200 text-purple-700 hover:bg-purple-50"
+                  className="border-indigo-200 text-indigo-600 hover:bg-indigo-50"
                 >
                   <MessageSquare className="mr-2 h-4 w-4" />
                   Continue in Tutor
