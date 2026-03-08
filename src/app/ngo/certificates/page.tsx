@@ -3,7 +3,9 @@
 import { useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
 import { MainLayout } from "@/components/layout/main-layout";
+import { PageHero } from "@/components/layout/page-hero";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { StatTile } from "@/components/ui/stat-tile";
 import { Button } from "@/components/ui/button";
 import { Avatar } from "@/components/ui/avatar";
 import { 
@@ -376,6 +378,19 @@ export default function NGOCertificatesPage() {
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
+
+        <PageHero
+          eyebrow="NGO certificates"
+          icon={Award}
+          title="Project Certificates"
+          description="Preview, issue, and manage certificates for students who completed your projects with strong work."
+        />
+
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+          <StatTile label="Completed Projects" value={stats.totalCompleted} icon={CheckCircle} tone="green" hint="Projects now eligible for certificate action." />
+          <StatTile label="Certificates Issued" value={stats.certificatesGenerated} icon={Award} tone="amber" hint="Recognitions already awarded to students." />
+          <StatTile label="Pending Certificates" value={stats.pendingCertificates} icon={Clock} tone="blue" hint="Students still waiting for a certificate decision." />
+        </div>
 
         {/* Header */}
         <div className="flex items-center justify-between">

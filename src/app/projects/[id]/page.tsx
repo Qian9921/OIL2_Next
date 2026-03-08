@@ -4,7 +4,9 @@ import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { MainLayout } from "@/components/layout/main-layout";
+import { PageHero } from "@/components/layout/page-hero";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { StatTile } from "@/components/ui/stat-tile";
 import { Button } from "@/components/ui/button";
 import { Avatar } from "@/components/ui/avatar";
 import { getProject, getParticipations, createParticipation, getCertificates } from "@/lib/firestore";
@@ -222,41 +224,34 @@ export default function ProjectDetailPage() {
           </AlertDialogContent>
         </AlertDialog>
 
-        {/* Header */}
-        <div className="flex items-center justify-between">
-          <div className="flex items-center space-x-4">
-            <Link href={getProjectWorkspaceRoute(session?.user?.role)}>
-              <Button variant="ghost" size="sm">
-                <ArrowLeft className="w-4 h-4 mr-2" />
-                Back
-              </Button>
-            </Link>
-            <div>
-              <h1 className="text-3xl font-bold text-gray-900">{project.title}</h1>
-              <p className="text-gray-600 mt-2 flex items-center">
-                <GraduationCap className="w-4 h-4 mr-2" />
-                Initiated by {project.ngoName}
-              </p>
-            </div>
-          </div>
-          <div className="flex items-center space-x-2">
-            <span className={`px-3 py-1 rounded-full text-sm font-medium ${getDifficultyColor(project.difficulty)}`}>
-              {project.difficulty === 'beginner' ? 'Beginner' :
-               project.difficulty === 'intermediate' ? 'Intermediate' : 'Advanced'}
-            </span>
-            {isProjectExpired(project.deadline) && (
-              <span className="px-3 py-1 rounded-full text-sm font-medium bg-gray-100 text-gray-800">
-                <Clock className="w-4 h-4 mr-1 inline" />
-                Expired
-              </span>
-            )}
-            {myParticipation && (
-              <span className="px-3 py-1 rounded-full text-sm font-medium bg-green-100 text-green-800">
-                <CheckCircle className="w-4 h-4 mr-1 inline" />
-                Joined
-              </span>
-            )}
-          </div>
+        <PageHero
+          eyebrow="Project detail"
+          icon={GraduationCap}
+          title={project.title}
+          description={`Initiated by ${project.ngoName}. Review the challenge level, workload, and project structure before deciding whether to join.`}
+          actions={
+            <>
+              <Link href={getProjectWorkspaceRoute(session?.user?.role)}>
+                <Button variant="outline" size="sm">
+                  <ArrowLeft className="w-4 h-4 mr-2" />
+                  Back
+                </Button>
+              </Link>
+              {canJoinProject() && (
+                <Button onClick={handleJoinButtonClick} disabled={isJoining}>
+                  <Plus className="w-4 h-4 mr-2" />
+                  {isJoining ? 'Joining...' : 'Join Project'}
+                </Button>
+              )}
+            </>
+          }
+        />
+
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
+          <StatTile label="Difficulty" value={project.difficulty === 'beginner' ? 'Beginner' : project.difficulty === 'intermediate' ? 'Intermediate' : 'Advanced'} icon={Target} tone="blue" hint="How challenging the project may feel at the start." />
+          <StatTile label="Participants" value={`${project.currentParticipants}${project.maxParticipants ? `/${project.maxParticipants}` : ''}`} icon={Users} tone="green" hint="How many learners are already involved." />
+          <StatTile label="Tasks" value={project.subtasks?.length || 0} icon={BookOpen} tone="purple" hint="The number of core tasks in this project." />
+          <StatTile label="Deadline" value={project.deadline ? formatDeadline(project.deadline) : 'Open'} icon={Calendar} tone="amber" hint="When the project is expected to wrap up." />
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">

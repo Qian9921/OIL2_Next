@@ -3,7 +3,9 @@
 import { useEffect, useState, useRef } from "react";
 import { useSession, signOut } from "next-auth/react";
 import { MainLayout } from "@/components/layout/main-layout";
+import { PageHero } from "@/components/layout/page-hero";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { StatTile } from "@/components/ui/stat-tile";
 import { Button } from "@/components/ui/button";
 import { Avatar } from "@/components/ui/avatar";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
@@ -293,30 +295,36 @@ export default function NGOProfilePage() {
           </AlertDialogContent>
         </AlertDialog>
         
-        {/* Header */}
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-3xl font-bold text-gray-900">Organization Profile</h1>
-            <p className="text-gray-600 mt-2">
-              Manage your organization information and impact data 🏢
-            </p>
-          </div>
-          {!isEditing ? (
-            <Button onClick={() => setIsEditing(true)}>
-              <Edit className="w-4 h-4 mr-2" />
-              Edit Profile
-            </Button>
-          ) : (
-            <div className="flex space-x-3">
-              <Button onClick={handleSave}>
-                <Save className="w-4 h-4 mr-2" />
-                Save Changes
+        <PageHero
+          eyebrow="NGO profile"
+          icon={Building}
+          title="Organization Profile"
+          description="Show students who you are, what causes you care about, and why your projects are worth joining."
+          actions={
+            !isEditing ? (
+              <Button onClick={() => setIsEditing(true)}>
+                <Edit className="w-4 h-4 mr-2" />
+                Edit Profile
               </Button>
-              <Button variant="outline" onClick={() => setIsEditing(false)}>
-                Cancel
-              </Button>
-            </div>
-          )}
+            ) : (
+              <>
+                <Button onClick={handleSave}>
+                  <Save className="w-4 h-4 mr-2" />
+                  Save Changes
+                </Button>
+                <Button variant="outline" onClick={() => setIsEditing(false)}>
+                  Cancel
+                </Button>
+              </>
+            )
+          }
+        />
+
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
+          <StatTile label="Published Projects" value={dashboard?.publishedProjects || 0} icon={FolderOpen} tone="blue" hint="Projects currently visible to students." />
+          <StatTile label="Participants" value={dashboard?.totalParticipants || 0} icon={Users} tone="green" hint="Learners actively connected to your work." />
+          <StatTile label="Completed Projects" value={dashboard?.completedProjects || 0} icon={Trophy} tone="purple" hint="Projects that reached a full finish." />
+          <StatTile label="Pending Reviews" value={dashboard?.pendingReviews || 0} icon={AlertCircle} tone="amber" hint="Submissions waiting on your response." />
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
