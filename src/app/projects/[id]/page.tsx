@@ -9,7 +9,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { StatTile } from "@/components/ui/stat-tile";
 import { Button } from "@/components/ui/button";
 import { Avatar } from "@/components/ui/avatar";
-import { getProject, getParticipations, createParticipation, getCertificates } from "@/lib/firestore";
+import { getProject, getParticipations, getCertificates } from "@/lib/firestore";
 import { getProjectWorkspaceRoute, isStudentWorkspaceRole } from "@/lib/role-routing";
 import { Project, Participation, Certificate } from "@/lib/types";
 import { generateAvatar, getDifficultyColor, formatDeadline, isProjectExpired } from "@/lib/utils";
@@ -125,21 +125,28 @@ export default function ProjectDetailPage() {
     setIsJoining(true);
     
     try {
-      await createParticipation({
-        projectId: project.id,
-        studentId: session.user.id,
-        studentName: session.user.name,
-        status: 'active',
-        completedSubtasks: [],
-        progress: 0
+      const response = await fetch("/api/projects/join", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          projectId: project.id,
+        }),
       });
+
+      const payload = await response.json().catch(() => ({}));
+
+      if (!response.ok) {
+        throw new Error(payload?.error || "Failed to join the project.");
+      }
       
       // Reload data to show updated state
       await loadProjectData();
       toast({ title: "Project Joined!", description: "Successfully joined the project!", variant: "default" });
     } catch (error) {
       console.error("Error joining project:", error);
-      toast({ title: "Join Failed", description: "Failed to join the project, please try again.", variant: "destructive" });
+      toast({ title: "Join Failed", description: error instanceof Error ? error.message : "Failed to join the project, please try again.", variant: "destructive" });
     } finally {
       setIsJoining(false);
       setShowJoinDialog(false);

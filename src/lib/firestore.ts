@@ -127,22 +127,12 @@ export async function deleteProject(projectId: string) {
 export async function createParticipation(participationData: Omit<Participation, 'id' | 'joinedAt' | 'chatHistory' | 'submissions' | 'createdAt' | 'updatedAt'>) {
   const batch = writeBatch(db);
   
-  // 获取学生信息以获取班级ID
-  let classId: string | undefined = undefined;
-  if (participationData.studentId) {
-    const student = await getUser(participationData.studentId);
-    if (student?.classId) {
-      classId = student.classId;
-    }
-  }
-  
   // Create participation
   const participationRef = doc(collection(db, 'participations'));
   batch.set(participationRef, {
     ...participationData,
-    ...(classId !== undefined ? { classId } : {}), // 仅在存在时写入，避免 undefined 导致 Firestore 失败
     joinedAt: Timestamp.now(),
-    chatHistory: [],
+    chatHistory: {},
     submissions: [],
     createdAt: Timestamp.now(),
     updatedAt: Timestamp.now()

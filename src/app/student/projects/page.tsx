@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { FilterShell } from "@/components/ui/filter-shell";
 import { StatTile } from "@/components/ui/stat-tile";
-import { getProjects, createParticipation, getParticipations } from "@/lib/firestore";
+import { getProjects, getParticipations } from "@/lib/firestore";
 import { Project } from "@/lib/types";
 import { 
   BookOpen, 
@@ -143,14 +143,21 @@ export default function StudentProjectsPage() {
     setJoiningProject(projectToJoin.id);
     
     try {
-      await createParticipation({
-        projectId: projectToJoin.id,
-        studentId: session.user.id,
-        studentName: session.user.name,
-        status: 'active',
-        progress: 0,
-        completedSubtasks: []
+      const response = await fetch("/api/projects/join", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          projectId: projectToJoin.id,
+        }),
       });
+
+      const payload = await response.json().catch(() => ({}));
+
+      if (!response.ok) {
+        throw new Error(payload?.error || "Failed to join project");
+      }
 
       // Reload data
       await loadProjects();
@@ -163,7 +170,7 @@ export default function StudentProjectsPage() {
       console.error("Error joining project:", error);
       toast({
         title: "Join Failed",
-        description: "Failed to join project, please try again",
+        description: error instanceof Error ? error.message : "Failed to join project, please try again",
         variant: "destructive"
       });
     } finally {
