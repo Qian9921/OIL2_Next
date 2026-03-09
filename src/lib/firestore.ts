@@ -140,7 +140,7 @@ export async function createParticipation(participationData: Omit<Participation,
   const participationRef = doc(collection(db, 'participations'));
   batch.set(participationRef, {
     ...participationData,
-    classId, // 添加班级关联
+    ...(classId !== undefined ? { classId } : {}), // 仅在存在时写入，避免 undefined 导致 Firestore 失败
     joinedAt: Timestamp.now(),
     chatHistory: [],
     submissions: [],
