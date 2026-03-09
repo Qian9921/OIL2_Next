@@ -14,7 +14,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
-import { AlertDialog, AlertDialogAction, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
+import { AlertDialog, AlertDialogAction, AlertDialogContent, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import {
   Dialog,
   DialogContent,
@@ -29,8 +29,8 @@ import { SubmitProjectDialog } from '@/components/project/submit-project-dialog'
 import { 
   Send, CheckCircle, BookOpen, AlertTriangle, Bot, 
   Trash2, Paperclip, Lock, Loader2, Github, Info, 
-  ChevronLeft, Circle, Clock, X as XIcon,
-  MessageCircleQuestion, XCircle, MessageSquare, Copy, SendHorizonal
+  ChevronLeft, Clock, X as XIcon,
+  MessageCircleQuestion, XCircle, MessageSquare, SendHorizonal
 } from 'lucide-react';
 
 // Project-specific components
@@ -56,7 +56,6 @@ import { buildEvaluationChatDraft, buildPromptFeedbackChatDraft, buildQuickActio
 // Navigation
 import { TaskNavigation } from '@/components/task/task-navigation';
 import { GitHubInfoButton } from '@/components/task/github-info-button';
-import { ProgressBar } from '@/components/ui/progress-bar';
 
 interface TeachingFeedback {
   strengths?: string[];
@@ -635,8 +634,6 @@ ${draft}` : draft);
     setTutorContextPills([]);
     focusTutorComposer();
   };
-
-  const hasChatStarted = chatMessages.some((message) => message.role === 'user' || message.role === 'model');
 
   const handleSendMessage = async () => {
     if (!userInput.trim() || isChatLoading) return;
@@ -1479,36 +1476,44 @@ ${draft}` : draft);
         </div>
       )}
       
-      <div className="mx-auto flex w-full max-w-7xl flex-col gap-4 px-4 pb-6 md:px-6 xl:grid xl:h-[calc(100dvh-6.75rem)] xl:max-h-[calc(100dvh-6.75rem)] xl:grid-rows-[auto_minmax(0,1fr)] xl:overflow-hidden">
+      <div className="mx-auto flex w-full max-w-7xl flex-col gap-4 px-4 pb-6 md:px-6 xl:grid xl:h-[calc(100dvh-var(--app-shell-top-offset)-2rem)] xl:max-h-[calc(100dvh-var(--app-shell-top-offset)-2rem)] xl:grid-rows-[auto_minmax(0,1fr)] xl:overflow-hidden">
         <Card className="overflow-hidden border-white/80 bg-white/88 shadow-[0_18px_40px_-30px_rgba(15,23,42,0.18)] xl:flex-shrink-0">
-          <CardContent className="space-y-4 p-4 sm:p-5">
-            <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
-              <div className="min-w-0 space-y-3">
+          <CardContent className="p-3.5 sm:p-4">
+            <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+              <div className="min-w-0 space-y-2">
                 <div className="flex flex-wrap items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
-                  <span className="rounded-full border border-slate-200 bg-white px-3 py-1 shadow-sm">
+                  <span className="rounded-full border border-slate-200 bg-white px-2.5 py-1 shadow-sm">
                     {subtask.id === GITHUB_SUBMISSION_SUBTASK_ID ? 'Repository onboarding' : `Task ${currentTaskNumber}`}
                   </span>
-                  <span className="rounded-full border border-slate-200 bg-white px-3 py-1 shadow-sm">
+                  <span className="rounded-full border border-slate-200 bg-white px-2.5 py-1 shadow-sm">
                     {taskStateSummary}
                   </span>
+                  <span className="rounded-full border border-slate-200 bg-white px-2.5 py-1 shadow-sm">
+                    Progress {taskProgress}%
+                  </span>
+                  {latestEvaluationScore !== null ? (
+                    <span className="rounded-full border border-slate-200 bg-white px-2.5 py-1 shadow-sm">
+                      Eval {latestEvaluationScore}%
+                    </span>
+                  ) : null}
                   {project && isProjectExpired(project.deadline) && (
-                    <span className="rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-amber-700 shadow-sm">
+                    <span className="rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-amber-700 shadow-sm">
                       Project expired
                     </span>
                   )}
                 </div>
 
-                <div className="space-y-1">
-                  <h1 className="text-2xl font-semibold tracking-tight text-slate-900 sm:text-3xl">
+                <div className="min-w-0">
+                  <h1 className="truncate text-xl font-semibold tracking-tight text-slate-900 sm:text-[1.6rem]">
                     {subtask.title}
                   </h1>
-                  <p className="max-w-3xl text-sm leading-6 text-slate-600">
-                    {project.title} · A stable split workspace for task detail on the left and Tutor guidance on the right.
+                  <p className="truncate text-sm text-slate-500">
+                    {project.title}
                   </p>
                 </div>
               </div>
 
-              <div className="flex flex-wrap items-center gap-2 xl:justify-end">
+              <div className="flex flex-wrap items-center gap-2 xl:max-w-[56%] xl:justify-end">
                 <Button
                   variant="outline"
                   size="sm"
@@ -1532,31 +1537,6 @@ ${draft}` : draft);
                     </Button>
                   </Link>
                 )}
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_auto] xl:items-center">
-              <div className="rounded-[1.1rem] border border-slate-200 bg-slate-50/90 p-3.5 shadow-sm">
-                <div className="mb-2 flex items-center justify-between gap-3">
-                  <div>
-                    <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">Project progress</p>
-                    <p className="mt-1 text-sm font-medium text-slate-700">
-                      {completedRealSubtasks} of {Math.max(totalRealSubtasks, 1)} core tasks complete · Latest evaluation {latestEvaluationScore !== null ? `${latestEvaluationScore}%` : 'pending'}
-                    </p>
-                  </div>
-                  <div className="rounded-full bg-white px-3 py-1 text-sm font-semibold text-slate-700 shadow-sm">
-                    {taskProgress}%
-                  </div>
-                </div>
-                <ProgressBar
-                  progress={taskProgress}
-                  completedTasks={completedRealSubtasks}
-                  totalTasks={Math.max(totalRealSubtasks, 1)}
-                  className="mb-0"
-                />
-              </div>
-
-              <div className="rounded-[1.1rem] border border-slate-200 bg-white/95 p-2 shadow-sm">
                 <TaskNavigation 
                   project={project}
                   participation={participation}
@@ -1570,14 +1550,14 @@ ${draft}` : draft);
         <div className="grid grid-cols-1 items-start gap-4 xl:min-h-0 xl:grid-cols-[minmax(340px,0.82fr)_minmax(620px,1.18fr)] 2xl:grid-cols-[minmax(360px,0.78fr)_minmax(720px,1.22fr)]">
           <div className="flex flex-col self-start xl:h-full xl:min-h-0">
             <Card className="overflow-hidden xl:flex xl:h-full xl:min-h-0 xl:flex-col">
-              <CardHeader className="flex-shrink-0 pb-2">
+              <CardHeader className="flex-shrink-0 space-y-2 border-b border-slate-100 pb-3">
                 <div className="flex items-center justify-between">
-                  <CardTitle className="flex items-center text-xl">
+                  <CardTitle className="flex items-center text-base">
                     <BookOpen className="mr-2 h-5 w-5 text-indigo-600" />
-                    {subtask?.title}
+                    Subtask detail
                   </CardTitle>
                   {project && (
-                    <div className="flex items-center text-xs text-gray-500 bg-gray-50 px-2 py-1 rounded">
+                    <div className="flex items-center rounded-full bg-slate-50 px-2.5 py-1 text-xs text-slate-500">
                       <span className="font-medium">
                         {subtask?.id === GITHUB_SUBMISSION_SUBTASK_ID ? 
                           'Repository Setup' :
@@ -1587,6 +1567,9 @@ ${draft}` : draft);
                     </div>
                   )}
                 </div>
+                <CardDescription className="hidden text-sm text-slate-500 xl:block">
+                  Read requirements, resources, and completion criteria without losing sight of the Tutor conversation.
+                </CardDescription>
                 <CardDescriptionWithLock 
                   project={project} 
                   isLocked={!isCurrentSequentially && !isSubtaskCompletedByStudent} 
@@ -1741,7 +1724,7 @@ ${draft}` : draft);
 
           <div className={`flex flex-col ${subtask?.id === GITHUB_SUBMISSION_SUBTASK_ID ? 'hidden xl:hidden' : ''} xl:h-full xl:min-h-0`}>
             <Card className="overflow-hidden xl:flex xl:h-full xl:min-h-0 xl:flex-col">
-              <CardHeader className="space-y-4 border-b border-slate-100 pb-4">
+              <CardHeader className="space-y-2 border-b border-slate-100 pb-3">
                 <div className="flex items-start justify-between gap-4">
                   <div className="space-y-2">
                     <div className="flex items-center gap-2">
@@ -1749,9 +1732,9 @@ ${draft}` : draft);
                         <Bot className="h-5 w-5" />
                       </div>
                       <div>
-                        <CardTitle className="text-lg">Tutor Workspace</CardTitle>
-                        <CardDescription className="mt-0.5 text-sm">
-                          Ask freely, or continue from feedback without leaving the task.
+                        <CardTitle className="text-base">Tutor chat</CardTitle>
+                        <CardDescription className="mt-0.5 hidden text-sm xl:block">
+                          Keep the conversation active while you read and build.
                         </CardDescription>
                       </div>
                     </div>
@@ -1794,7 +1777,7 @@ ${draft}` : draft);
                     onImprovePrompt={handleImprovePromptFromHistory}
                     onDismiss={handleDismissTutorGuidance}
                     onStartFreshChat={handleStartFreshTutorChat}
-                    compact={hasChatStarted}
+                    compact
                   />
                 )}
               </CardHeader>
@@ -2038,7 +2021,7 @@ ${draft}` : draft);
                           <div className="flex items-start gap-2 rounded-xl bg-red-50 p-3 text-sm text-red-600">
                             <AlertTriangle className="mt-0.5 h-5 w-5 flex-shrink-0" />
                             <div>
-                              <p className="font-semibold">Your work doesn't meet the required criteria yet.</p>
+                              <p className="font-semibold">Your work doesn&apos;t meet the required criteria yet.</p>
                               <p className="mt-1">Use the Tutor actions on this page to turn missing requirements or suggestions into your next draft.</p>
                             </div>
                           </div>

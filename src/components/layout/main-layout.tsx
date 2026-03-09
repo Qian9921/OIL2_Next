@@ -204,7 +204,7 @@ export function MainLayout({ children }: MainLayoutProps) {
       </aside>
 
       <div className="relative flex min-h-screen flex-col lg:pl-80">
-        <header className="sticky top-0 z-30 px-4 pt-4 lg:px-6">
+        <header className="fixed inset-x-4 top-4 z-30 lg:left-[21rem] lg:right-6">
           <div className="relative overflow-hidden rounded-[1.75rem] border border-white/80 bg-white/75 px-4 py-4 shadow-[0_18px_50px_-32px_rgba(15,23,42,0.22)] backdrop-blur-xl sm:px-5 lg:px-6">
             <ShineBorder borderWidth={1} duration={15} shineColor={["rgba(129,140,248,0.12)", "rgba(251,191,186,0.1)", "rgba(125,211,252,0.08)"]} />
             <div className="pointer-events-none absolute inset-y-0 right-0 w-40 bg-gradient-to-l from-rose-100/30 via-transparent to-transparent" />
@@ -250,7 +250,7 @@ export function MainLayout({ children }: MainLayoutProps) {
           </div>
         </header>
 
-        <main className="flex-1 px-4 pb-28 pt-6 lg:px-6 lg:pb-8">
+        <main className="flex-1 px-4 pb-28 pt-[calc(var(--app-shell-top-offset)+0.75rem)] lg:px-6 lg:pb-8">
           <div className="page-transition">{children}</div>
         </main>
 
