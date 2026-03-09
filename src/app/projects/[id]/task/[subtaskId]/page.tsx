@@ -1476,11 +1476,11 @@ ${draft}` : draft);
         </div>
       )}
       
-      <div className="mx-auto flex w-full max-w-7xl flex-col gap-4 px-4 pb-6 md:px-6 xl:grid xl:h-[calc(100dvh-1.5rem)] xl:max-h-[calc(100dvh-1.5rem)] xl:grid-rows-[auto_minmax(0,1fr)] xl:overflow-hidden">
+      <div className="mx-auto flex w-full max-w-7xl flex-col gap-4 px-4 pb-6 md:px-6 xl:grid xl:h-[calc(100dvh-4rem)] xl:max-h-[calc(100dvh-4rem)] xl:grid-rows-[auto_minmax(0,1fr)] xl:overflow-hidden xl:pb-0">
         <Card className="overflow-hidden border-white/80 bg-white/88 shadow-[0_18px_40px_-30px_rgba(15,23,42,0.18)] xl:flex-shrink-0">
-          <CardContent className="p-3.5 sm:p-4">
-            <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
-              <div className="min-w-0 space-y-2">
+          <CardContent className="p-3 sm:p-3.5">
+            <div className="flex flex-col gap-2 xl:flex-row xl:items-center xl:justify-between">
+              <div className="min-w-0 space-y-1.5">
                 <div className="flex flex-wrap items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
                   <span className="rounded-full border border-slate-200 bg-white px-2.5 py-1 shadow-sm">
                     {subtask.id === GITHUB_SUBMISSION_SUBTASK_ID ? 'Repository onboarding' : `Task ${currentTaskNumber}`}
@@ -1504,16 +1504,16 @@ ${draft}` : draft);
                 </div>
 
                 <div className="min-w-0">
-                  <h1 className="truncate text-xl font-semibold tracking-tight text-slate-900 sm:text-[1.6rem]">
+                  <h1 className="truncate text-lg font-semibold tracking-tight text-slate-950 sm:text-[1.45rem]">
                     {subtask.title}
                   </h1>
-                  <p className="truncate text-sm text-slate-500">
+                  <p className="truncate text-sm text-slate-600">
                     {project.title}
                   </p>
                 </div>
               </div>
 
-              <div className="flex flex-wrap items-center gap-2 xl:max-w-[58%] xl:justify-end">
+              <div className="flex flex-wrap items-center gap-2 xl:max-w-[60%] xl:justify-end">
                 <Button
                   variant="outline"
                   size="sm"
@@ -1547,7 +1547,7 @@ ${draft}` : draft);
           </CardContent>
         </Card>
 
-        <div className="grid grid-cols-1 items-start gap-4 xl:min-h-0 xl:grid-cols-[minmax(300px,0.66fr)_minmax(780px,1.34fr)] 2xl:grid-cols-[minmax(320px,0.64fr)_minmax(900px,1.36fr)]">
+        <div className="grid grid-cols-1 items-start gap-4 xl:min-h-0 xl:grid-cols-[minmax(280px,0.62fr)_minmax(820px,1.38fr)] 2xl:grid-cols-[minmax(300px,0.6fr)_minmax(960px,1.4fr)]">
           <div className="flex flex-col self-start xl:h-full xl:min-h-0">
             <Card className="overflow-hidden xl:flex xl:h-full xl:min-h-0 xl:flex-col">
               <CardHeader className="flex-shrink-0 space-y-2 border-b border-slate-100 pb-2">
@@ -1575,7 +1575,7 @@ ${draft}` : draft);
                   isLocked={!isCurrentSequentially && !isSubtaskCompletedByStudent} 
                 />
               </CardHeader>
-              <CardContent className="py-4 xl:min-h-0 xl:flex-1 xl:overflow-y-auto xl:overscroll-contain">
+              <CardContent className="py-3 xl:min-h-0 xl:flex-1 xl:overflow-y-auto xl:overscroll-contain">
                 <div className="space-y-4">
                   {subtask?.id === GITHUB_SUBMISSION_SUBTASK_ID ? (
                   <div className="space-y-4 py-4">
@@ -1732,7 +1732,7 @@ ${draft}` : draft);
                         <Bot className="h-5 w-5" />
                       </div>
                       <div>
-                        <CardTitle className="text-base">Tutor chat</CardTitle>
+                        <CardTitle className="text-lg">Tutor chat</CardTitle>
                         <CardDescription className="mt-0.5 hidden text-sm 2xl:block">
                           Keep the conversation active while you read and build.
                         </CardDescription>
@@ -1841,7 +1841,7 @@ ${draft}` : draft);
                 )}
 
                 <div className="flex items-center justify-between gap-3 px-1">
-                  <div className="text-[11px] text-slate-500">
+                  <div className="text-[11px] text-slate-600">
                     {showTutorQuickActions ? 'Starter actions are visible below.' : 'Free chat mode is active.'}
                   </div>
                   <div className="flex items-center gap-3 text-[11px] font-medium">
@@ -1917,20 +1917,20 @@ ${draft}` : draft);
                           }
                         }}
                         disabled={isChatLoading || isSubtaskCompletedByStudent || !isCurrentSequentially}
-                        className="min-h-[88px] max-h-[220px] resize-y border-0 bg-transparent text-sm text-slate-900 shadow-none focus-visible:ring-0 focus-visible:ring-offset-0"
+                        className="min-h-[96px] max-h-[220px] resize-y border-0 bg-transparent text-sm text-slate-950 shadow-none focus-visible:ring-0 focus-visible:ring-offset-0"
                         autoFocus
                       />
 
                       <div className="flex items-center justify-between gap-3 px-1 pb-1">
-                        <div className="text-xs text-gray-500">
+                        <div className="text-xs text-slate-600">
                           {promptStreak?.bestStreak && promptStreak.bestStreak > 0 && (
                             <span title="Your best streak of good prompts">Best streak: {promptStreak.bestStreak} 🏆</span>
                           )}
                         </div>
-                        <p className={`text-xs text-right ${userInput.length > MAX_USER_INPUT_LENGTH ? 'text-red-500' : 'text-gray-500'}`}>
+                        <p className={`text-xs text-right ${userInput.length > MAX_USER_INPUT_LENGTH ? 'text-red-500' : 'text-slate-600'}`}>
                           {userInput.length}/{MAX_USER_INPUT_LENGTH} characters
                           {userInput.length > 0 && userInput.length < 500 && (
-                            <span className="ml-1 text-blue-500">
+                            <span className="ml-1 text-indigo-600">
                               • Tip: Detailed prompts usually lead to stronger tutoring
                             </span>
                           )}
