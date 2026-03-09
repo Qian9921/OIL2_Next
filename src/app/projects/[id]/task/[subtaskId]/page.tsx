@@ -136,8 +136,8 @@ export default function ProjectTaskPage() {
   const [evaluationFeedback, setEvaluationFeedback] = useState<TaskEvaluationResponse | null>(null);
   const [evaluationProgress, setEvaluationProgress] = useState<EvaluationProgressData | null>(null);
   const [tutorContextPills, setTutorContextPills] = useState<TutorContextPill[]>([]);
-  const [showTutorGuidance, setShowTutorGuidance] = useState(true);
-  const [showTutorQuickActions, setShowTutorQuickActions] = useState(true);
+  const [showTutorGuidance, setShowTutorGuidance] = useState(false);
+  const [showTutorQuickActions, setShowTutorQuickActions] = useState(false);
   const [isEvaluating, setIsEvaluating] = useState(false);
   const [isPageDisabled, setIsPageDisabled] = useState(false);
   
@@ -1476,7 +1476,7 @@ ${draft}` : draft);
         </div>
       )}
       
-      <div className="mx-auto flex w-full max-w-7xl flex-col gap-4 px-4 pb-6 md:px-6 xl:grid xl:h-[calc(100dvh-var(--app-shell-top-offset)-2rem)] xl:max-h-[calc(100dvh-var(--app-shell-top-offset)-2rem)] xl:grid-rows-[auto_minmax(0,1fr)] xl:overflow-hidden">
+      <div className="mx-auto flex w-full max-w-7xl flex-col gap-4 px-4 pb-6 md:px-6 xl:grid xl:h-[calc(100dvh-1.5rem)] xl:max-h-[calc(100dvh-1.5rem)] xl:grid-rows-[auto_minmax(0,1fr)] xl:overflow-hidden">
         <Card className="overflow-hidden border-white/80 bg-white/88 shadow-[0_18px_40px_-30px_rgba(15,23,42,0.18)] xl:flex-shrink-0">
           <CardContent className="p-3.5 sm:p-4">
             <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
@@ -1513,7 +1513,7 @@ ${draft}` : draft);
                 </div>
               </div>
 
-              <div className="flex flex-wrap items-center gap-2 xl:max-w-[56%] xl:justify-end">
+              <div className="flex flex-wrap items-center gap-2 xl:max-w-[58%] xl:justify-end">
                 <Button
                   variant="outline"
                   size="sm"
@@ -1547,10 +1547,10 @@ ${draft}` : draft);
           </CardContent>
         </Card>
 
-        <div className="grid grid-cols-1 items-start gap-4 xl:min-h-0 xl:grid-cols-[minmax(340px,0.82fr)_minmax(620px,1.18fr)] 2xl:grid-cols-[minmax(360px,0.78fr)_minmax(720px,1.22fr)]">
+        <div className="grid grid-cols-1 items-start gap-4 xl:min-h-0 xl:grid-cols-[minmax(300px,0.66fr)_minmax(780px,1.34fr)] 2xl:grid-cols-[minmax(320px,0.64fr)_minmax(900px,1.36fr)]">
           <div className="flex flex-col self-start xl:h-full xl:min-h-0">
             <Card className="overflow-hidden xl:flex xl:h-full xl:min-h-0 xl:flex-col">
-              <CardHeader className="flex-shrink-0 space-y-2 border-b border-slate-100 pb-3">
+              <CardHeader className="flex-shrink-0 space-y-2 border-b border-slate-100 pb-2">
                 <div className="flex items-center justify-between">
                   <CardTitle className="flex items-center text-base">
                     <BookOpen className="mr-2 h-5 w-5 text-indigo-600" />
@@ -1567,7 +1567,7 @@ ${draft}` : draft);
                     </div>
                   )}
                 </div>
-                <CardDescription className="hidden text-sm text-slate-500 xl:block">
+                <CardDescription className="hidden text-sm text-slate-500 2xl:block">
                   Read requirements, resources, and completion criteria without losing sight of the Tutor conversation.
                 </CardDescription>
                 <CardDescriptionWithLock 
@@ -1724,7 +1724,7 @@ ${draft}` : draft);
 
           <div className={`flex flex-col ${subtask?.id === GITHUB_SUBMISSION_SUBTASK_ID ? 'hidden xl:hidden' : ''} xl:h-full xl:min-h-0`}>
             <Card className="overflow-hidden xl:flex xl:h-full xl:min-h-0 xl:flex-col">
-              <CardHeader className="space-y-2 border-b border-slate-100 pb-3">
+              <CardHeader className="space-y-2 border-b border-slate-100 pb-2">
                 <div className="flex items-start justify-between gap-4">
                   <div className="space-y-2">
                     <div className="flex items-center gap-2">
@@ -1733,7 +1733,7 @@ ${draft}` : draft);
                       </div>
                       <div>
                         <CardTitle className="text-base">Tutor chat</CardTitle>
-                        <CardDescription className="mt-0.5 hidden text-sm xl:block">
+                        <CardDescription className="mt-0.5 hidden text-sm 2xl:block">
                           Keep the conversation active while you read and build.
                         </CardDescription>
                       </div>
@@ -1743,13 +1743,13 @@ ${draft}` : draft);
                   <div className="flex items-center gap-2">
                     {!isSubtaskCompletedByStudent && <FloatingPromptHistoryButton />}
 
-                    {!showTutorGuidance && (latestEvaluationAttempt || latestPromptAttempt) && (
+                    {(latestEvaluationAttempt || latestPromptAttempt) && (
                       <button
                         type="button"
-                        onClick={() => setShowTutorGuidance(true)}
+                        onClick={() => setShowTutorGuidance((current) => !current)}
                         className="text-xs font-medium text-slate-500 transition hover:text-slate-700"
                       >
-                        Show suggestions
+                        {showTutorGuidance ? 'Hide suggestions' : 'Show suggestions'}
                       </button>
                     )}
 
@@ -1784,7 +1784,7 @@ ${draft}` : draft);
               
               <CardContent 
                 ref={chatContainerRef} 
-                className="rounded-b-none bg-slate-50/85 px-4 py-4 pb-4 xl:min-h-0 xl:flex-1 xl:overflow-y-auto xl:overscroll-contain"
+                className="rounded-b-none bg-slate-50/85 px-4 py-3 xl:min-h-0 xl:flex-1 xl:overflow-y-auto xl:overscroll-contain"
               >
                 <div className="space-y-4">
                   {chatMessages.map((msg, index) => (
@@ -1821,7 +1821,7 @@ ${draft}` : draft);
                 </div>
               </CardContent>
               
-              <div className="space-y-3 rounded-b-lg border-t bg-white p-3 xl:flex-shrink-0">
+              <div className="space-y-2 rounded-b-lg border-t bg-white p-3 xl:flex-shrink-0">
                 {selectedFilePreview && (
                   <div className="mb-2 flex items-center justify-between rounded-md border border-slate-300 bg-slate-50 p-2">
                     <div className="flex items-center space-x-2">
@@ -1841,7 +1841,7 @@ ${draft}` : draft);
                 )}
 
                 <div className="flex items-center justify-between gap-3 px-1">
-                  <div className="text-[11px] text-slate-400">
+                  <div className="text-[11px] text-slate-500">
                     {showTutorQuickActions ? 'Starter actions are visible below.' : 'Free chat mode is active.'}
                   </div>
                   <div className="flex items-center gap-3 text-[11px] font-medium">
@@ -1917,7 +1917,7 @@ ${draft}` : draft);
                           }
                         }}
                         disabled={isChatLoading || isSubtaskCompletedByStudent || !isCurrentSequentially}
-                        className="min-h-[64px] max-h-[220px] resize-y border-0 bg-transparent text-sm shadow-none focus-visible:ring-0 focus-visible:ring-offset-0"
+                        className="min-h-[88px] max-h-[220px] resize-y border-0 bg-transparent text-sm text-slate-900 shadow-none focus-visible:ring-0 focus-visible:ring-offset-0"
                         autoFocus
                       />
 
@@ -1948,7 +1948,7 @@ ${draft}` : draft);
                       </div>
                     )}
 
-                    <Button onClick={handleSendMessage} disabled={isChatLoading || (!userInput.trim() && !selectedFile) || isSubtaskCompletedByStudent || !isCurrentSequentially} size="icon" className="mb-1 h-10 w-10 rounded-full bg-gradient-to-r from-indigo-400 to-sky-400 text-white shadow-sm hover:from-indigo-500 hover:to-sky-500">
+                    <Button onClick={handleSendMessage} disabled={isChatLoading || (!userInput.trim() && !selectedFile) || isSubtaskCompletedByStudent || !isCurrentSequentially} size="icon" className="mb-1 h-11 w-11 rounded-full bg-indigo-600 text-white shadow-md shadow-indigo-200 hover:bg-indigo-700">
                       <Send className="w-4 h-4" />
                     </Button>
                   </div>

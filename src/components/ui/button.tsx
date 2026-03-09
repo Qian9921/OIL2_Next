@@ -9,16 +9,16 @@ const buttonVariants = cva(
     variants: {
       variant: {
         default:
-          "bg-gradient-to-r from-indigo-400 to-sky-400 text-white shadow-sm shadow-indigo-100/80 hover:-translate-y-0.5 hover:shadow-md hover:shadow-indigo-100/90",
+          "bg-indigo-600 text-white shadow-md shadow-indigo-200/90 hover:-translate-y-0.5 hover:bg-indigo-700 hover:shadow-lg hover:shadow-indigo-200",
         destructive:
-          "bg-rose-400 text-white shadow-sm shadow-rose-100/80 hover:-translate-y-0.5 hover:bg-rose-500 hover:shadow-md hover:shadow-rose-100/90",
+          "bg-rose-500 text-white shadow-md shadow-rose-200/90 hover:-translate-y-0.5 hover:bg-rose-600 hover:shadow-lg hover:shadow-rose-200",
         outline:
-          "border border-slate-200/90 bg-white/95 text-slate-700 shadow-sm hover:-translate-y-px hover:border-slate-300 hover:bg-slate-50/90 hover:shadow-sm",
+          "border border-slate-300 bg-white text-slate-800 shadow-sm hover:-translate-y-px hover:border-indigo-300 hover:bg-indigo-50/60 hover:text-slate-900 hover:shadow-md",
         secondary:
-          "bg-gradient-to-r from-emerald-300 to-teal-300 text-slate-900 shadow-sm shadow-emerald-100/70 hover:-translate-y-0.5 hover:shadow-md hover:shadow-emerald-100/80",
+          "bg-emerald-500 text-white shadow-md shadow-emerald-200/90 hover:-translate-y-0.5 hover:bg-emerald-600 hover:shadow-lg hover:shadow-emerald-200",
         ghost:
-          "text-slate-600 hover:bg-slate-100/80 hover:text-slate-900",
-        link: "text-indigo-500 underline-offset-4 hover:underline",
+          "text-slate-700 hover:bg-slate-100/90 hover:text-slate-950",
+        link: "text-indigo-600 underline-offset-4 hover:underline",
       },
       size: {
         default: "h-11 px-4 py-2",
