@@ -132,12 +132,18 @@ export const RequirementCheckpoint = ({
   requirement: string;
   details: string;
 }) => {
-  const isCompleted = status.toLowerCase().includes('completed');
+  const normalizedStatus = status.toLowerCase();
+  const isCompleted = (normalizedStatus.includes('completed') || normalizedStatus.includes('pass')) && !normalizedStatus.includes('not');
+  const isPartial = normalizedStatus.includes('partial');
   
   return (
     <div className="border rounded-md overflow-hidden">
       <div className={`p-3 font-medium text-sm ${
-        isCompleted ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'
+        isCompleted
+          ? 'bg-green-50 text-green-700'
+          : isPartial
+            ? 'bg-amber-50 text-amber-700'
+            : 'bg-red-50 text-red-700'
       }`}>
         {status}
       </div>

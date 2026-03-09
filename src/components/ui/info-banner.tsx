@@ -13,12 +13,12 @@ interface InfoBannerProps {
 
 const variantStyles = {
   primary: {
-    container: "bg-gradient-to-r from-indigo-50 to-purple-50 border border-purple-100",
-    badge: "bg-indigo-100 text-indigo-800"
+    container: "bg-gradient-to-r from-indigo-50 to-sky-50 border border-indigo-100",
+    badge: "bg-indigo-50 text-indigo-700 border border-indigo-100"
   },
   secondary: {
-    container: "bg-gradient-to-r from-green-50 to-teal-50 border border-green-100",
-    badge: "bg-green-100 text-green-800"
+    container: "bg-gradient-to-r from-emerald-50 to-teal-50 border border-emerald-100",
+    badge: "bg-emerald-50 text-emerald-700 border border-emerald-100"
   },
   light: {
     container: "bg-white/80 backdrop-blur-sm border border-gray-200",
@@ -26,7 +26,7 @@ const variantStyles = {
   },
   dark: {
     container: "bg-white/20 backdrop-blur-sm text-white",
-    badge: "bg-indigo-700/30 backdrop-blur-sm text-white"
+    badge: "bg-white/20 backdrop-blur-sm text-white border border-white/20"
   }
 };
 

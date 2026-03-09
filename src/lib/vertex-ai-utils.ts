@@ -1,4 +1,5 @@
 import { VertexAI, HarmCategory, HarmBlockThreshold } from '@google-cloud/vertexai';
+import { GoogleAuth } from 'google-auth-library';
 
 export type LLMTaskType =
   | 'chat'
@@ -54,6 +55,102 @@ const SAFETY_SETTINGS = [
 ];
 
 export const PROJECT_ID = CONFIGURED_PROJECT_ID;
+
+const googleAuth = new GoogleAuth({
+  scopes: ['https://www.googleapis.com/auth/cloud-platform'],
+});
+
+async function getVertexAccessToken() {
+  const client = await googleAuth.getClient();
+  const tokenResponse = await client.getAccessToken();
+  const token = typeof tokenResponse === 'string' ? tokenResponse : tokenResponse?.token;
+
+  if (!token) {
+    throw new Error('Failed to acquire Google Cloud access token for Vertex AI.');
+  }
+
+  return token;
+}
+
+function buildPublisherModelEndpoint(modelName: string, location: string) {
+  return `https://aiplatform.googleapis.com/v1/projects/${PROJECT_ID}/locations/${location}/publishers/google/models/${modelName}:generateContent`;
+}
+
+export async function generateTextContentForTask(
+  taskType: LLMTaskType,
+  requestBody: {
+    contents: Array<{ role: string; parts: Array<Record<string, unknown>> }>;
+    systemInstruction?: { role: string; parts: Array<Record<string, unknown>> };
+  },
+  overrides: GenerationOverrides = {},
+) {
+  const config = getTaskModelConfig(taskType);
+  const token = await getVertexAccessToken();
+
+  const attempt = async (modelName: string, location: string) => {
+    const response = await fetch(buildPublisherModelEndpoint(modelName, location), {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        ...requestBody,
+        generationConfig: {
+          maxOutputTokens: overrides.maxOutputTokens ?? 2048,
+          temperature: overrides.temperature ?? 0.4,
+          topP: overrides.topP ?? 0.95,
+          topK: overrides.topK ?? 40,
+          stopSequences: overrides.stopSequences ?? [],
+          responseMimeType: overrides.responseMimeType ?? 'text/plain',
+        },
+      }),
+      cache: 'no-store',
+    });
+
+    const payload = await response.json();
+
+    if (!response.ok) {
+      throw new Error(JSON.stringify(payload));
+    }
+
+    const resultText = payload?.candidates?.[0]?.content?.parts?.[0]?.text;
+    if (!resultText || typeof resultText !== 'string') {
+      throw new Error('Vertex AI returned an empty response body.');
+    }
+
+    return resultText;
+  };
+
+  try {
+    const text = await attempt(config.primaryModel, config.primaryLocation);
+    return { text, usedModel: config.primaryModel, usedFallback: false };
+  } catch (error) {
+    if (!config.fallbackModel || !shouldRetryWithFallback(error)) {
+      throw error;
+    }
+
+    console.warn(
+      `Primary model ${config.primaryModel} failed for location ${config.primaryLocation}; retrying with fallback ${config.fallbackModel} in ${config.fallbackLocation}.`,
+      error,
+    );
+
+    const text = await attempt(config.fallbackModel, config.fallbackLocation || DEFAULT_REGIONAL_LOCATION);
+    return { text, usedModel: config.fallbackModel, usedFallback: true };
+  }
+}
+
+export async function generateJsonContentForTask(
+  taskType: LLMTaskType,
+  prompt: string,
+  overrides: GenerationOverrides = {},
+) {
+  return generateTextContentForTask(
+    taskType,
+    { contents: [{ role: 'user', parts: [{ text: prompt }] }] },
+    { ...overrides, responseMimeType: 'application/json' },
+  );
+}
 
 function normalizeModelName(modelName: string | undefined | null, fallback: string) {
   const requestedModel = modelName?.trim() || fallback;
@@ -385,7 +482,7 @@ export function parseJsonObjectResponse(responseText: string) {
         console.error('Second parse attempt failed:', secondParseError);
         return { 
           success: false, 
-          error: 'Failed to parse response as JSON object', 
+          error: cleanedResponseText.startsWith('<!DOCTYPE') ? 'Model returned HTML instead of JSON object' : 'Failed to parse response as JSON object', 
           cleanedText: cleanedResponseText,
           recoverableText
         };
@@ -505,7 +602,7 @@ export function parseJsonArrayResponse(responseText: string) {
         
         return { 
           success: false, 
-          error: 'Failed to parse response as JSON array', 
+          error: cleanedResponseText.startsWith('<!DOCTYPE') ? 'Model returned HTML instead of JSON array' : 'Failed to parse response as JSON array', 
           cleanedText: cleanedResponseText,
           recoverableText
         };

@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
 import { MainLayout } from "@/components/layout/main-layout";
+import { PageHero } from "@/components/layout/page-hero";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
@@ -13,6 +14,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { LoadingState } from "@/components/ui/loading-state";
 import { 
   Plus, 
+  BookOpen,
   Users, 
   Calendar, 
   Tag,
@@ -191,54 +193,70 @@ export default function NGOProjectsPage() {
           </AlertDialogContent>
         </AlertDialog>
 
-        {/* Header */}
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-3xl font-bold text-gray-900">Project Management</h1>
-            <p className="text-gray-600 mt-2">
-              Manage the social impact projects you create 🚀
-            </p>
-          </div>
-          <Link href="/ngo/projects/create">
-            <Button>
-              <Plus className="w-4 h-4 mr-2" />
-              Create New Project
-            </Button>
-          </Link>
-        </div>
+        <PageHero
+          eyebrow="NGO workspace"
+          icon={BookOpen}
+          title="Project Management"
+          description="Create, refine, and publish projects that feel clear to students, evaluate well, and look polished across the full learning journey."
+          actions={
+            <Link href="/ngo/projects/create">
+              <Button>
+                <Plus className="w-4 h-4 mr-2" />
+                Create New Project
+              </Button>
+            </Link>
+          }
+        />
 
-        {/* Filter Tabs */}
-        <div className="flex space-x-1 bg-gray-100 rounded-lg p-1">
-          {[
-            { key: 'all', label: 'All', count: projects.length },
-            { key: 'draft', label: 'Draft', count: projects.filter(p => p.status === 'draft').length },
-            { key: 'published', label: 'Published', count: projects.filter(p => p.status === 'published').length },
-            { key: 'completed', label: 'Completed', count: projects.filter(p => p.status === 'completed').length },
-            { key: 'archived', label: 'Archived', count: projects.filter(p => p.status === 'archived').length }
-          ].map((tab) => (
-            <button
-              key={tab.key}
-              onClick={() => setFilter(tab.key)}
-              className={`flex-1 px-4 py-2 text-sm font-medium rounded-md transition-colors ${
-                filter === tab.key
-                  ? 'bg-white text-purple-600 shadow-sm'
-                  : 'text-gray-600 hover:text-gray-900'
-              }`}
-            >
-              {tab.label} ({tab.count})
-            </button>
-          ))}
-        </div>
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex flex-col gap-4">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Project status</p>
+                  <p className="mt-1 text-sm text-slate-600">Switch between draft, published, and completed projects without losing context.</p>
+                </div>
+                <div className="inline-flex items-center rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-600">
+                  {filteredProjects.length} visible
+                </div>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {[
+                  { key: 'all', label: 'All', count: projects.length },
+                  { key: 'draft', label: 'Draft', count: projects.filter(p => p.status === 'draft').length },
+                  { key: 'published', label: 'Published', count: projects.filter(p => p.status === 'published').length },
+                  { key: 'completed', label: 'Completed', count: projects.filter(p => p.status === 'completed').length },
+                  { key: 'archived', label: 'Archived', count: projects.filter(p => p.status === 'archived').length }
+                ].map((tab) => (
+                  <button
+                    key={tab.key}
+                    onClick={() => setFilter(tab.key)}
+                    className={`inline-flex items-center rounded-full px-3 py-2 text-sm font-medium transition-all ${
+                      filter === tab.key
+                        ? 'bg-white text-rose-700 shadow-sm ring-1 ring-rose-100'
+                        : 'bg-slate-100/70 text-slate-600 hover:bg-slate-200/80 hover:text-slate-900'
+                    }`}
+                  >
+                    {tab.label}
+                    <span className="ml-2 rounded-full bg-slate-200/70 px-2 py-0.5 text-[11px] font-semibold text-slate-600">
+                      {tab.count}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          </CardContent>
+        </Card>
 
         {/* Projects Grid */}
         {filteredProjects.length > 0 ? (
           <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
             {filteredProjects.map((project) => (
-              <Card key={project.id} className="card-hover">
+              <Card key={project.id} className="overflow-hidden">
                 <CardHeader>
-                  <div className="flex items-start justify-between">
+                  <div className="flex items-start justify-between gap-3">
                     <div className="flex-1">
-                      <CardTitle className="text-lg mb-2 line-clamp-2">
+                      <CardTitle className="text-lg leading-6 line-clamp-2">
                         {project.title}
                       </CardTitle>
                       <div className="flex items-center space-x-2 mb-2">
@@ -273,12 +291,12 @@ export default function NGOProjectsPage() {
                 </CardHeader>
                 
                 <CardContent className="space-y-4">
-                  <CardDescription className="line-clamp-3">
+                  <CardDescription className="line-clamp-3 text-sm leading-6 text-slate-600">
                     {project.description}
                   </CardDescription>
 
                   {/* Project Stats */}
-                  <div className="grid grid-cols-2 gap-4 text-sm">
+                  <div className="grid grid-cols-2 gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-3 text-sm">
                     <div className="flex items-center space-x-2 text-gray-600">
                       <Users className="w-4 h-4" />
                       <span>{project.currentParticipants}/{project.maxParticipants || '∞'}</span>
@@ -299,20 +317,20 @@ export default function NGOProjectsPage() {
 
                   {/* Tags */}
                   {project.tags && project.tags.length > 0 && (
-                    <div className="flex flex-wrap gap-1">
+                    <div className="flex flex-wrap gap-1.5">
                       {project.tags.slice(0, 3).map((tag, index) => (
-                        <span key={index} className="px-2 py-1 bg-gray-100 text-gray-700 text-xs rounded-full">
+                        <span key={index} className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-600">
                           {tag}
                         </span>
                       ))}
                       {project.tags.length > 3 && (
-                        <span className="text-xs text-gray-500">+{project.tags.length - 3}</span>
+                        <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-600">+{project.tags.length - 3}</span>
                       )}
                     </div>
                   )}
 
                   {/* Action Buttons */}
-                  <div className="flex space-x-2 pt-2">
+                  <div className="flex items-center gap-2 pt-2">
                     <Link href={`/ngo/projects/${project.id}`} className="flex-1">
                       <Button variant="outline" className="w-full">
                         <Eye className="w-4 h-4 mr-2" />
@@ -325,7 +343,7 @@ export default function NGOProjectsPage() {
                       <select
                         value={project.status}
                         onChange={(e) => handleStatusChange(project.id, e.target.value as Project['status'])}
-                        className="appearance-none bg-white border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
+                        className="appearance-none rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm text-slate-700 shadow-sm focus:outline-none focus:ring-4 focus:ring-rose-100 focus:border-rose-300"
                         disabled={changingStatus === project.id || project.status === 'archived'}
                         title={project.status === 'archived' ? 'Archived projects cannot be changed' : ''}
                       >
@@ -359,7 +377,7 @@ export default function NGOProjectsPage() {
                         </option>
                       </select>
                       {changingStatus === project.id ? (
-                        <div className="w-4 h-4 absolute right-2 top-1/2 transform -translate-y-1/2 text-purple-500 animate-spin border-2 border-current border-t-transparent rounded-full" />
+                        <div className="w-4 h-4 absolute right-2 top-1/2 transform -translate-y-1/2 text-rose-500 animate-spin border-2 border-current border-t-transparent rounded-full" />
                       ) : (
                         <Settings className="w-4 h-4 absolute right-2 top-1/2 transform -translate-y-1/2 pointer-events-none text-gray-400" />
                       )}

@@ -230,7 +230,6 @@ export default function StudentMyProjectsPage() {
         let finalScore = result.score;
         if (typeof result.score === 'number' && result.score <= 1) {
           finalScore = Math.round(result.score * 100);
-          console.log(`Converting score: ${result.score} (0-1 range) -> ${finalScore}% (0-100 range)`);
         }
         
         // Check if the score meets the threshold (80%)
@@ -639,7 +638,7 @@ export default function StudentMyProjectsPage() {
                     }`}>
                       <h4 className={`font-semibold mb-1 flex items-center`}>
                         <FileText className="w-3.5 h-3.5 mr-1.5 flex-shrink-0" />
-                        Teacher Feedback:
+                        Reviewer Feedback:
                       </h4>
                       <p className="pl-5 line-clamp-2">
                         {submission.reviewComment}
@@ -765,7 +764,7 @@ export default function StudentMyProjectsPage() {
           </div>
         ) : (
           <div className="rounded-[1.75rem] border border-white/70 bg-white/80 p-12 text-center shadow-sm backdrop-blur-xl">
-            <div className="mx-auto mb-4 flex h-20 w-20 items-center justify-center rounded-3xl bg-gradient-to-br from-slate-100 to-cyan-100">
+            <div className="mx-auto mb-4 flex h-20 w-20 items-center justify-center rounded-3xl bg-gradient-to-br from-slate-100 to-rose-100">
               <BookmarkX className="h-10 w-10 text-slate-500" />
             </div>
             <h3 className="mb-2 text-lg font-medium text-gray-900">No Projects Found</h3>

@@ -72,8 +72,6 @@ export const PromptFeedbackDisplay = ({
     }
   };
   
-  console.log("CRITICAL DEBUG - PromptFeedbackDisplay input:", feedback);
-  
   // Check if we have feedback to display
   const hasFeedback = typeof feedback?.feedback === 'string' && feedback.feedback.trim() !== '';
   
@@ -94,12 +92,12 @@ export const PromptFeedbackDisplay = ({
   const fontSize = textSizes[size];
   
   return (
-    <div className={`bg-purple-50 border border-purple-100 rounded-md p-3 ${className}`}>
+    <div className={`rounded-xl border border-rose-100 bg-gradient-to-br from-rose-50 via-white to-sky-50 p-3 ${className}`}>
       <div className="flex items-start">
-        <Info className={`text-purple-600 mr-2 mt-0.5 flex-shrink-0 ${size === 'sm' ? 'h-4 w-4' : 'h-5 w-5'}`} />
+        <Info className={`mr-2 mt-0.5 flex-shrink-0 text-rose-500 ${size === 'sm' ? 'h-4 w-4' : 'h-5 w-5'}`} />
         <div className="space-y-2 flex-1">
           {showTitle && (
-            <p className={`font-medium text-purple-900 ${fontSize.title}`}>
+            <p className={`font-medium text-slate-900 ${fontSize.title}`}>
               Prompt Quality Feedback
               {hasAnyScore && `: ${score!.toFixed(0)}%`}
             </p>
@@ -118,7 +116,7 @@ export const PromptFeedbackDisplay = ({
           {/* Display the feedback paragraph */}
           {hasFeedback && (
             <div className="mt-2">
-              <p className={`${fontSize.content} text-purple-700`}>
+              <p className={`${fontSize.content} text-slate-700`}>
                 {feedback.feedback}
               </p>
             </div>
@@ -126,7 +124,7 @@ export const PromptFeedbackDisplay = ({
           
           {/* Show message if no detailed feedback but score exists */}
           {hasAnyScore && !hasFeedback && (
-            <p className={`${fontSize.content} text-purple-700`}>
+            <p className={`${fontSize.content} text-slate-700`}>
               Score calculated based on your prompt quality.
             </p>
           )}

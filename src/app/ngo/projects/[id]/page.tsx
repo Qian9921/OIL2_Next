@@ -216,9 +216,9 @@ export default function NGOProjectDetailPage() {
                     </div>
                     <div className="text-xs text-gray-600">Estimated Hours</div>
                   </div>
-                  <div className="text-center p-3 bg-purple-50 rounded-lg">
-                    <Target className="w-6 h-6 text-purple-600 mx-auto mb-1" />
-                    <div className="text-lg font-bold text-purple-600">
+                  <div className="text-center p-3 bg-rose-50 rounded-lg">
+                    <Target className="w-6 h-6 text-rose-600 mx-auto mb-1" />
+                    <div className="text-lg font-bold text-rose-600">
                       {project.subtasks?.length || 0}
                     </div>
                     <div className="text-xs text-gray-600">Subtasks</div>
@@ -388,7 +388,7 @@ export default function NGOProjectDetailPage() {
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center space-x-2">
-                  <TrendingUp className="w-5 h-5 text-purple-600" />
+                  <TrendingUp className="w-5 h-5 text-rose-600" />
                   <span>Project Statistics</span>
                 </CardTitle>
               </CardHeader>
@@ -407,8 +407,8 @@ export default function NGOProjectDetailPage() {
                   <div className="text-sm text-gray-600">Completion Rate</div>
                 </div>
 
-                <div className="text-center p-3 bg-purple-50 rounded-lg">
-                  <div className="text-2xl font-bold text-purple-600">
+                <div className="text-center p-3 bg-rose-50 rounded-lg">
+                  <div className="text-2xl font-bold text-rose-600">
                     {averageProgress}%
                   </div>
                   <div className="text-sm text-gray-600">Average Progress</div>

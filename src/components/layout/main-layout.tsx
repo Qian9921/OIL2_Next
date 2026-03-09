@@ -79,7 +79,10 @@ export function MainLayout({ children }: MainLayoutProps) {
   };
 
   return (
-    <div className="relative min-h-screen overflow-x-hidden bg-[radial-gradient(circle_at_top_left,rgba(255,248,246,0.98),rgba(255,255,255,0.94)_38%,rgba(244,248,255,0.97)_100%)]">
+    <div
+      className="relative min-h-screen overflow-x-hidden bg-[radial-gradient(circle_at_top_left,rgba(255,248,246,0.98),rgba(255,255,255,0.94)_38%,rgba(244,248,255,0.97)_100%)]"
+      style={{ ["--app-shell-top-offset" as string]: "6.75rem" }}
+    >
       <ScrollProgress />
 
       <div className="pointer-events-none absolute inset-0">

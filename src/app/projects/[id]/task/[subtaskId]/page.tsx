@@ -14,8 +14,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
-import { Collapsible, CollapsibleContent } from "@/components/ui/collapsible";
+import { AlertDialog, AlertDialogAction, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import {
   Dialog,
   DialogContent,
@@ -28,10 +27,10 @@ import { SubmitProjectDialog } from '@/components/project/submit-project-dialog'
 
 // Icons
 import { 
-  ArrowLeft, Send, CheckCircle, BookOpen, AlertTriangle, Bot, 
-  UserCircle2, Trash2, Paperclip, Lock, Loader2, Github, Info, 
-  ChevronUp, ChevronDown, ChevronLeft, Circle, Clock, X as XIcon,
-  MessageCircleQuestion, XCircle, AlertCircle, MessageSquare, Copy, FileText, PlusCircle, Download, SendHorizonal
+  Send, CheckCircle, BookOpen, AlertTriangle, Bot, 
+  Trash2, Paperclip, Lock, Loader2, Github, Info, 
+  ChevronLeft, Circle, Clock, X as XIcon,
+  MessageCircleQuestion, XCircle, MessageSquare, Copy, SendHorizonal
 } from 'lucide-react';
 
 // Project-specific components
@@ -40,26 +39,19 @@ import { TutorInsightsStrip } from '@/components/chat/tutor-insights-strip';
 import { TutorQuickActions } from '@/components/chat/tutor-quick-actions';
 import { TutorContextPills } from '@/components/chat/tutor-context-pills';
 import { LoadingState } from '@/components/ui/loading-state';
-import { ScoreDisplay, ScoreProgressBar, ScoreBadge, MetricScoreCard, StreakBadge } from '@/components/task/score-components';
-import { SafeAlertDialogDescription, EvaluationLoadingState, ConfirmationDialog, RequirementCheckpoint } from '@/components/task/dialog-components';
+import { ScoreDisplay, ScoreProgressBar, StreakBadge } from '@/components/task/score-components';
+import { SafeAlertDialogDescription, ConfirmationDialog, RequirementCheckpoint } from '@/components/task/dialog-components';
 import { EvaluationProgressPanel, EvaluationProgressData } from '@/components/task/evaluation-progress-panel';
 import { EvaluationHistoryItem, EvaluationHistoryEntry, PromptHistoryItem, EmptyPromptHistory, EmptyEvaluationHistory, PromptHistoryEntry } from '@/components/task/history-components';
-import { PromptFeedbackDisplay, PromptFeedbackMessage } from '@/components/task/feedback-components';
-import { DimensionScoreDisplay } from '@/components/task/score-components';
 
 // Utils and data
 import { getProject, getParticipationByProjectAndStudent, updateParticipation } from '@/lib/firestore';
 import { Project, Subtask, Participation, ChatMessage } from '@/lib/types';
-import { showSuccessToast, showErrorToast, showStreakToast, showInfoToast, showFeedbackToast } from '@/lib/toast-utils';
+import { showSuccessToast, showErrorToast, showInfoToast, showFeedbackToast } from '@/lib/toast-utils';
 import { GITHUB_SUBMISSION_SUBTASK_ID } from '@/lib/constants';
 import { saveTaskChatHistory, saveGitHubRepoURL } from '@/lib/task-utils';
-import { generateAvatar, formatRelativeTime, getRawBase64, isProjectExpired } from '@/lib/utils';
-import { fetchData } from '@/lib/fetch-utils';
+import { isProjectExpired } from '@/lib/utils';
 import { buildEvaluationChatDraft, buildPromptFeedbackChatDraft, buildQuickActionDraft, TutorContextPill } from '@/lib/tutor-chat-context';
-
-// Markdown
-import ReactMarkdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
 
 // Navigation
 import { TaskNavigation } from '@/components/task/task-navigation';
@@ -128,7 +120,6 @@ export default function ProjectTaskPage() {
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [userInput, setUserInput] = useState('');
   const [isSubtaskCompletedByStudent, setIsSubtaskCompletedByStudent] = useState(false);
-  const [copiedMessageIndex, setCopiedMessageIndex] = useState<number | null>(null);
   const [copiedCodeBlockKey, setCopiedCodeBlockKey] = useState<string | null>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [selectedFilePreview, setSelectedFilePreview] = useState<string | null>(null);
@@ -138,8 +129,6 @@ export default function ProjectTaskPage() {
   const [showCompleteDialog, setShowCompleteDialog] = useState(false);
   const [showEvaluationFeedbackDialog, setShowEvaluationFeedbackDialog] = useState(false);
   const [showClearChatDialog, setShowClearChatDialog] = useState(false);
-  const [isGithubNoticeOpen, setIsGithubNoticeOpen] = useState(false);
-  const [isProgressCollapsed, setIsProgressCollapsed] = useState(false);
   const [promptStreak, setPromptStreak] = useState<{ currentStreak: number; bestStreak: number; isGoodPrompt: boolean } | null>(null);
   const [isStreakAnimating, setIsStreakAnimating] = useState(false);
   const [currentPromptFeedback, setCurrentPromptFeedback] = useState<{
@@ -260,13 +249,10 @@ export default function ProjectTaskPage() {
       // Create a reliable way to scroll to bottom after content is rendered
       const timer = setTimeout(() => {
         if (chatContainerRef.current) {
-          const lastChild = chatContainerRef.current.lastElementChild;
-
-          if (lastChild instanceof HTMLElement) {
-            lastChild.scrollIntoView({ behavior: 'smooth', block: 'end' });
-          } else {
-            chatContainerRef.current.scrollIntoView({ behavior: 'smooth', block: 'end' });
-          }
+          chatContainerRef.current.scrollTo({
+            top: chatContainerRef.current.scrollHeight,
+            behavior: 'smooth',
+          });
         }
       }, 50);
       
@@ -300,15 +286,8 @@ export default function ProjectTaskPage() {
   useEffect(() => {
     if (participation && subtask) {
       // If there's prompt history for this subtask, load it
-      console.log("PROMPT HISTORY DEBUG - Initial check:", {
-        hasPromptHistory: !!participation.promptHistory,
-        subtaskId: subtask.id,
-        allHistoryKeys: participation.promptHistory ? Object.keys(participation.promptHistory) : [],
-        fullPromptHistory: participation.promptHistory
-      });
       
       const history = participation.promptHistory?.[subtask.id] || [];
-      console.log(`PROMPT HISTORY DEBUG - Loading for subtask ${subtask.id}:`, history);
       setPromptHistory(history);
     }
   }, [participation, subtask]);
@@ -340,7 +319,6 @@ export default function ProjectTaskPage() {
       });
       
       setIsSubtaskCompletedByStudent(true);
-      setIsGithubNoticeOpen(false);
       showSuccessToast(toast, "Repository Saved", { description: "GitHub repository URL saved successfully" });
     } catch (error) {
       console.error('Error saving GitHub repo:', error);
@@ -359,22 +337,14 @@ export default function ProjectTaskPage() {
     currentHistory: T[] | null
   ): Promise<{ success: boolean; newHistory?: T[]; historyUpdate?: any; error?: any }> => {
     try {
-      console.log(`HISTORY DEBUG - ${historyType} update starting:`, {
-        participationId,
-        subtaskId,
-        currentHistoryLength: currentHistory?.length || 0,
-        entry
-      });
       
       // Create the new history array
       const newHistory = [...(currentHistory || []), entry];
       
       // Log the update for debugging
-      console.log(`HISTORY DEBUG - ${historyType} array created:`, newHistory);
       
       // Get the current data from participation
       const currentData = participation?.[historyType] || {};
-      console.log(`HISTORY DEBUG - Current ${historyType} data:`, currentData);
       
       // Prepare the update data
       const historyUpdate = {
@@ -382,14 +352,12 @@ export default function ProjectTaskPage() {
         [subtaskId]: newHistory
       };
       
-      console.log(`HISTORY DEBUG - ${historyType} update prepared:`, historyUpdate);
       
       // Update Firebase
       await updateParticipation(participationId, {
         [historyType]: historyUpdate
       });
       
-      console.log(`HISTORY DEBUG - ${historyType} Firebase update completed`);
       
       return { 
         success: true, 
@@ -442,21 +410,9 @@ export default function ProjectTaskPage() {
 
   // Function to handle viewing prompt history
   const handleViewPromptHistory = () => {
-    console.log("PROMPT HISTORY DEBUG - handleViewPromptHistory called, current history:", promptHistory);
     
     // Add detailed debugging for feedback
     if (promptHistory && promptHistory.length > 0) {
-      console.log("PROMPT HISTORY DEBUG - Feedback check:", 
-        promptHistory.map(p => ({
-          id: p.timestamp.toMillis(),
-          qualityScore: p.qualityScore,
-          hasFeedback: !!p.feedback,
-          feedbackDetails: p.feedback ? {
-            hasFeedbackProp: typeof p.feedback.feedback === 'string',
-            feedbackLength: p.feedback.feedback ? p.feedback.feedback.length : 0
-          } : null
-        }))
-      );
     }
     
     // Always show the dialog, even if history is empty
@@ -480,7 +436,6 @@ export default function ProjectTaskPage() {
       feedback?: string;
     } | null
   ) => {
-    console.log("PROMPT HISTORY DEBUG - Starting savePromptHistory with feedback:", feedback);
     
     try {
       // Check if we have valid feedback
@@ -495,7 +450,6 @@ export default function ProjectTaskPage() {
         typeof qualityData.sourceScore === 'number';
       
       if (!hasAnyScore && !hasAnyDimensionScore && !hasValidFeedback) {
-        console.log("PROMPT HISTORY DEBUG - Skipping save due to missing scores and feedback");
         return { success: false, error: "No scores or feedback available" };
       }
       
@@ -516,7 +470,6 @@ export default function ProjectTaskPage() {
       };
       
       // Log for debugging
-      console.log("PROMPT HISTORY DEBUG - Created new prompt entry:", promptEntry);
       
       // Use the common function to update history in Firebase
       const result = await updateHistoryInFirebase(
@@ -560,7 +513,10 @@ export default function ProjectTaskPage() {
   const focusTutorComposer = () => {
     window.setTimeout(() => {
       chatInputRef.current?.focus();
-      chatInputRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      chatContainerRef.current?.scrollTo({
+        top: chatContainerRef.current.scrollHeight,
+        behavior: 'smooth',
+      });
     }, 120);
   };
 
@@ -731,18 +687,6 @@ ${draft}` : draft);
       const endpoint = `/api/chat`;
       
       // Log the API request details
-      console.log("PROMPT QUALITY DEBUG - Sending chat API request with params:", {
-        userId: session.user.id,
-        projectId: currentProjectId,
-        subtaskId: subtask.id,
-        messageLength: currentInput.length,
-        messageLengthPercentage: Math.round((currentInput.length / MAX_USER_INPUT_LENGTH) * 100) + "%",
-        chatHistoryLength: chatMessages.length,
-        evaluatePromptQuality: true,
-        requestPersonalizedFeedback: true,
-        tutorContextCount: currentTutorContext.length,
-        hasImageData: !!userMessage.imageData
-      });
       
       // Convert chat messages to the format expected by the API
       const formattedChatHistory = chatMessages.map(msg => ({
@@ -784,7 +728,6 @@ ${draft}` : draft);
 
       // Handle prompt quality headers before starting to stream content
       const headers = response.headers;
-      let finalPromptStreak = promptStreak;
       let promptQualityData = {
         qualityScore: 0, // Default to 0 (invalid) instead of 50
         goalScore: 0,
@@ -795,15 +738,6 @@ ${draft}` : draft);
       };
       
       // Debug log all headers related to prompt quality
-      console.log("PROMPT QUALITY DEBUG - Headers:", {
-        qualityScore: headers.get('x-prompt-quality-score'),
-        goalScore: headers.get('x-prompt-goal-score'),
-        contextScore: headers.get('x-prompt-context-score'),
-        expectationsScore: headers.get('x-prompt-expectations-score'),
-        sourceScore: headers.get('x-prompt-source-score'),
-        streak: headers.get('x-prompt-streak'),
-        evaluation: headers.get('x-prompt-evaluation')
-      });
 
       if (headers.get('x-prompt-quality-score')) {
         const qualityScore = parseInt(headers.get('x-prompt-quality-score') || '0');
@@ -812,9 +746,6 @@ ${draft}` : draft);
         const contextScore = parseInt(headers.get('x-prompt-context-score') || '0');
         const expectationsScore = parseInt(headers.get('x-prompt-expectations-score') || '0');
         const sourceScore = parseInt(headers.get('x-prompt-source-score') || '0');
-        
-        // Check if we have real scores (not all 50)
-        const hasRealScores = [goalScore, contextScore, expectationsScore, sourceScore].some(score => score !== 50);
         
         // Update promptQualityData with the actual scores from the API
         promptQualityData = {
@@ -826,33 +757,21 @@ ${draft}` : draft);
           isGoodPrompt
         };
         
-        let strengths: string[] = [];
-        let tips: string[] = [];
-        let componentFeedback: {
-          goal?: string;
-          context?: string;
-          expectations?: string;
-          source?: string;
-        } = {};
-
         // Get personalized feedback from API response headers
         const personalisedFeedbackHeader = headers.get('x-prompt-feedback');
         if (personalisedFeedbackHeader) {
           try {
             const parsedFeedback = JSON.parse(decodeURIComponent(personalisedFeedbackHeader));
-            console.log("PROMPT FEEDBACK DEBUG - Parsed feedback from headers:", parsedFeedback);
             
             // Set standardized feedback format
             if (typeof parsedFeedback.feedback === 'string') {
               const feedbackData = {
                 feedback: parsedFeedback.feedback
               };
-              console.log("PROMPT FEEDBACK DEBUG - Setting feedback state:", feedbackData);
               setCurrentPromptFeedback(feedbackData);
               
               // Always save to history if we have participation and subtask IDs
               if (participation?.id && subtask?.id) {
-                console.log("PROMPT FEEDBACK DEBUG - Saving feedback to history with quality data:", promptQualityData);
                 await savePromptHistory(
                   participation.id,
                   subtask.id,
@@ -865,7 +784,6 @@ ${draft}` : draft);
               // Show toast about feedback
               showFeedbackToast(toast, 'info', "Feedback Available", "Detailed prompt feedback has been saved. Click 'View Prompt Feedback' to see tips and suggestions.", 5000);
             } else {
-              console.log("PROMPT FEEDBACK DEBUG - No valid feedback string in data");
               setCurrentPromptFeedback(null);
             }
           } catch (e) {
@@ -873,7 +791,6 @@ ${draft}` : draft);
             setCurrentPromptFeedback(null);
           }
         } else {
-          console.log("PROMPT FEEDBACK DEBUG - No feedback header found");
           setCurrentPromptFeedback(null);
         }
         
@@ -883,7 +800,6 @@ ${draft}` : draft);
             ? { currentStreak: (promptStreak?.currentStreak || 0) + 1, bestStreak: Math.max((promptStreak?.bestStreak || 0), (promptStreak?.currentStreak || 0) + 1), isGoodPrompt }
             : { currentStreak: 0, bestStreak: promptStreak?.bestStreak || 0, isGoodPrompt };
           setPromptStreak(newStreakInfo);
-          finalPromptStreak = newStreakInfo;
           
           if (isGoodPrompt) {
             showFeedbackToast(toast, 'streak', "Prompt Analysis", `Goal: ${goalScore}/100 | Context: ${contextScore}/100 | Expectations: ${expectationsScore}/100 | Source: ${sourceScore}/100`, 2000);
@@ -893,7 +809,6 @@ ${draft}` : draft);
             showFeedbackToast(toast, 'info', "Prompt Feedback", `Your prompt needs improvement. Scores - Goal: ${goalScore}/100 | Context: ${contextScore}/100 | Expectations: ${expectationsScore}/100 | Source: ${sourceScore}/100`, 5000);
           }
         } else {
-          console.log("PROMPT QUALITY DEBUG - Not showing score toast due to missing or invalid scores");
         }
       } else if (headers.get('x-prompt-streak')) {
         try {
@@ -901,7 +816,6 @@ ${draft}` : draft);
           if (streakInfoString) {
             const parsedStreakInfo = JSON.parse(decodeURIComponent(streakInfoString));
             setPromptStreak(parsedStreakInfo);
-            finalPromptStreak = parsedStreakInfo;
             const promptEval = headers.get('x-prompt-evaluation');
             let goalScore = 0, contextScore = 0, expectationsScore = 0, sourceScore = 0;
             let hasValidScores = false;
@@ -924,14 +838,6 @@ ${draft}` : draft);
                   typeof evalData.expectationsScore === 'number' && 
                   typeof evalData.sourceScore === 'number';
                 
-                console.log("PROMPT QUALITY DEBUG - Scores from evaluation header:", {
-                  goalScore,
-                  contextScore,
-                  expectationsScore,
-                  sourceScore,
-                  hasValidScores,
-                  rawEvalData: evalData
-                });
                 
                 // Always create promptQualityData with all available scores
                 promptQualityData = {
@@ -945,13 +851,11 @@ ${draft}` : draft);
                   isGoodPrompt: parsedStreakInfo.isGoodPrompt
                 };
                 
-                console.log("PROMPT QUALITY DEBUG - Updated promptQualityData:", promptQualityData);
                 
                 // Check if it's already in the standardized format
                 let feedbackData = null;
                 
                 if (evalData.feedback && typeof evalData.feedback === 'object') {
-                  console.log("PROMPT FEEDBACK DEBUG - Found feedback in evaluation data:", evalData.feedback);
                   
                   // Check if it's already in the standardized format
                   if (typeof evalData.feedback.feedback === 'string') {
@@ -983,7 +887,6 @@ ${draft}` : draft);
                   setCurrentPromptFeedback(feedbackData);
                   hasValidFeedback = true;
                   
-                  console.log("PROMPT FEEDBACK DEBUG - Using feedback from evaluation:", feedbackData);
                   
                   // Show toast about feedback
                   showFeedbackToast(toast, 'info', "Feedback Available", "Prompt feedback has been saved. Click 'View Prompt Feedback' to see details.", 5000);
@@ -997,7 +900,6 @@ ${draft}` : draft);
                     typeof currentPromptFeedback.feedback === 'string' && 
                     currentPromptFeedback.feedback.trim() !== '';
                   
-                  console.log("PROMPT FEEDBACK DEBUG - No valid feedback available");
                 }
               } catch (e) {
                 console.error('Error parsing prompt evaluation:', e);
@@ -1013,7 +915,6 @@ ${draft}` : draft);
                   (typeof promptQualityData.expectationsScore === 'number' && promptQualityData.expectationsScore > 0) ||
                   (typeof promptQualityData.sourceScore === 'number' && promptQualityData.sourceScore > 0)) {
                 
-                console.log("PROMPT HISTORY DEBUG - Saving prompt with quality data:", JSON.stringify(promptQualityData));
                 try {
                   await savePromptHistory(
                     participation.id,
@@ -1026,7 +927,6 @@ ${draft}` : draft);
                   console.error("PROMPT HISTORY DEBUG - Failed to save prompt history:", savingError);
                 }
               } else {
-                console.log("PROMPT HISTORY DEBUG - Not saving to history due to missing scores and feedback");
               }
             }
             
@@ -1039,7 +939,6 @@ ${draft}` : draft);
               showFeedbackToast(toast, 'info', "Prompt Feedback", `Your prompt needs improvement. Scores - Goal: ${goalScore}/100 | Context: ${contextScore}/100 | Expectations: ${expectationsScore}/100 | Source: ${sourceScore}/100`, 5000);
             } else {
               // Don't show score-related toast if scores are invalid
-              console.log("PROMPT QUALITY DEBUG - Not showing toast due to invalid scores");
             }
           }
         } catch (e) { 
@@ -1151,7 +1050,9 @@ ${draft}` : draft);
       // For GitHub submission subtask, enforce GitHub repo submission
       if (subtask.id === GITHUB_SUBMISSION_SUBTASK_ID && !participation.studentGitHubRepo) {
         setShowCompleteDialog(false);
-        setIsGithubNoticeOpen(true);
+        showInfoToast(toast, "GitHub repository required", {
+          description: "Please add your GitHub repository URL before marking this step complete.",
+        });
         return;
       }
       
@@ -1171,13 +1072,6 @@ ${draft}` : draft);
         
         // Make API call to evaluate the task completion
         try {
-          console.log("Sending evaluation request with data:", {
-            projectDetail: project.title,
-            tasks: project.subtasks.map(st => st.title),
-            currentTask: subtask.title,
-            githubRepoUrl: participation.studentGitHubRepo || "",
-            evidence: subtask.description || "Task completion criteria",
-          });
 
           // Use a Next.js API route as a proxy to avoid CORS issues
           const response = await fetch('/api/evaluate-proxy', {
@@ -1204,12 +1098,10 @@ ${draft}` : draft);
             
           let result = await response.json() as TaskEvaluationResponse;
           updateEvaluationProgressState(result);
-          console.log("Evaluation result (full response):", JSON.stringify(result, null, 2));
 
           if (response.status === 202 && result.evaluationId) {
             showFeedbackToast(toast, 'info', 'Evaluation in Progress', "We're still reviewing your work. Please wait a few more seconds…", 3000);
             result = await pollEvaluationUntilComplete(result.evaluationId);
-            console.log("Evaluation result after polling:", JSON.stringify(result, null, 2));
           }
 
           setEvaluationFeedback(result);
@@ -1550,7 +1442,7 @@ ${draft}` : draft);
   if (isLoading && !project) {
     return (
       <MainLayout>
-        <div className="flex items-center justify-center h-[calc(100vh-var(--header-height,4rem))]">
+        <div className="flex min-h-[calc(100dvh-var(--header-height,4rem))] items-center justify-center">
           <LoadingState text="Loading task data..." />
         </div>
       </MainLayout>
@@ -1587,9 +1479,9 @@ ${draft}` : draft);
         </div>
       )}
       
-      <div className="mx-auto flex w-full max-w-7xl flex-col space-y-5 px-4 pb-6 md:px-6 xl:h-[calc(100vh-6.5rem)] xl:overflow-hidden">
-        <Card className="overflow-hidden border-white/80 bg-white/88 shadow-[0_18px_40px_-30px_rgba(15,23,42,0.18)]">
-          <CardContent className="space-y-4 p-5">
+      <div className="mx-auto flex w-full max-w-7xl flex-col gap-4 px-4 pb-6 md:px-6 xl:grid xl:h-[calc(100dvh-6.75rem)] xl:max-h-[calc(100dvh-6.75rem)] xl:grid-rows-[auto_minmax(0,1fr)] xl:overflow-hidden">
+        <Card className="overflow-hidden border-white/80 bg-white/88 shadow-[0_18px_40px_-30px_rgba(15,23,42,0.18)] xl:flex-shrink-0">
+          <CardContent className="space-y-4 p-4 sm:p-5">
             <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
               <div className="min-w-0 space-y-3">
                 <div className="flex flex-wrap items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
@@ -1644,8 +1536,8 @@ ${draft}` : draft);
             </div>
 
             <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_auto] xl:items-center">
-              <div className="rounded-[1.2rem] border border-slate-200 bg-slate-50/90 p-4 shadow-sm">
-                <div className="mb-3 flex items-center justify-between gap-3">
+              <div className="rounded-[1.1rem] border border-slate-200 bg-slate-50/90 p-3.5 shadow-sm">
+                <div className="mb-2 flex items-center justify-between gap-3">
                   <div>
                     <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">Project progress</p>
                     <p className="mt-1 text-sm font-medium text-slate-700">
@@ -1664,7 +1556,7 @@ ${draft}` : draft);
                 />
               </div>
 
-              <div className="rounded-[1.2rem] border border-slate-200 bg-white/90 p-2 shadow-sm">
+              <div className="rounded-[1.1rem] border border-slate-200 bg-white/95 p-2 shadow-sm">
                 <TaskNavigation 
                   project={project}
                   participation={participation}
@@ -1675,13 +1567,13 @@ ${draft}` : draft);
           </CardContent>
         </Card>
 
-        <div className="grid grid-cols-1 items-start gap-5 xl:min-h-0 xl:flex-1 xl:grid-cols-[minmax(340px,0.82fr)_minmax(620px,1.18fr)] 2xl:grid-cols-[minmax(360px,0.78fr)_minmax(720px,1.22fr)]">
+        <div className="grid grid-cols-1 items-start gap-4 xl:min-h-0 xl:grid-cols-[minmax(340px,0.82fr)_minmax(620px,1.18fr)] 2xl:grid-cols-[minmax(360px,0.78fr)_minmax(720px,1.22fr)]">
           <div className="flex flex-col self-start xl:h-full xl:min-h-0">
             <Card className="overflow-hidden xl:flex xl:h-full xl:min-h-0 xl:flex-col">
               <CardHeader className="flex-shrink-0 pb-2">
                 <div className="flex items-center justify-between">
                   <CardTitle className="flex items-center text-xl">
-                    <BookOpen className="w-5 h-5 mr-2 text-blue-600" />
+                    <BookOpen className="mr-2 h-5 w-5 text-indigo-600" />
                     {subtask?.title}
                   </CardTitle>
                   {project && (
@@ -1700,13 +1592,13 @@ ${draft}` : draft);
                   isLocked={!isCurrentSequentially && !isSubtaskCompletedByStudent} 
                 />
               </CardHeader>
-              <CardContent className="py-4 xl:min-h-0 xl:flex-1 xl:overflow-y-auto">
+              <CardContent className="py-4 xl:min-h-0 xl:flex-1 xl:overflow-y-auto xl:overscroll-contain">
                 <div className="space-y-4">
                   {subtask?.id === GITHUB_SUBMISSION_SUBTASK_ID ? (
                   <div className="space-y-4 py-4">
-                    <div className="bg-blue-50 p-3 rounded-md border border-blue-100 mb-4">
-                      <h3 className="text-sm font-medium text-blue-800 mb-1">About This Task</h3>
-                      <p className="text-gray-700 text-sm leading-normal">{subtask.description}</p>
+                    <div className="mb-4 rounded-xl border border-indigo-100 bg-gradient-to-br from-indigo-50 via-white to-sky-50 p-3">
+                      <h3 className="mb-1 text-sm font-medium text-indigo-800">About This Task</h3>
+                      <p className="text-sm leading-normal text-slate-700">{subtask.description}</p>
                     </div>
                     <div>
                       <label htmlFor="githubRepoUrl" className="block text-sm font-medium text-gray-700 mb-1">
@@ -1725,7 +1617,7 @@ ${draft}` : draft);
                     {subtask.resources && subtask.resources.length > 0 && (
                       <div>
                         <h4 className="font-semibold text-sm mb-1">Need help?</h4>
-                        <ul className="list-disc list-inside text-sm text-blue-600 space-y-0.5">
+                        <ul className="list-disc list-inside space-y-0.5 text-sm text-indigo-600">
                           {subtask.resources.map((res, i) => {
                             const parts = res.split(': ');
                             return (
@@ -1750,9 +1642,9 @@ ${draft}` : draft);
                   </div>
                 ) : (
                   <>
-                    <div className="bg-blue-50 p-3 rounded-md border border-blue-100 mb-4">
-                      <h3 className="text-sm font-medium text-blue-800 mb-1">Task Description</h3>
-                      <p className="text-gray-700 text-sm leading-normal">{subtask?.description}</p>
+                    <div className="mb-4 rounded-xl border border-indigo-100 bg-gradient-to-br from-indigo-50 via-white to-sky-50 p-3">
+                      <h3 className="mb-1 text-sm font-medium text-indigo-800">Task Description</h3>
+                      <p className="text-sm leading-normal text-slate-700">{subtask?.description}</p>
                     </div>
                       
                     {subtask?.estimatedHours && (
@@ -1909,7 +1801,7 @@ ${draft}` : draft);
               
               <CardContent 
                 ref={chatContainerRef} 
-                className="rounded-b-none bg-slate-50/85 px-4 py-4 pb-4 xl:min-h-0 xl:flex-1 xl:overflow-y-auto"
+                className="rounded-b-none bg-slate-50/85 px-4 py-4 pb-4 xl:min-h-0 xl:flex-1 xl:overflow-y-auto xl:overscroll-contain"
               >
                 <div className="space-y-4">
                   {chatMessages.map((msg, index) => (
@@ -2106,8 +1998,8 @@ ${draft}` : draft);
           open={showEvaluationFeedbackDialog} 
           onOpenChange={setShowEvaluationFeedbackDialog}
         >
-          <AlertDialogContent className="max-w-5xl max-h-[90vh] overflow-hidden p-0">
-            <div className="flex max-h-[90vh] flex-col">
+          <AlertDialogContent className="max-h-[90dvh] max-w-5xl overflow-hidden p-0">
+            <div className="flex max-h-[90dvh] flex-col">
               <AlertDialogHeader className="border-b border-slate-200 bg-white px-6 py-5">
                 <AlertDialogTitle>Task Evaluation Results</AlertDialogTitle>
                 <SafeAlertDialogDescription>
@@ -2338,7 +2230,7 @@ ${draft}` : draft);
 
         {/* Evaluation History Dialog */}
         <AlertDialog open={showHistoryDialog} onOpenChange={setShowHistoryDialog}>
-          <AlertDialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+          <AlertDialogContent className="max-h-[90dvh] max-w-4xl overflow-y-auto">
             <AlertDialogHeader>
               <AlertDialogTitle>Evaluation History</AlertDialogTitle>
               <SafeAlertDialogDescription>
@@ -2385,7 +2277,7 @@ ${draft}` : draft);
 
         {/* Prompt History Dialog */}
         <Dialog open={showPromptHistoryDialog} onOpenChange={setShowPromptHistoryDialog}>
-          <DialogContent className="max-w-4xl max-h-[80vh] overflow-hidden flex flex-col">
+          <DialogContent className="flex max-h-[80dvh] max-w-4xl flex-col overflow-hidden">
             <DialogHeader>
               <DialogTitle>Your Prompt History & Feedback</DialogTitle>
               <DialogDescription>

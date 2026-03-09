@@ -24,12 +24,24 @@ interface EvaluationRawContent {
   message?: string;
 }
 
+interface EvaluationProgressStats {
+  candidateFileCount?: number;
+  selectedFileCount?: number;
+  fetchedFileCount?: number;
+  relevantFileCount?: number;
+}
+
 interface UpstreamEvaluationResponse {
   success?: boolean;
   message?: string;
   evaluationId?: string;
   status?: string;
   statusMessage?: string;
+  progressPercent?: number;
+  stageKey?: string;
+  stageTitle?: string;
+  stageDetail?: string;
+  progressStats?: EvaluationProgressStats;
   score?: number;
   feedback?: string;
   error?: string;
@@ -88,10 +100,14 @@ function normalizeUpstreamResponse(responseData: UpstreamEvaluationResponse): No
     ? responseData.result?.rawContent?.checkpoints
     : [];
 
+  const isStillProcessing = !isTerminalStatus(responseData.status) && !responseData.result?.rawContent;
+
   const feedback =
     typeof responseData.feedback === 'string' && responseData.feedback.trim().length > 0
       ? responseData.feedback
-      : buildDefaultFeedback(score, checkpoints);
+      : isStillProcessing
+        ? responseData.stageDetail || responseData.statusMessage || 'Evaluation in progress.'
+        : buildDefaultFeedback(score, checkpoints);
 
   return {
     ...responseData,

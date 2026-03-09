@@ -78,10 +78,10 @@ export default function SignIn() {
 
   if (showRoleSelection && userInfo) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-purple-50 via-pink-50 to-cyan-50 flex items-center justify-center p-4">
+      <div className="min-h-screen bg-gradient-to-br from-rose-50 via-white to-sky-50 flex items-center justify-center p-4">
         <Card className="w-full max-w-lg">
           <CardHeader className="text-center">
-            <div className="w-16 h-16 bg-gradient-to-br from-pink-500 to-purple-600 rounded-full flex items-center justify-center mx-auto mb-4">
+            <div className="w-16 h-16 bg-gradient-to-br from-indigo-400 to-sky-400 rounded-full flex items-center justify-center mx-auto mb-4">
               <Heart className="w-8 h-8 text-white" />
             </div>
             <CardTitle className="text-2xl gradient-text">Choose Your Role</CardTitle>
@@ -113,9 +113,9 @@ export default function SignIn() {
               onClick={() => handleRoleSelection("ngo")}
               disabled={isLoading}
               variant="outline"
-              className="w-full h-20 flex flex-col items-center justify-center space-y-2 hover:bg-purple-50 hover:border-purple-300"
+              className="w-full h-20 flex flex-col items-center justify-center space-y-2 hover:bg-rose-50 hover:border-rose-200"
             >
-              <Building className="w-8 h-8 text-purple-600" />
+              <Building className="w-8 h-8 text-rose-500" />
               <div>
                 <div className="font-semibold">NGO</div>
                 <div className="text-xs text-gray-500">Create and manage projects</div>
@@ -128,10 +128,10 @@ export default function SignIn() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-purple-50 via-pink-50 to-cyan-50 flex items-center justify-center p-4">
+    <div className="min-h-screen bg-gradient-to-br from-rose-50 via-white to-sky-50 flex items-center justify-center p-4">
       <Card className="w-full max-w-md">
         <CardHeader className="text-center">
-          <div className="w-16 h-16 bg-gradient-to-br from-pink-500 to-purple-600 rounded-full flex items-center justify-center mx-auto mb-4">
+          <div className="w-16 h-16 bg-gradient-to-br from-indigo-400 to-sky-400 rounded-full flex items-center justify-center mx-auto mb-4">
             <Heart className="w-8 h-8 text-white" />
           </div>
           <CardTitle className="text-3xl gradient-text">OpenImpactLab</CardTitle>

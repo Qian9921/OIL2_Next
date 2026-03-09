@@ -46,8 +46,8 @@ export default function AdminPage() {
       title: t('admin.features.analytics.reports'),
       description: t('admin.features.analytics.reports.desc'),
       icon: BarChart3,
-      color: "text-purple-600",
-      bgColor: "bg-purple-50",
+      color: "text-indigo-500",
+      bgColor: "bg-indigo-50",
       path: "/admin/analytics",
       stats: t('admin.features.data.insights')
     },
@@ -105,8 +105,8 @@ export default function AdminPage() {
     {
       name: t('admin.status.data.sync'),
       status: t('admin.status.synced'),
-      color: "text-purple-600",
-      bgColor: "bg-purple-100"
+      color: "text-indigo-500",
+      bgColor: "bg-indigo-100"
     }
   ];
 
@@ -251,7 +251,7 @@ export default function AdminPage() {
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center space-x-2">
-                <BarChart3 className="h-5 w-5 text-purple-600" />
+                <BarChart3 className="h-5 w-5 text-indigo-500" />
                 <span>{t('admin.recent.activity')}</span>
               </CardTitle>
               <CardDescription>
@@ -276,8 +276,8 @@ export default function AdminPage() {
                     <p className="text-xs text-gray-500 mt-1">{new Date().toLocaleString('zh-CN')}</p>
                   </div>
                 </div>
-                <div className="flex items-start space-x-3 p-3 bg-purple-50 rounded-lg">
-                  <div className="w-2 h-2 bg-purple-500 rounded-full mt-2"></div>
+                <div className="flex items-start space-x-3 p-3 bg-indigo-50 rounded-lg">
+                  <div className="w-2 h-2 bg-indigo-400 rounded-full mt-2"></div>
                   <div>
                     <p className="text-sm font-medium text-gray-900">{t('admin.activity.data.sync')}</p>
                     <p className="text-xs text-gray-600">{t('admin.activity.data.sync.desc')}</p>
@@ -290,7 +290,7 @@ export default function AdminPage() {
         </div>
 
         {/* 底部信息 */}
-        <div className="mt-8 p-4 bg-white rounded-lg border">
+        <div className="mt-8 rounded-2xl border border-white/70 bg-white/80 p-4 shadow-sm">
           <div className="flex items-center justify-between text-sm text-gray-600">
             <div>
               {t('admin.footer.version')}: v2.0.0 | {t('admin.footer.last.update')}: {new Date().toLocaleString('zh-CN')}

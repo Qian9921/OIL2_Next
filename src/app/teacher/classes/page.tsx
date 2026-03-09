@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
 import { MainLayout } from "@/components/layout/main-layout";
+import { PageHero } from "@/components/layout/page-hero";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
@@ -243,110 +244,93 @@ export default function TeacherClassesPage() {
   return (
     <MainLayout>
       <div className="space-y-6">
-        {/* Page Header */}
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-3xl font-bold text-gray-900">My Classes</h1>
-            <p className="text-gray-600 mt-2">
-              Manage your classes and students 🎓
-            </p>
-          </div>
-          <Button onClick={() => setShowCreateDialog(true)}>
-            <Plus className="w-4 h-4 mr-2" />
-            Create Class
-          </Button>
-        </div>
+        <PageHero
+          eyebrow="Teacher workspace"
+          icon={GraduationCap}
+          title="My Classes"
+          description="Manage your classes, invite students, and keep the classroom experience organized and easy to navigate."
+          actions={
+            <Button onClick={() => setShowCreateDialog(true)}>
+              <Plus className="w-4 h-4 mr-2" />
+              Create Class
+            </Button>
+          }
+        />
 
         {/* Classes Grid */}
         {classes.length > 0 ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-3">
             {classes.map((classData) => (
-              <Card key={classData.id} className="hover:shadow-lg transition-shadow">
-                <CardHeader>
-                  <div className="flex items-start justify-between">
-                    <div className="flex items-center space-x-3">
-                      <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
-                        <GraduationCap className="w-6 h-6 text-blue-600" />
+              <Card key={classData.id} className="overflow-hidden">
+                <CardHeader className="pb-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex min-w-0 items-center gap-3">
+                      <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-100 to-cyan-100 text-blue-700 shadow-sm">
+                        <GraduationCap className="h-5 w-5" />
                       </div>
-                      <div>
-                        <CardTitle className="text-lg">{classData.name}</CardTitle>
+                      <div className="min-w-0">
+                        <CardTitle className="text-lg leading-6">{classData.name}</CardTitle>
                         <CardDescription className="text-sm">
-                          {classData.studentIds.length} students
+                          {classData.studentIds.length} enrolled students
                         </CardDescription>
                       </div>
                     </div>
-                    <div className="flex items-center space-x-2">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => openEditDialog(classData)}
-                      >
-                        <Edit className="w-4 h-4" />
+                    <div className="flex items-center gap-2">
+                      <Button variant="outline" size="sm" onClick={() => openEditDialog(classData)}>
+                        <Edit className="h-4 w-4" />
                       </Button>
                       <Button
-                        variant="ghost"
+                        variant="outline"
                         size="sm"
                         onClick={() => openDeleteDialog(classData)}
-                        className="text-red-600 hover:text-red-700"
+                        className="border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700"
                       >
-                        <Trash2 className="w-4 h-4" />
+                        <Trash2 className="h-4 w-4" />
                       </Button>
                     </div>
                   </div>
                 </CardHeader>
-                <CardContent>
-                  <p className="text-sm text-gray-600 mb-4 line-clamp-2">
+                <CardContent className="space-y-4">
+                  <p className="line-clamp-2 text-sm leading-6 text-slate-600">
                     {classData.description}
                   </p>
-                  
-                  {/* Invite Code */}
-                  <div className="mb-4 p-3 bg-gray-50 rounded-lg">
-                    <div className="flex items-center justify-between">
+
+                  <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3">
+                    <div className="flex items-center justify-between gap-3">
                       <div>
-                        <p className="text-xs text-gray-500 mb-1">Invite Code</p>
-                        <p className="font-mono text-sm font-medium">{classData.inviteCode}</p>
+                        <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Invite code</p>
+                        <p className="mt-1 font-mono text-sm font-medium text-slate-800">{classData.inviteCode}</p>
                       </div>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => copyInviteCode(classData.inviteCode)}
-                      >
-                        <Copy className="w-3 h-3 mr-1" />
+                      <Button variant="outline" size="sm" onClick={() => copyInviteCode(classData.inviteCode)}>
+                        <Copy className="mr-1.5 h-3.5 w-3.5" />
                         Copy
                       </Button>
                     </div>
                   </div>
 
-                  {/* Class Stats */}
-                  <div className="grid grid-cols-2 gap-4 mb-4">
-                    <div className="text-center p-2 bg-blue-50 rounded-lg">
-                      <div className="text-lg font-bold text-blue-600">
-                        {classData.studentIds.length}
-                      </div>
-                      <div className="text-xs text-gray-600">Students</div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="rounded-xl bg-blue-50 p-3 text-center">
+                      <div className="text-lg font-semibold text-blue-700">{classData.studentIds.length}</div>
+                      <div className="text-xs text-slate-500">Students</div>
                     </div>
-                    <div className="text-center p-2 bg-green-50 rounded-lg">
-                      <div className="text-lg font-bold text-green-600">
-                        {classData.maxStudents || "∞"}
-                      </div>
-                      <div className="text-xs text-gray-600">Max Students</div>
+                    <div className="rounded-xl bg-green-50 p-3 text-center">
+                      <div className="text-lg font-semibold text-green-700">{classData.maxStudents || '∞'}</div>
+                      <div className="text-xs text-slate-500">Max Students</div>
                     </div>
                   </div>
 
-                  {/* Actions */}
-                  <div className="flex space-x-2">
+                  <div className="flex gap-2 pt-1">
                     <Link href={`/teacher/classes/${classData.id}`} className="flex-1">
                       <Button variant="outline" className="w-full">
-                        <Users className="w-4 h-4 mr-2" />
+                        <Users className="mr-2 h-4 w-4" />
                         View Details
                       </Button>
                     </Link>
                   </div>
 
-                  {/* Creation Date */}
-                  <div className="mt-4 pt-4 border-t border-gray-200">
-                    <div className="flex items-center text-xs text-gray-500">
-                      <Calendar className="w-3 h-3 mr-1" />
+                  <div className="border-t border-slate-200 pt-3 text-xs text-slate-500">
+                    <div className="flex items-center gap-1.5">
+                      <Calendar className="h-3.5 w-3.5" />
                       Created {formatDate(classData.createdAt)}
                     </div>
                   </div>

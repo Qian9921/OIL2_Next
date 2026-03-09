@@ -193,8 +193,8 @@ export default function StudentDetailPage() {
                   <div className="text-2xl font-bold text-green-600">{student.completedProjects}</div>
                   <div className="text-sm text-gray-600">{t('student.detail.completed.projects')}</div>
                 </div>
-                <div className="text-center p-3 bg-purple-50 rounded-lg">
-                  <div className="text-2xl font-bold text-purple-600">{student.certificates}</div>
+                <div className="rounded-lg bg-rose-50 p-3 text-center">
+                  <div className="text-2xl font-bold text-rose-600">{student.certificates}</div>
                   <div className="text-sm text-gray-600">{t('student.detail.certificates.earned')}</div>
                 </div>
                 <div className="text-center p-3 bg-orange-50 rounded-lg">
@@ -209,7 +209,7 @@ export default function StudentDetailPage() {
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center space-x-2">
-                <Activity className="w-5 h-5 text-purple-600" />
+                <Activity className="w-5 h-5 text-indigo-500" />
                 <span>{t('student.detail.activity.info')}</span>
               </CardTitle>
             </CardHeader>

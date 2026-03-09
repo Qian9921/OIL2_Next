@@ -1,11 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import {
-  createGenerativeModelBundle,
+  generateJsonContentForTask,
   sanitizeInput,
   sanitizeArrayInput,
   validateAIResponse,
   parseJsonArrayResponse,
-  withGenerativeModelFallback
 } from '@/lib/vertex-ai-utils';
 
 // Helper to sanitize subtask data
@@ -50,7 +49,6 @@ export async function POST(req: NextRequest) {
     }
 
     // Use shared generative model with configured token limit
-    const generativeModelBundle = createGenerativeModelBundle('subtask-refinement', { maxOutputTokens: 4096 });
 
     // Sanitize all input data using shared helpers
     const sanitizedProjectTitle = sanitizeInput(body.projectTitle);
@@ -130,22 +128,14 @@ Example of one subtask object in the array:
 If refining existing subtasks, improve their clarity, detail, estimated hours, and alignment with goals/requirements. If generating new ones, ensure they form a logical progression for the project and cover the learning goals.
 Provide ONLY the JSON array in your response, without any surrounding text, explanations, or markdown. Ensure the JSON is valid and complete.`;
 
-    // Generate content using the AI model
-    const { value: result, usedModel } = await withGenerativeModelFallback(
-      generativeModelBundle,
-      (model) => model.generateContent(prompt),
+    const { text: responseText, usedModel } = await generateJsonContentForTask(
+      'subtask-refinement',
+      prompt,
+      { maxOutputTokens: 4096, temperature: 0.4, topP: 0.95 },
     );
     console.log(`Subtask refinement model used: ${usedModel}`);
-    
-    // Validate the AI response using shared helper
-    const validationResult = validateAIResponse(result.response);
-    
-    if (!validationResult.isValid) {
-      return NextResponse.json({ message: validationResult.error }, { status: 500 });
-    }
-    
-    // Parse the JSON array response using shared helper
-    const parseResult = parseJsonArrayResponse(validationResult.responseText);
+    console.log('AI raw response preview:', responseText.slice(0, 1200));
+    const parseResult = parseJsonArrayResponse(responseText);
     
     if (!parseResult.success) {
       console.error("Failed to parse subtasks AI response:", parseResult.error);

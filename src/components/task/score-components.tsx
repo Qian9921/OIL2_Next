@@ -1,5 +1,7 @@
 import React from 'react';
 
+import { Flame, Sparkles, TriangleAlert } from 'lucide-react';
+
 /**
  * Component for displaying a score value with color coding
  */
@@ -34,10 +36,10 @@ export const ScoreProgressBar = ({
   className?: string;
 }) => {
   return (
-    <div className={`w-full bg-gray-200 rounded-full h-${height} ${className}`}>
+    <div className={`w-full rounded-full bg-slate-200/80 ${className}`} style={{ height: `${height * 4}px` }}>
       <div
-        className={`h-${height} rounded-full ${score >= threshold ? 'bg-green-600' : 'bg-red-600'}`}
-        style={{ width: `${score}%` }}
+        className={`rounded-full ${score >= threshold ? 'bg-emerald-500' : 'bg-rose-400'}`}
+        style={{ width: `${score}%`, height: `${height * 4}px` }}
       ></div>
     </div>
   );
@@ -56,24 +58,28 @@ export const ScoreBadge = ({
   className?: string;
 }) => {
   const getScoreColor = (score: number) => {
-    if (score >= 90) return 'bg-purple-100 text-purple-800';
-    if (score >= 80) return 'bg-green-100 text-green-800';
-    if (score >= 60) return 'bg-blue-100 text-blue-800';
-    if (score >= 40) return 'bg-yellow-100 text-yellow-800';
-    return 'bg-red-100 text-red-800';
+    if (score >= 90) return 'border border-indigo-100 bg-indigo-50 text-indigo-700';
+    if (score >= 80) return 'border border-emerald-100 bg-emerald-50 text-emerald-700';
+    if (score >= 60) return 'border border-sky-100 bg-sky-50 text-sky-700';
+    if (score >= 40) return 'border border-amber-100 bg-amber-50 text-amber-700';
+    return 'border border-rose-100 bg-rose-50 text-rose-700';
   };
 
   const formatScoreText = (score: number) => {
-    if (score >= 90) return `${score}% 🌟`;
-    if (score >= 80) return `${score}% ✨`;
-    if (score >= 60) return `${score}% ✅`;
-    if (score >= 40) return `${score}% ⚠️`;
-    return `${score}% ❗`;
+    return `${score}%`;
+  };
+
+  const getScoreIcon = (score: number) => {
+    if (score >= 90) return <Sparkles className="h-3.5 w-3.5" />;
+    if (score >= 80) return <Sparkles className="h-3.5 w-3.5" />;
+    if (score >= 60) return <Sparkles className="h-3.5 w-3.5" />;
+    return <TriangleAlert className="h-3.5 w-3.5" />;
   };
 
   return (
-    <span className={`px-2 py-1 text-xs font-medium rounded-full ${getScoreColor(score)} ${className}`}>
-      {text || formatScoreText(score)}
+    <span className={`inline-flex items-center gap-1.5 px-2 py-1 text-xs font-medium rounded-full ${getScoreColor(score)} ${className}`}>
+      {getScoreIcon(score)}
+      <span>{text || formatScoreText(score)}</span>
     </span>
   );
 };
@@ -126,9 +132,9 @@ export const DimensionScoreDisplay = ({
   };
 
   return (
-    <div className="bg-white rounded border border-purple-100 p-2 text-center">
-      <p className={`font-medium ${textSizes[size].label} text-purple-900`}>{label}</p>
-      <p className={`${textSizes[size].score} text-purple-700`}>{score.toFixed(0)}%</p>
+    <div className="rounded-xl border border-indigo-100 bg-white p-2 text-center shadow-sm shadow-slate-100/80">
+      <p className={`font-medium ${textSizes[size].label} text-slate-700`}>{label}</p>
+      <p className={`${textSizes[size].score} text-indigo-600`}>{score.toFixed(0)}%</p>
     </div>
   );
 };
@@ -146,9 +152,9 @@ export const StreakBadge = ({
   isAnimating?: boolean;
 }) => {
   const getStreakClass = (streak: number) => {
-    if (streak >= 5) return 'bg-purple-100 text-purple-800 border border-purple-300';
-    if (streak >= 3) return 'bg-green-100 text-green-800 border border-green-300';
-    return 'bg-blue-100 text-blue-800 border border-blue-300';
+    if (streak >= 5) return 'bg-rose-100 text-rose-800 border border-rose-200';
+    if (streak >= 3) return 'bg-emerald-100 text-emerald-800 border border-emerald-200';
+    return 'bg-sky-100 text-sky-800 border border-sky-200';
   };
 
   return (
@@ -156,8 +162,8 @@ export const StreakBadge = ({
       className={`flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${getStreakClass(currentStreak)} ${isAnimating ? 'animate-bounce-short' : ''}`}
       title={`You have a streak of ${currentStreak} good prompts! Your best streak is ${bestStreak}.`}
     >
-      <span className="mr-1">🔥</span>
+      <Flame className="mr-1 h-3.5 w-3.5" />
       <span className={isAnimating ? 'animate-pulse' : ''}>{currentStreak}</span>
     </div>
   );
-}; 
+};

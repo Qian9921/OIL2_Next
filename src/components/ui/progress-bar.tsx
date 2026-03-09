@@ -32,10 +32,10 @@ export function ProgressBar({
       )}
       <div className="h-2.5 w-full overflow-hidden rounded-full bg-slate-200/80">
         <div
-          className="h-2.5 rounded-full bg-gradient-to-r from-fuchsia-500 via-violet-500 to-cyan-500 transition-all duration-500 ease-in-out"
+          className="h-2.5 rounded-full bg-gradient-to-r from-emerald-400 via-sky-400 to-indigo-400 transition-all duration-500 ease-in-out"
           style={{ 
             width: `${progress}%`,
-            boxShadow: isComplete ? '0 0 8px rgba(168, 85, 247, 0.5)' : 'none'
+            boxShadow: isComplete ? '0 0 8px rgba(99, 102, 241, 0.28)' : 'none'
           }}
         />
       </div>

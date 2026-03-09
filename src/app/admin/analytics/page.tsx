@@ -206,13 +206,13 @@ export default function AnalyticsPage() {
             value={analyticsData.totalUsers}
             icon={Users}
             color="bg-blue-600"
-            description={`学生: ${analyticsData.usersByRole.student}, 教师: ${analyticsData.usersByRole.teacher}, NGO: ${analyticsData.usersByRole.ngo}`}
+            description={`学生: ${analyticsData.usersByRole.student}, NGO: ${analyticsData.usersByRole.ngo}`}
           />
           <MetricCard
             title="项目总数"
             value={analyticsData.totalProjects}
             icon={BookOpen}
-            color="bg-purple-600"
+            color="bg-indigo-500"
             description="平台上的所有项目"
           />
           <MetricCard
@@ -282,12 +282,12 @@ export default function AnalyticsPage() {
                       <span className="font-semibold text-blue-600">{analyticsData.usersByRole.student}</span>
                     </div>
                     <div className="flex justify-between items-center">
-                      <span>教师用户</span>
-                      <span className="font-semibold text-green-600">{analyticsData.usersByRole.teacher}</span>
+                      <span>全部用户</span>
+                      <span className="font-semibold text-emerald-600">{analyticsData.totalUsers}</span>
                     </div>
                     <div className="flex justify-between items-center">
                       <span>NGO机构</span>
-                      <span className="font-semibold text-purple-600">{analyticsData.usersByRole.ngo}</span>
+                      <span className="font-semibold text-rose-600">{analyticsData.usersByRole.ngo}</span>
                     </div>
                   </div>
                 </CardContent>
@@ -313,14 +313,14 @@ export default function AnalyticsPage() {
               
               <Card>
                 <CardHeader>
-                  <CardTitle>教师用户</CardTitle>
+                  <CardTitle>全部用户</CardTitle>
                 </CardHeader>
                 <CardContent>
                   <div className="text-center">
-                    <div className="text-3xl font-bold text-green-600">
-                      {analyticsData.usersByRole.teacher}
+                    <div className="text-3xl font-bold text-emerald-600">
+                      {analyticsData.totalUsers}
                     </div>
-                    <p className="text-sm text-gray-600 mt-2">注册教师总数</p>
+                    <p className="text-sm text-gray-600 mt-2">当前已注册账号总数</p>
                   </div>
                 </CardContent>
               </Card>
@@ -331,7 +331,7 @@ export default function AnalyticsPage() {
                 </CardHeader>
                 <CardContent>
                   <div className="text-center">
-                    <div className="text-3xl font-bold text-purple-600">
+                    <div className="text-3xl font-bold text-rose-600">
                       {analyticsData.usersByRole.ngo}
                     </div>
                     <p className="text-sm text-gray-600 mt-2">注册NGO总数</p>
@@ -350,7 +350,7 @@ export default function AnalyticsPage() {
               <CardContent>
                 <div className="grid grid-cols-2 gap-4">
                   <div className="text-center p-4 border rounded-lg">
-                    <div className="text-2xl font-bold text-purple-600">{analyticsData.totalProjects}</div>
+                    <div className="text-2xl font-bold text-indigo-600">{analyticsData.totalProjects}</div>
                     <p className="text-sm text-gray-600">总项目数</p>
                   </div>
                   <div className="text-center p-4 border rounded-lg">

@@ -25,17 +25,17 @@ export const PromptQualitySummary = ({
         <CardTitle className="text-sm font-medium text-gray-600">
           Prompt Quality
         </CardTitle>
-        <Brain className="h-4 w-4 text-purple-600" />
+        <Brain className="h-4 w-4 text-indigo-600" />
       </CardHeader>
       <CardContent>
         <div className="flex justify-between items-center mb-2">
-          <div className="text-2xl font-bold text-purple-600">
+          <div className="text-2xl font-bold text-indigo-600">
             {averageScore.toFixed(0)}%
           </div>
         </div>
         <ScoreProgressBar score={averageScore} className="mb-2" />
         <div className="text-xs text-gray-500 mt-2">
-          {bestStreak > 1 && <span className="mr-2">Best streak: <span className="font-semibold text-purple-600">{bestStreak}🔥</span></span>}
+          {bestStreak > 1 && <span className="mr-2">Best streak: <span className="font-semibold text-indigo-600">{bestStreak}</span></span>}
           <span>Total prompts: {totalPrompts}</span>
         </div>
       </CardContent>
@@ -72,13 +72,13 @@ export const RecentPromptsCard = ({
       <CardHeader>
         <div className="flex items-center justify-between">
           <CardTitle className="flex items-center space-x-2">
-            <MessageSquare className="w-5 h-5 text-purple-600" />
+            <MessageSquare className="w-5 h-5 text-indigo-600" />
             <span>Recent Prompts</span>
           </CardTitle>
           {onViewAllClick && (
             <button 
               onClick={onViewAllClick}
-              className="text-xs text-purple-600 hover:text-purple-800 hover:underline"
+              className="text-xs text-indigo-600 hover:text-indigo-800 hover:underline"
             >
               View all
             </button>
@@ -141,7 +141,7 @@ export const RecentActivityCard = ({
       case 'subtask_completed':
         return <CheckCircle className="w-4 h-4 text-green-500" />;
       case 'submission_made':
-        return <FileText className="w-4 h-4 text-purple-500" />;
+        return <FileText className="w-4 h-4 text-rose-500" />;
       case 'certificate_earned':
         return <Award className="w-4 h-4 text-yellow-500" />;
       default:

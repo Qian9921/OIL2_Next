@@ -16,7 +16,7 @@ interface StatTileProps {
 const TONE_MAP: Record<NonNullable<StatTileProps['tone']>, string> = {
   blue: 'from-indigo-100 to-sky-100 text-indigo-600',
   green: 'from-emerald-100 to-teal-100 text-emerald-700',
-  purple: 'from-violet-100 to-indigo-100 text-violet-700',
+  purple: 'from-rose-100 to-sky-100 text-rose-700',
   amber: 'from-amber-100 to-orange-100 text-amber-700',
 };
 

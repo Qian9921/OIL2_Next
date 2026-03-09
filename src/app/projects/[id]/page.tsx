@@ -306,7 +306,7 @@ export default function ProjectDetailPage() {
                     <div className="text-xs text-gray-600">Est. Completion Time</div>
                   </div>
                   <div className="text-center">
-                    <Target className="w-6 h-6 text-purple-600 mx-auto mb-1" />
+                    <Target className="w-6 h-6 text-rose-600 mx-auto mb-1" />
                     <div className="text-lg font-bold text-gray-900">
                       {project.subtasks?.length || 0}
                     </div>
@@ -508,7 +508,7 @@ export default function ProjectDetailPage() {
               <Card>
                 <CardHeader>
                   <CardTitle className="flex items-center space-x-2 text-lg">
-                    <Tag className="w-5 h-5 text-purple-600" />
+                    <Tag className="w-5 h-5 text-rose-600" />
                     <span>Project Tags</span>
                   </CardTitle>
                 </CardHeader>
@@ -518,7 +518,7 @@ export default function ProjectDetailPage() {
                       <span 
                         key={index} 
                         className={`px-3 py-1 text-sm rounded-full ${
-                          'bg-purple-100 text-purple-700'
+                          'bg-rose-100 text-rose-700'
                         }`}
                       >
                         {tag}

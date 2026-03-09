@@ -318,7 +318,6 @@ export default function EditProjectPage() {
         });
       }
 
-      console.log("Sending subtask data to refine:", dataToRefine);
 
       const response = await fetch('/api/refine-subtasks', {
         method: 'POST',
@@ -444,7 +443,6 @@ export default function EditProjectPage() {
         });
       }
 
-      console.log("Sending project details to refine:", projectDetailsToRefine);
 
       const response = await fetch('/api/refine-project', {
         method: 'POST',
@@ -606,9 +604,7 @@ export default function EditProjectPage() {
         subtasks: allSubtasksWithGithubFirst
       };
 
-      console.log("Updating project:", updateData);
       await updateProject(project.id, updateData);
-      console.log("Project updated successfully");
       
       toast({ title: "Project Updated", description: "Project information has been successfully updated", variant: "default" });
       router.push(`/ngo/projects/${project.id}`);
@@ -828,7 +824,7 @@ export default function EditProjectPage() {
             <Card className="border-white/70 bg-white/85 backdrop-blur-xl">
               <CardHeader>
                 <CardTitle className="flex items-center space-x-2">
-                  <Tag className="w-5 h-5 text-purple-600" />
+                  <Tag className="w-5 h-5 text-rose-600" />
                   <span>Project Tags</span>
                 </CardTitle>
                 <CardDescription>
@@ -838,11 +834,11 @@ export default function EditProjectPage() {
               <CardContent className="space-y-4">
                 <div className="flex flex-wrap gap-2">
                   {formData.tags.map((tag, index) => (
-                    <span key={index} className="inline-flex items-center px-3 py-1 rounded-full text-sm bg-purple-100 text-purple-800">
+                    <span key={index} className="inline-flex items-center px-3 py-1 rounded-full text-sm bg-rose-100 text-rose-800">
                       {tag}
                       <button
                         onClick={() => removeTag(tag)}
-                        className="ml-2 text-purple-600 hover:text-purple-800"
+                        className="ml-2 text-rose-600 hover:text-rose-800"
                       >
                         <X className="w-3 h-3" />
                       </button>

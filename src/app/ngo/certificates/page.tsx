@@ -528,7 +528,7 @@ export default function NGOCertificatesPage() {
                     </p>
                     {completedProject.submission.rating && (
                       <div className="flex items-center">
-                        <span className="text-sm text-gray-600 mr-2">Teacher Rating:</span>
+                        <span className="text-sm text-gray-600 mr-2">Reviewer Rating:</span>
                         <div className="flex items-center">
                           {[...Array(5)].map((_, i) => (
                             <Star

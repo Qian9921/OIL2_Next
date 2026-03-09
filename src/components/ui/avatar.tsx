@@ -20,7 +20,7 @@ const Avatar = React.forwardRef<HTMLDivElement, AvatarProps>(
       <div
         ref={ref}
         className={cn(
-          "relative flex shrink-0 overflow-hidden rounded-full border-2 border-purple-200",
+          "relative flex shrink-0 overflow-hidden rounded-full border-2 border-white/80 shadow-sm shadow-slate-200/70",
           sizeClasses[size],
           className
         )}
@@ -33,7 +33,7 @@ const Avatar = React.forwardRef<HTMLDivElement, AvatarProps>(
             alt={alt || "Avatar"}
           />
         ) : (
-          <div className="flex h-full w-full items-center justify-center rounded-full bg-gradient-to-br from-pink-300 to-purple-400 text-white font-medium">
+          <div className="flex h-full w-full items-center justify-center rounded-full bg-gradient-to-br from-indigo-300 via-sky-300 to-rose-300 text-white font-medium">
             {fallback || "?"}
           </div>
         )}

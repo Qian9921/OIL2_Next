@@ -333,7 +333,7 @@ export default function NGOProfilePage() {
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center space-x-2">
-                  <Building className="w-5 h-5 text-purple-600" />
+                  <Building className="w-5 h-5 text-rose-600" />
                   <span>Organization Information</span>
                 </CardTitle>
               </CardHeader>
@@ -372,14 +372,14 @@ export default function NGOProfilePage() {
                         type="text"
                         value={editForm.name}
                         onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
-                        className="text-2xl font-bold bg-transparent border-b border-gray-300 focus:border-purple-500 outline-none w-full"
+                        className="text-2xl font-bold bg-transparent border-b border-gray-300 focus:border-rose-400 outline-none w-full"
                         placeholder="Organization Name"
                       />
                     ) : (
                       <h2 className="text-2xl font-bold text-gray-900">{user?.name}</h2>
                     )}
                     <p className="text-gray-500">{user?.email}</p>
-                    <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-purple-100 text-purple-800 mt-2">
+                    <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-rose-100 text-rose-800 mt-2">
                       NGO Organization
                     </span>
                   </div>
@@ -394,7 +394,7 @@ export default function NGOProfilePage() {
                     <textarea
                       value={editForm.bio}
                       onChange={(e) => setEditForm({ ...editForm, bio: e.target.value })}
-                      className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                      className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-rose-300 focus:border-transparent"
                       rows={4}
                       placeholder="Introduce your organization's mission, vision, and main work..."
                     />
@@ -416,7 +416,7 @@ export default function NGOProfilePage() {
                         type="url"
                         value={editForm.website}
                         onChange={(e) => setEditForm({ ...editForm, website: e.target.value })}
-                        className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                        className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-rose-300 focus:border-transparent"
                         placeholder="https://yourorganization.org"
                       />
                     ) : (
@@ -427,7 +427,7 @@ export default function NGOProfilePage() {
                             href={user.profile.website} 
                             target="_blank" 
                             rel="noopener noreferrer"
-                            className="text-purple-600 hover:underline"
+                            className="text-rose-600 hover:underline"
                           >
                             {user.profile.website}
                           </a>
@@ -445,7 +445,7 @@ export default function NGOProfilePage() {
                         type="text"
                         value={editForm.location}
                         onChange={(e) => setEditForm({ ...editForm, location: e.target.value })}
-                        className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                        className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-rose-300 focus:border-transparent"
                         placeholder="e.g., Haidian District, Beijing"
                       />
                     ) : (
@@ -486,7 +486,7 @@ export default function NGOProfilePage() {
                         value={newFocusArea}
                         onChange={(e) => setNewFocusArea(e.target.value)}
                         onKeyPress={(e) => e.key === 'Enter' && handleAddFocusArea()}
-                        className="flex-1 p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                        className="flex-1 p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-rose-300 focus:border-transparent"
                         placeholder="Add focus area..."
                       />
                       <Button onClick={handleAddFocusArea} variant="outline">
@@ -506,7 +506,7 @@ export default function NGOProfilePage() {
                       type="text"
                       value={editForm.signature}
                       onChange={(e) => setEditForm({ ...editForm, signature: e.target.value })}
-                      className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                      className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-rose-300 focus:border-transparent"
                       placeholder="e.g., Prof. John Smith, Director"
                     />
                   ) : (
@@ -548,9 +548,9 @@ export default function NGOProfilePage() {
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
-                <div className="text-center p-4 bg-purple-50 rounded-lg">
-                  <FolderOpen className="w-8 h-8 text-purple-600 mx-auto mb-2" />
-                  <div className="text-2xl font-bold text-purple-600">
+                <div className="text-center p-4 bg-rose-50 rounded-lg">
+                  <FolderOpen className="w-8 h-8 text-rose-600 mx-auto mb-2" />
+                  <div className="text-2xl font-bold text-rose-600">
                     {dashboard?.publishedProjects || 0}
                   </div>
                   <div className="text-sm text-gray-600">Published Projects</div>
@@ -605,7 +605,7 @@ export default function NGOProfilePage() {
                         </div>
                         <div className="w-full bg-gray-200 rounded-full h-1">
                           <div
-                            className="bg-purple-500 h-1 rounded-full"
+                            className="bg-rose-500 h-1 rounded-full"
                             style={{ width: `${stat.averageProgress}%` }}
                           />
                         </div>

@@ -87,7 +87,7 @@ export default function PromptHistoryPage() {
           </div>
           
           <div className="text-center py-12">
-            <Brain className="h-16 w-16 text-purple-300 mx-auto mb-4" />
+            <Brain className="mx-auto mb-4 h-16 w-16 text-rose-300" />
             <h2 className="text-2xl font-bold mb-2">No Prompt History Yet</h2>
             <p className="text-gray-600 mb-6">
               You haven't interacted with AI assistants in your projects yet.
@@ -156,7 +156,7 @@ export default function PromptHistoryPage() {
           <Card className="md:col-span-1">
             <CardHeader className="pb-2">
               <CardTitle className="text-lg flex items-center">
-                <Brain className="h-5 w-5 mr-2 text-purple-600" />
+                <Brain className="mr-2 h-5 w-5 text-indigo-500" />
                 Quality Metrics
               </CardTitle>
               <CardDescription>Your prompt performance</CardDescription>
@@ -165,7 +165,7 @@ export default function PromptHistoryPage() {
               <div>
                 <div className="text-sm font-medium text-gray-600 mb-1">Overall Quality</div>
                 <div className="flex justify-between items-center mb-1">
-                  <div className="text-xl font-bold text-purple-600">
+                  <div className="text-xl font-bold text-indigo-600">
                     {metrics.averageScore.toFixed(0)}%
                   </div>
                   <ScoreBadge score={metrics.averageScore} />
@@ -192,9 +192,9 @@ export default function PromptHistoryPage() {
                 <MetricScoreCard 
                   label="Expectations" 
                   score={metrics.averageExpectationsScore} 
-                  bgColor="bg-purple-50" 
-                  borderColor="border-purple-100" 
-                  barColor="bg-purple-600" 
+                  bgColor="bg-rose-50" 
+                  borderColor="border-rose-100" 
+                  barColor="bg-rose-500" 
                 />
                 <MetricScoreCard 
                   label="Source Material" 
@@ -206,7 +206,7 @@ export default function PromptHistoryPage() {
               </div>
 
               <div className="flex justify-between text-xs text-gray-500 pt-2 border-t">
-                <span>Best streak: <span className="font-semibold text-purple-600">{metrics.bestStreak}🔥</span></span>
+                <span>Best streak: <span className="font-semibold text-rose-600">{metrics.bestStreak}🔥</span></span>
                 <span>Total: {metrics.totalPrompts}</span>
               </div>
             </CardContent>

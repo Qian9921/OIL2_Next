@@ -31,15 +31,15 @@ export function LoadingState({
   return (
     <div className={cn(
       "flex flex-col items-center justify-center", 
-      fullHeight && "h-[calc(100vh-var(--header-height,4rem))]",
+      fullHeight && "min-h-[calc(100dvh-var(--app-shell-top-offset,6rem))]",
       className
     )}>
       <Loader2 className={cn(
-        "text-purple-600 animate-spin", 
+        "text-indigo-500 animate-spin", 
         sizeClasses[size]
       )} />
       {text && (
-        <p className="mt-4 text-gray-600">{text}</p>
+        <p className="mt-4 text-slate-600">{text}</p>
       )}
     </div>
   );

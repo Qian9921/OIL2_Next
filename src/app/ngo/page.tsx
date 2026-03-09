@@ -81,7 +81,7 @@ export default function NGODashboardPage() {
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center space-x-2">
-              <BarChart3 className="w-5 h-5 text-purple-600" />
+              <BarChart3 className="w-5 h-5 text-rose-600" />
               <span>Project Performance</span>
             </CardTitle>
             <CardDescription>
@@ -168,8 +168,8 @@ export default function NGODashboardPage() {
               </Link>
               
               <Link href="/ngo/profile">
-                <Button variant="outline" className="w-full h-20 flex flex-col items-center justify-center space-y-2 hover:bg-purple-50">
-                  <TrendingUp className="w-6 h-6 text-purple-600" />
+                <Button variant="outline" className="w-full h-20 flex flex-col items-center justify-center space-y-2 hover:bg-rose-50">
+                  <TrendingUp className="w-6 h-6 text-rose-600" />
                   <span>View Profile</span>
                 </Button>
               </Link>

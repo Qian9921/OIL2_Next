@@ -1,12 +1,11 @@
 import { getServerSession } from 'next-auth';
 import { NextRequest, NextResponse } from 'next/server';
-import { Part } from '@google-cloud/vertexai';
 import { authOptions } from '@/lib/auth-options';
 import { getProject, getParticipationByProjectAndStudent, savePromptEvaluation } from '@/lib/firestore'; // Assuming these exist
 import {
-  createGenerativeModelBundle,
+  generateJsonContentForTask,
+  generateTextContentForTask,
   getTaskModelConfig,
-  withGenerativeModelFallback,
 } from '@/lib/vertex-ai-utils';
 import { Subtask } from '@/lib/types';
 
@@ -20,24 +19,13 @@ interface ChatRequestData {
   imageMimeType?: string; // e.g., 'image/png', 'image/jpeg'
   evaluatePromptQuality?: boolean; // Whether to evaluate prompt quality
   requestPersonalizedFeedback?: boolean; // Whether to generate personalized feedback for the prompt
+  tutorContext?: string[]; // User-approved context pills for the next tutoring reply
 }
-
-const chatModelBundle = createGenerativeModelBundle('chat', {
-  maxOutputTokens: 65535,
-  temperature: 0.8,
-  topP: 0.95,
-});
-
-const promptEvaluationModelBundle = createGenerativeModelBundle('prompt-evaluation', {
-  maxOutputTokens: 65535,
-  temperature: 0.2,
-  topP: 0.95,
-});
 
 export async function POST(req: NextRequest) {
   try {
     const body: ChatRequestData = await req.json();
-    const { userId, projectId, subtaskId, message, chatHistory = [], imageData, imageMimeType, evaluatePromptQuality, requestPersonalizedFeedback } = body;
+    const { userId, projectId, subtaskId, message, chatHistory = [], imageData, imageMimeType, evaluatePromptQuality, requestPersonalizedFeedback, tutorContext = [] } = body;
 
     if (!userId || !projectId || !subtaskId || (!message && !imageData)) { // Message or image is required
       return NextResponse.json({ message: 'Missing required fields: userId, projectId, subtaskId, and message or image.' }, { status: 400 });
@@ -91,6 +79,14 @@ export async function POST(req: NextRequest) {
     }
 
     // 4. Construct the prompt for the Gemini API
+    const approvedTutorContext = Array.isArray(tutorContext)
+      ? tutorContext.filter((item) => typeof item === 'string' && item.trim().length > 0)
+      : [];
+
+    const contextualGuidanceSection = approvedTutorContext.length > 0
+      ? `\n    * **Student-approved context for this reply:**\n${approvedTutorContext.map((item) => `    * ${item}`).join('\\n')}`
+      : '';
+
     const systemInstruction = `You are an AI Socratic Tutor for OpenImpactLab. Your design is inspired by the Socratic method and modern cognitive science. You do not provide direct answers. Instead, you guide the student to discover the path to the solution themselves. Let's begin this journey of discovery together.
 
     # 1. Core Role & Pedagogical Philosophy
@@ -108,6 +104,7 @@ export async function POST(req: NextRequest) {
     * **Task Estimated Hours:** ${subtask.estimatedHours}
     * **Task Completion Criteria:** ${subtask.completionCriteria?.join(', ') || 'Not specified'}
     * **Task Resources:** ${subtask.resources?.join(', ') || 'Not specified'}
+    ${contextualGuidanceSection}
     
     # 3. The Socratic Dialogue Framework (Core Upgrade)
     
@@ -144,7 +141,7 @@ export async function POST(req: NextRequest) {
     * **Handle Long Prompts:** Students may ask long questions with multiple points (up to 3000 characters). Pay careful attention to all details and ensure your Socratic guidance addresses all facets of their thinking in a structured way, rather than just latching onto one point. 📝
     * **Guide, Don't Interrogate:** Maintain a natural and supportive dialogue. The Socratic method is not a relentless cross-examination, but a curious, collaborative partnership. Offer positive reinforcement where appropriate ("That's a very insightful thought! 👏," "I'm glad you noticed that detail! ✨") and use visual breaks (━━━) or bullet points (◦ ▪ ●) to organize complex ideas when helpful.`;
 
-    const userParts: Part[] = [];
+    const userParts: Array<Record<string, unknown>> = [];
     if (message && message.trim()) { // Ensure message is not just whitespace
       userParts.push({ text: message });
     }
@@ -155,11 +152,11 @@ export async function POST(req: NextRequest) {
     // Ensure we're processing chat history correctly
     const processedChatHistory = chatHistory.map(turn => ({
       role: turn.role,
-      parts: turn.parts.reduce((acc: Part[], part) => {
+      parts: turn.parts.reduce((acc: Array<Record<string, unknown>>, part) => {
         if (part.text) acc.push({ text: part.text });
         else if (part.inlineData) acc.push({ inlineData: { mimeType: part.inlineData.mimeType, data: part.inlineData.data }});
         return acc;
-      }, [] as Part[])
+      }, [] as Array<Record<string, unknown>>)
     }));
 
     // Log chat history length for debugging
@@ -170,17 +167,20 @@ export async function POST(req: NextRequest) {
       { role: 'user', parts: userParts }
     ].filter(content => content.parts.length > 0); // Ensure no content turns with empty parts
 
-    const streamRequest = {
-        contents: contents, 
+    const { text: streamedResponse, usedModel } = await generateTextContentForTask(
+      'chat',
+      {
+        contents: contents as Array<{ role: string; parts: Array<Record<string, unknown>> }>,
         systemInstruction: {
-            role: 'system', 
-            parts: [{text: systemInstruction}]
-        }
-    };
-
-    const { value: result, usedModel } = await withGenerativeModelFallback(
-      chatModelBundle,
-      (model) => model.generateContentStream(streamRequest),
+          role: 'system',
+          parts: [{ text: systemInstruction }],
+        },
+      },
+      {
+        maxOutputTokens: 65535,
+        temperature: 0.8,
+        topP: 0.95,
+      },
     );
 
     // Handle prompt evaluation if requested
@@ -277,26 +277,8 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    const stream = new ReadableStream({
-      async start(controller) {
-        try {
-          for await (const item of result.stream) {
-            if (item.candidates && item.candidates[0].content && item.candidates[0].content.parts) {
-              const textChunk = item.candidates[0].content.parts[0].text || "";
-              if (textChunk) {
-                controller.enqueue(new TextEncoder().encode(textChunk));
-              }
-            }
-          }
-        } catch (error) {
-          console.error("Error in stream processing:", error);
-          controller.error(error);
-        } finally {
-          controller.close();
-        }
-      },
-    });
-    
+    const responseBody = streamedResponse;
+
     // Add prompt quality score and streak info to headers if available
     if (promptQualityScore !== null && promptQualityDetails !== null) {
       headers['X-Prompt-Quality-Score' as keyof HeadersInit] = promptQualityScore.toString();
@@ -331,7 +313,7 @@ export async function POST(req: NextRequest) {
       headers['X-Prompt-Evaluation' as keyof HeadersInit] = encodeURIComponent(JSON.stringify(evaluationData));
     }
     
-    return new Response(stream, { headers });
+    return new Response(responseBody, { headers });
 
   } catch (error: unknown) {
     console.error("Error in /api/chat:", error);
@@ -398,12 +380,12 @@ async function evaluatePromptWithAI(prompt: string, subtask: Subtask) {
     `;
     
     console.log("evaluatePromptWithAI: Sending combined prompt to Gemini for evaluation and feedback.");
-    const { value: result, usedModel } = await withGenerativeModelFallback(
-      promptEvaluationModelBundle,
-      (model) => model.generateContent(combinedEvaluationPrompt),
+    const { text: textResult, usedModel } = await generateJsonContentForTask(
+      'prompt-evaluation',
+      combinedEvaluationPrompt,
+      { maxOutputTokens: 65535, temperature: 0.2, topP: 0.95 },
     );
     console.log(`evaluatePromptWithAI: model used -> ${usedModel}`);
-    const textResult = result.response.candidates?.[0]?.content?.parts?.[0]?.text || '';
     console.log("evaluatePromptWithAI: Received raw textResult from Gemini:", textResult);
     
     const jsonMatch = textResult.match(/\{[\s\S]*\}/);

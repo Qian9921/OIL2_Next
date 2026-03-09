@@ -31,7 +31,7 @@ export default function Home() {
 
   if (status === "loading") {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-purple-50 via-pink-50 to-cyan-50 flex items-center justify-center">
+      <div className="min-h-screen bg-gradient-to-br from-rose-50 via-white to-sky-50 flex items-center justify-center">
         <LoadingState text="Loading..." />
       </div>
     );
@@ -40,20 +40,20 @@ export default function Home() {
   // Loading is displayed only when authenticated and with a role
   if (status === "authenticated" && session?.user?.role) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-purple-50 via-pink-50 to-cyan-50 flex items-center justify-center">
+      <div className="min-h-screen bg-gradient-to-br from-rose-50 via-white to-sky-50 flex items-center justify-center">
         <LoadingState text="Redirecting to dashboard..." />
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-purple-50 to-blue-50">
+    <div className="min-h-screen bg-gradient-to-br from-rose-50 via-white to-sky-50">
       {/* Hero Section */}
       <div className="relative overflow-hidden">
         {/* Decorative background elements */}
         <div className="absolute top-0 left-0 w-full h-full overflow-hidden pointer-events-none opacity-40">
           <div className="absolute top-20 left-[10%] w-64 h-64 rounded-full bg-indigo-300 mix-blend-multiply filter blur-3xl animate-blob"></div>
-          <div className="absolute top-40 right-[10%] w-72 h-72 rounded-full bg-purple-300 mix-blend-multiply filter blur-3xl animation-delay-2000"></div>
+          <div className="absolute top-40 right-[10%] w-72 h-72 rounded-full bg-rose-200 mix-blend-multiply filter blur-3xl animation-delay-2000"></div>
           <div className="absolute bottom-20 left-[20%] w-80 h-80 rounded-full bg-blue-300 mix-blend-multiply filter blur-3xl animate-blob animation-delay-4000"></div>
         </div>
 
@@ -62,7 +62,7 @@ export default function Home() {
             <div className="md:w-1/2 md:pr-12">
               {/* Logo */}
               <div className="flex items-center justify-center md:justify-start mb-8">
-                <div className="w-16 h-16 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-2xl flex items-center justify-center shadow-lg">
+                <div className="w-16 h-16 bg-gradient-to-br from-indigo-400 to-sky-400 rounded-2xl flex items-center justify-center shadow-lg">
                   <Sparkles className="w-8 h-8 text-white" />
                 </div>
                 <span className="ml-4 text-4xl font-bold gradient-text">OpenImpactLab</span>
@@ -144,7 +144,7 @@ export default function Home() {
             <div className="md:w-1/2 mt-12 md:mt-0 flex justify-center">
               <div className="relative w-full max-w-lg">
                 <div className="absolute top-0 -left-4 w-72 h-72 bg-indigo-300 rounded-full mix-blend-multiply filter blur-xl opacity-70 animate-blob"></div>
-                <div className="absolute top-0 -right-4 w-72 h-72 bg-purple-300 rounded-full mix-blend-multiply filter blur-xl opacity-70 animate-blob animation-delay-2000"></div>
+                <div className="absolute top-0 -right-4 w-72 h-72 bg-rose-200 rounded-full mix-blend-multiply filter blur-xl opacity-70 animate-blob animation-delay-2000"></div>
                 <div className="absolute -bottom-8 left-20 w-72 h-72 bg-blue-300 rounded-full mix-blend-multiply filter blur-xl opacity-70 animate-blob animation-delay-4000"></div>
                 <div className="relative">
                   <div className="relative shadow-2xl rounded-2xl overflow-hidden border-4 border-white">
@@ -156,30 +156,30 @@ export default function Home() {
                         </div>
                       </div>
                       
-                      <div className="w-full bg-purple-50 rounded-xl p-4">
-                        <div className="text-sm font-medium text-purple-800 mb-2">Prompt Quality Analysis:</div>
+                      <div className="w-full bg-indigo-50 rounded-xl p-4">
+                        <div className="text-sm font-medium text-indigo-800 mb-2">Prompt Quality Analysis:</div>
                         <div className="grid grid-cols-2 gap-2 mb-2">
-                          <div className="bg-white rounded border border-purple-100 p-2 text-center">
-                            <p className="font-medium text-xs text-purple-900">Goal</p>
-                            <p className="text-sm text-purple-700">90%</p>
+                          <div className="bg-white rounded border border-indigo-100 p-2 text-center">
+                            <p className="font-medium text-xs text-indigo-900">Goal</p>
+                            <p className="text-sm text-indigo-700">90%</p>
                           </div>
-                          <div className="bg-white rounded border border-purple-100 p-2 text-center">
-                            <p className="font-medium text-xs text-purple-900">Context</p>
-                            <p className="text-sm text-purple-700">75%</p>
+                          <div className="bg-white rounded border border-indigo-100 p-2 text-center">
+                            <p className="font-medium text-xs text-indigo-900">Context</p>
+                            <p className="text-sm text-indigo-700">75%</p>
                           </div>
-                          <div className="bg-white rounded border border-purple-100 p-2 text-center">
-                            <p className="font-medium text-xs text-purple-900">Expectations</p>
-                            <p className="text-sm text-purple-700">85%</p>
+                          <div className="bg-white rounded border border-indigo-100 p-2 text-center">
+                            <p className="font-medium text-xs text-indigo-900">Expectations</p>
+                            <p className="text-sm text-indigo-700">85%</p>
                           </div>
-                          <div className="bg-white rounded border border-purple-100 p-2 text-center">
-                            <p className="font-medium text-xs text-purple-900">Source</p>
-                            <p className="text-sm text-purple-700">65%</p>
+                          <div className="bg-white rounded border border-indigo-100 p-2 text-center">
+                            <p className="font-medium text-xs text-indigo-900">Source</p>
+                            <p className="text-sm text-indigo-700">65%</p>
                           </div>
                         </div>
                         <div className="flex justify-between items-center">
                           <span className="font-bold text-sm">Overall: 79%</span>
                           <div className="w-24 bg-gray-200 rounded-full h-1.5">
-                            <div className="bg-purple-600 h-1.5 rounded-full" style={{ width: '79%' }}></div>
+                            <div className="bg-indigo-400 h-1.5 rounded-full" style={{ width: '79%' }}></div>
                           </div>
                           <span className="px-2 py-1 text-xs font-medium rounded-full bg-green-100 text-green-800">Good Prompt! 🔥</span>
                         </div>
@@ -206,16 +206,16 @@ export default function Home() {
       </div>
 
       {/* What You'll Learn Section */}
-      <div id="prompt-framework" className="bg-gradient-to-br from-indigo-100 to-purple-100 py-16 relative overflow-hidden">
+      <div id="prompt-framework" className="bg-gradient-to-br from-sky-50 to-rose-50 py-16 relative overflow-hidden">
         <div className="absolute inset-0 opacity-10">
           <div className="absolute top-10 left-1/4 w-64 h-64 rounded-full bg-indigo-300 mix-blend-multiply filter blur-3xl animate-blob"></div>
-          <div className="absolute bottom-10 right-1/4 w-72 h-72 rounded-full bg-purple-300 mix-blend-multiply filter blur-3xl animation-delay-2000"></div>
+          <div className="absolute bottom-10 right-1/4 w-72 h-72 rounded-full bg-rose-200 mix-blend-multiply filter blur-3xl animation-delay-2000"></div>
         </div>
         
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
           <div className="text-center mb-8">
             <div className="inline-block mb-4">
-              <div className="px-3 py-1 bg-gradient-to-r from-indigo-500 to-purple-500 text-white text-sm font-medium rounded-full animate-pulse-glow">
+              <div className="px-3 py-1 bg-gradient-to-r from-indigo-400 to-sky-400 text-white text-sm font-medium rounded-full animate-pulse-glow">
                 Our 4-Dimension Prompt Framework
               </div>
             </div>
@@ -290,7 +290,7 @@ export default function Home() {
               badge="Real-time Feedback"
               variant="primary"
               className="mt-8"
-              iconContainerClassName="w-10 h-10 bg-gradient-to-br from-purple-500 to-indigo-600 rounded-full flex items-center justify-center text-white shadow-md"
+              iconContainerClassName="w-10 h-10 bg-gradient-to-br from-indigo-300 to-sky-400 rounded-full flex items-center justify-center text-white shadow-sm"
             />
             
             {/* Certificate highlight */}
@@ -305,7 +305,7 @@ export default function Home() {
               badge="Career Boost"
               variant="secondary"
               className="mt-4"
-              iconContainerClassName="w-10 h-10 bg-gradient-to-br from-green-500 to-teal-600 rounded-full flex items-center justify-center text-white shadow-md"
+              iconContainerClassName="w-10 h-10 bg-gradient-to-br from-emerald-300 to-teal-400 rounded-full flex items-center justify-center text-white shadow-sm"
             />
           </div>
         </div>
@@ -325,9 +325,9 @@ export default function Home() {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
           {/* Beginners */}
           <Card className="card-hover border-0 shadow-lg p-6 text-center relative">
-            <div className="absolute -top-1 -right-1 bg-indigo-500 text-white text-xs font-bold px-3 py-1 rounded-lg">Students</div>
+            <div className="absolute -top-1 -right-1 bg-indigo-400 text-white text-xs font-bold px-3 py-1 rounded-lg">Students</div>
             <CardHeader className="pb-2">
-              <div className="w-16 h-16 bg-gradient-to-br from-indigo-400 to-indigo-600 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-md">
+              <div className="w-16 h-16 bg-gradient-to-br from-indigo-300 to-indigo-400 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-md">
                 <GraduationCap className="w-8 h-8 text-white" />
               </div>
               <CardTitle className="text-xl">Students</CardTitle>
@@ -356,9 +356,9 @@ export default function Home() {
 
           {/* Professionals */}
           <Card className="card-hover border-0 shadow-lg p-6 text-center relative">
-            <div className="absolute -top-1 -right-1 bg-purple-500 text-white text-xs font-bold px-3 py-1 rounded-lg">NGOs</div>
+            <div className="absolute -top-1 -right-1 bg-rose-400 text-white text-xs font-bold px-3 py-1 rounded-lg">NGOs</div>
             <CardHeader className="pb-2">
-              <div className="w-16 h-16 bg-gradient-to-br from-purple-400 to-purple-600 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-md">
+              <div className="w-16 h-16 bg-gradient-to-br from-rose-300 to-rose-400 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-md">
                 <Building className="w-8 h-8 text-white" />
               </div>
               <CardTitle className="text-xl">NGOs</CardTitle>
@@ -380,16 +380,16 @@ export default function Home() {
                 />
               </div>
               <Link href="/auth/signin?role=ngo">
-                <Button className="w-full bg-purple-600 hover:bg-purple-700">Register Your NGO</Button>
+                <Button className="w-full bg-rose-400 hover:bg-rose-500">Register Your NGO</Button>
               </Link>
             </CardContent>
           </Card>
 
           {/* Collaboration */}
           <Card className="card-hover border-0 shadow-lg p-6 text-center relative">
-            <div className="absolute -top-1 -right-1 bg-blue-500 text-white text-xs font-bold px-3 py-1 rounded-lg">Collaboration</div>
+            <div className="absolute -top-1 -right-1 bg-sky-400 text-white text-xs font-bold px-3 py-1 rounded-lg">Collaboration</div>
             <CardHeader className="pb-2">
-              <div className="w-16 h-16 bg-gradient-to-br from-blue-400 to-blue-600 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-md">
+              <div className="w-16 h-16 bg-gradient-to-br from-sky-300 to-sky-400 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-md">
                 <Users className="w-8 h-8 text-white" />
               </div>
               <CardTitle className="text-xl">Student + NGO Workflow</CardTitle>
@@ -407,12 +407,12 @@ export default function Home() {
       </div>
 
       {/* CTA Section */}
-      <div className="bg-gradient-to-r from-indigo-500 to-purple-600 relative overflow-hidden">
+      <div className="bg-gradient-to-r from-indigo-400 to-sky-400 relative overflow-hidden">
         <div className="absolute inset-0 overflow-hidden opacity-20">
           <div className="galaxy absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px]"></div>
         </div>
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16 relative z-10">
-          <div className="bg-white/10 backdrop-blur-lg rounded-2xl p-8 shadow-2xl border border-white/20">
+          <div className="bg-white/14 backdrop-blur-lg rounded-2xl p-8 shadow-2xl border border-white/20">
             <div className="text-center">
               <h2 className="text-3xl font-bold text-white mb-4">
                 Level Up Your AI Prompting Skills
@@ -422,12 +422,12 @@ export default function Home() {
               </p>
               <div className="flex flex-col sm:flex-row items-center justify-center space-y-4 sm:space-y-0 sm:space-x-4">
                 <Link href="/auth/signin">
-                  <Button variant="secondary" size="lg" className="text-lg px-8 py-4 h-auto bg-white text-indigo-600 hover:bg-gray-100 shadow-lg">
+                  <Button variant="secondary" size="lg" className="text-lg px-8 py-4 h-auto bg-white text-indigo-500 hover:bg-gray-100 shadow-lg">
                     Join OpenImpactLab
                     <ArrowRight className="w-5 h-5 ml-2" />
                   </Button>
                 </Link>
-                <div className="flex items-center text-white bg-indigo-700/30 backdrop-blur-sm rounded-full px-4 py-1.5">
+              <div className="flex items-center text-white bg-white/15 backdrop-blur-sm rounded-full px-4 py-1.5">
                   <span className="mr-2 text-sm">🚀</span>
                   <span className="text-sm font-medium">Limited early access spots available!</span>
                 </div>
@@ -438,7 +438,7 @@ export default function Home() {
                 title="Build Your Professional Portfolio"
                 description="Complete real-world projects and receive official certificates from participating NGOs to showcase your AI prompt engineering skills to potential employers."
                 icon={
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 text-indigo-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z" />
                   </svg>
                 }
@@ -456,7 +456,7 @@ export default function Home() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           <div className="flex flex-col md:flex-row justify-between items-center">
             <div className="flex items-center space-x-2 mb-4 md:mb-0">
-              <div className="w-8 h-8 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-xl flex items-center justify-center">
+              <div className="w-8 h-8 bg-gradient-to-br from-indigo-400 to-sky-400 rounded-xl flex items-center justify-center">
                 <Sparkles className="w-4 h-4 text-white" />
               </div>
               <span className="text-lg font-bold gradient-text">OpenImpactLab</span>

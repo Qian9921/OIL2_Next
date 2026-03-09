@@ -1,5 +1,4 @@
 import React from 'react';
-import { LucideIcon } from 'lucide-react';
 
 interface MetricCardProps {
   title: string;
@@ -11,40 +10,40 @@ interface MetricCardProps {
 
 const colorVariants = {
   indigo: {
-    bg: "bg-gradient-to-br from-indigo-50 to-indigo-100",
-    border: "border-indigo-200",
-    iconBg: "bg-gradient-to-br from-indigo-400 to-indigo-600",
-    progressBg: "bg-indigo-600"
+    bg: "bg-gradient-to-br from-indigo-50 to-sky-50",
+    border: "border-indigo-100",
+    iconBg: "bg-gradient-to-br from-indigo-300 to-sky-400",
+    progressBg: "bg-indigo-400"
   },
   purple: {
-    bg: "bg-gradient-to-br from-purple-50 to-purple-100",
-    border: "border-purple-200",
-    iconBg: "bg-gradient-to-br from-purple-400 to-purple-600",
-    progressBg: "bg-purple-600"
+    bg: "bg-gradient-to-br from-rose-50 to-peach-50",
+    border: "border-rose-100",
+    iconBg: "bg-gradient-to-br from-rose-300 to-rose-400",
+    progressBg: "bg-rose-400"
   },
   blue: {
-    bg: "bg-gradient-to-br from-blue-50 to-blue-100",
-    border: "border-blue-200",
-    iconBg: "bg-gradient-to-br from-blue-400 to-blue-600",
-    progressBg: "bg-blue-600"
+    bg: "bg-gradient-to-br from-sky-50 to-blue-50",
+    border: "border-sky-100",
+    iconBg: "bg-gradient-to-br from-sky-300 to-blue-400",
+    progressBg: "bg-sky-400"
   },
   amber: {
-    bg: "bg-gradient-to-br from-amber-50 to-amber-100",
-    border: "border-amber-200",
-    iconBg: "bg-gradient-to-br from-amber-400 to-amber-600",
-    progressBg: "bg-amber-600"
+    bg: "bg-gradient-to-br from-amber-50 to-orange-50",
+    border: "border-amber-100",
+    iconBg: "bg-gradient-to-br from-amber-300 to-orange-400",
+    progressBg: "bg-amber-400"
   },
   green: {
-    bg: "bg-gradient-to-br from-green-50 to-green-100",
-    border: "border-green-200",
-    iconBg: "bg-gradient-to-br from-green-400 to-green-600",
-    progressBg: "bg-green-600"
+    bg: "bg-gradient-to-br from-emerald-50 to-teal-50",
+    border: "border-emerald-100",
+    iconBg: "bg-gradient-to-br from-emerald-300 to-teal-400",
+    progressBg: "bg-emerald-400"
   },
   teal: {
-    bg: "bg-gradient-to-br from-green-50 to-teal-50",
-    border: "border-green-100",
-    iconBg: "bg-gradient-to-br from-green-500 to-teal-600",
-    progressBg: "bg-teal-600"
+    bg: "bg-gradient-to-br from-teal-50 to-cyan-50",
+    border: "border-teal-100",
+    iconBg: "bg-gradient-to-br from-teal-300 to-cyan-400",
+    progressBg: "bg-teal-400"
   }
 };
 
@@ -52,9 +51,9 @@ export function MetricCard({ title, icon, color, children, className = '' }: Met
   const colorClasses = colorVariants[color];
   
   return (
-    <div className={`flex flex-col p-4 ${colorClasses.bg} rounded-xl border ${colorClasses.border} ${className}`}>
+    <div className={`flex flex-col p-4 ${colorClasses.bg} rounded-xl border ${colorClasses.border} shadow-sm ${className}`}>
       <div className="flex items-center mb-4">
-        <div className={`w-12 h-12 ${colorClasses.iconBg} rounded-full flex items-center justify-center text-white mr-4 shadow-md`}>
+        <div className={`w-12 h-12 ${colorClasses.iconBg} rounded-full flex items-center justify-center text-white mr-4 shadow-sm`}>
           {icon}
         </div>
         <div>

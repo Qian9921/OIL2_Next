@@ -82,7 +82,7 @@ export default function MonitorLoginPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 flex items-center justify-center p-4">
+    <div className="min-h-screen bg-gradient-to-br from-sky-50 via-white to-rose-50 flex items-center justify-center p-4">
       <div className="w-full max-w-md">
         {/* 语言切换器 */}
         <div className="flex justify-end mb-6">
@@ -233,7 +233,7 @@ export default function MonitorLoginPage() {
                   <span>{t('login.features.student.management')}</span>
                 </div>
                 <div className="flex items-center space-x-2 text-gray-600">
-                  <div className="w-1.5 h-1.5 bg-purple-500 rounded-full"></div>
+                  <div className="w-1.5 h-1.5 bg-indigo-400 rounded-full"></div>
                   <span>{t('login.features.data.analytics')}</span>
                 </div>
                 <div className="flex items-center space-x-2 text-gray-600">

@@ -9,19 +9,19 @@ export interface FeatureBadgeProps {
 }
 
 const colorVariants = {
-  indigo: "bg-indigo-100 text-indigo-800",
-  purple: "bg-purple-100 text-purple-800",
-  green: "bg-green-100 text-green-800",
-  blue: "bg-blue-100 text-blue-800",
-  amber: "bg-amber-100 text-amber-800",
-  red: "bg-red-100 text-red-800"
+  indigo: "bg-indigo-50 text-indigo-700 border border-indigo-100",
+  purple: "bg-rose-50 text-rose-700 border border-rose-100",
+  green: "bg-emerald-50 text-emerald-700 border border-emerald-100",
+  blue: "bg-sky-50 text-sky-700 border border-sky-100",
+  amber: "bg-amber-50 text-amber-700 border border-amber-100",
+  red: "bg-rose-50 text-rose-700 border border-rose-100"
 };
 
 export function FeatureBadge({ text, icon, color, className = '' }: FeatureBadgeProps) {
   const colorClass = colorVariants[color];
   
   return (
-    <div className={`flex items-center px-3 py-1 rounded-full text-sm font-medium ${colorClass} ${className}`}>
+    <div className={`flex items-center px-3 py-1 rounded-full text-sm font-medium shadow-sm ${colorClass} ${className}`}>
       <span className="mr-1">
         {React.isValidElement(icon) ? icon : React.createElement(icon as LucideIcon, { className: "h-4 w-4" })}
       </span>

@@ -161,7 +161,7 @@ export default function StudentDashboardPage() {
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center space-x-2">
-                  <Calendar className="w-5 h-5 text-purple-600" />
+                  <Calendar className="w-5 h-5 text-indigo-600" />
                   <span>Upcoming Deadlines</span>
                 </CardTitle>
                 <CardDescription>
@@ -235,8 +235,8 @@ export default function StudentDashboardPage() {
               </Link>
               
               <Link href="/student/profile">
-                <Button variant="outline" className="w-full h-20 flex flex-col items-center justify-center space-y-2 hover:bg-purple-50">
-                  <Award className="w-6 h-6 text-purple-600" />
+                <Button variant="outline" className="w-full h-20 flex flex-col items-center justify-center space-y-2 hover:bg-indigo-50">
+                  <Award className="w-6 h-6 text-indigo-600" />
                   <span>View Profile</span>
                 </Button>
               </Link>
