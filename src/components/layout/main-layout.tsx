@@ -70,9 +70,6 @@ export function MainLayout({ children }: MainLayoutProps) {
 
   const navItems = getNavItems(session?.user?.role || "");
   const homeRoute = getDefaultRouteForRole(session?.user?.role) ?? "/";
-  const activeItem =
-    navItems.find((item) => isActivePath(pathname, item)) ??
-    navItems[0];
 
   const handleSignOut = async () => {
     await signOut({ callbackUrl: "/" });
@@ -81,7 +78,7 @@ export function MainLayout({ children }: MainLayoutProps) {
   return (
     <div
       className="relative min-h-screen overflow-x-hidden bg-[radial-gradient(circle_at_top_left,rgba(255,248,246,0.98),rgba(255,255,255,0.94)_38%,rgba(244,248,255,0.97)_100%)]"
-      style={{ ["--app-shell-top-offset" as string]: "6.75rem" }}
+      style={{ ["--app-shell-top-offset" as string]: "1.5rem" }}
     >
       <ScrollProgress />
 
@@ -204,53 +201,7 @@ export function MainLayout({ children }: MainLayoutProps) {
       </aside>
 
       <div className="relative flex min-h-screen flex-col lg:pl-80">
-        <header className="fixed inset-x-4 top-4 z-30 lg:left-[21rem] lg:right-6">
-          <div className="relative overflow-hidden rounded-[1.75rem] border border-white/80 bg-white/75 px-4 py-4 shadow-[0_18px_50px_-32px_rgba(15,23,42,0.22)] backdrop-blur-xl sm:px-5 lg:px-6">
-            <ShineBorder borderWidth={1} duration={15} shineColor={["rgba(129,140,248,0.12)", "rgba(251,191,186,0.1)", "rgba(125,211,252,0.08)"]} />
-            <div className="pointer-events-none absolute inset-y-0 right-0 w-40 bg-gradient-to-l from-rose-100/30 via-transparent to-transparent" />
-
-            <div className="relative flex items-center justify-between gap-4">
-              <div className="min-w-0">
-                <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-500">
-                  <Sparkles className="h-3.5 w-3.5 text-indigo-400" />
-                  <span>{session?.user?.role || "platform"} workspace</span>
-                </div>
-                <p className="mt-1 truncate text-lg font-semibold text-slate-900">
-                  {activeItem?.label || "Dashboard"}
-                </p>
-                <p className="mt-0.5 hidden text-sm text-slate-500 sm:block">
-                  Calm, clear, and encouraging learning flow.
-                </p>
-              </div>
-
-              <div className="flex items-center gap-3">
-                <div className="hidden items-center gap-3 rounded-2xl border border-white/70 bg-white/80 px-3 py-2 shadow-sm sm:flex">
-                  <Avatar
-                    src={session?.user?.avatar || generateAvatar(session?.user?.email || "")}
-                    alt={session?.user?.name || "User"}
-                    size="sm"
-                    className="ring-2 ring-white"
-                  />
-                  <div className="max-w-[10rem]">
-                    <p className="truncate text-sm font-semibold text-slate-900">{session?.user?.name}</p>
-                    <p className="truncate text-xs text-slate-500">{session?.user?.email}</p>
-                  </div>
-                </div>
-
-                <Button
-                  variant="outline"
-                  onClick={handleSignOut}
-                  className="hidden rounded-2xl border-white/70 bg-white/80 shadow-sm sm:inline-flex"
-                >
-                  <LogOut className="mr-2 h-4 w-4" />
-                  Sign Out
-                </Button>
-              </div>
-            </div>
-          </div>
-        </header>
-
-        <main className="flex-1 px-4 pb-28 pt-[calc(var(--app-shell-top-offset)+0.75rem)] lg:px-6 lg:pb-8">
+        <main className="flex-1 px-4 pb-28 pt-4 lg:px-6 lg:pb-8 lg:pt-6">
           <div className="page-transition">{children}</div>
         </main>
 
