@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import { useToast } from '@/hooks/use-toast';
@@ -36,6 +36,12 @@ export function SubmitProjectDialog({
   const [projectSubmissionSummary, setProjectSubmissionSummary] = useState('');
   const [isSubmittingProject, setIsSubmittingProject] = useState(false);
 
+  useEffect(() => {
+    if (!showDialog) {
+      setProjectSubmissionSummary('');
+    }
+  }, [showDialog]);
+
   // Handle submit project for review
   const handleSubmitProject = async () => {
     if (!participation || !project || !session?.user) return;
@@ -64,7 +70,10 @@ export function SubmitProjectDialog({
         completedAt: Timestamp.now()
       });
       
-      showSuccessToast(toast, "Project Submitted", { description: "Your project has been submitted for review!" });
+      showSuccessToast(toast, "Project Submitted", {
+        description: "Your project is now in review. We’ll take you to My Projects for status updates."
+      });
+      setProjectSubmissionSummary('');
       setShowDialog(false);
       
       // Call onSuccess callback if provided
@@ -74,7 +83,7 @@ export function SubmitProjectDialog({
       
       // Redirect to my-projects page after submission
       setTimeout(() => {
-        router.push('/student/my-projects');
+        router.push(`/student/my-projects?projectId=${project.id}`);
       }, 1500);
       
     } catch (error) {
@@ -96,7 +105,7 @@ export function SubmitProjectDialog({
               Congratulations! Submit Your Project
             </DialogTitle>
             <DialogDescription>
-              You've completed all tasks in this project! Please provide a summary of what you've learned and accomplished.
+              You've completed all tasks in this project. Add a short summary, then track the review status from My Projects.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">

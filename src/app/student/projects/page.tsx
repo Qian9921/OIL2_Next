@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
+import { useRouter } from "next/navigation";
 import { MainLayout } from "@/components/layout/main-layout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -25,6 +26,7 @@ import { isProjectExpired } from "@/lib/utils";
 
 export default function StudentProjectsPage() {
   const { data: session } = useSession();
+  const router = useRouter();
   const { toast } = useToast();
   const [projects, setProjects] = useState<Project[]>([]);
   const [filteredProjects, setFilteredProjects] = useState<Project[]>([]);
@@ -144,13 +146,12 @@ export default function StudentProjectsPage() {
         completedSubtasks: []
       });
 
-      // Reload data
-      await loadProjects();
       toast({
         title: "Project Joined",
-        description: "Successfully joined the project!",
+        description: "Opening your action queue for this project.",
         variant: "default"
       });
+      router.push(`/student/my-projects?projectId=${projectToJoin.id}`);
     } catch (error) {
       console.error("Error joining project:", error);
       toast({

@@ -79,6 +79,9 @@ export default function ProjectTaskPage() {
 
   const currentProjectId = params.id as string;
   const subtaskId = params.subtaskId as string;
+  const myProjectsHref = currentProjectId
+    ? `/student/my-projects?projectId=${currentProjectId}`
+    : '/student/my-projects';
 
   const [project, setProject] = useState<Project | null>(null);
   const [subtask, setSubtask] = useState<Subtask | null>(null);
@@ -165,7 +168,7 @@ export default function ProjectTaskPage() {
       try {
         const projectData = await getProject(currentProjectId);
         if (!projectData) {
-          router.push('/student/my-projects');
+          router.push(myProjectsHref);
           return;
         }
         
@@ -187,7 +190,7 @@ export default function ProjectTaskPage() {
         );
         
         if (!participationData) {
-        router.push('/student/my-projects');
+        router.push(myProjectsHref);
         return;
       }
         
@@ -1344,7 +1347,7 @@ export default function ProjectTaskPage() {
           <AlertTriangle className="w-12 h-12 mx-auto text-red-500 mb-4" />
           <h1 className="text-2xl font-bold mb-2">Task Information Not Available</h1>
           <p className="text-gray-600 mb-4">Could not load the project or task details. Please try again or go back.</p>
-          <Link href={participation ? `/student/my-projects/${participation.projectId}` : '/student/projects' } passHref> 
+          <Link href={participation ? myProjectsHref : '/student/projects'} passHref> 
             <Button variant="outline">Go Back</Button>
           </Link>
         </div>
@@ -1373,7 +1376,7 @@ export default function ProjectTaskPage() {
             <Button 
               variant="outline" 
               size="sm" 
-              onClick={() => router.push('/student/my-projects')}
+              onClick={() => router.push(myProjectsHref)}
               className="mr-4"
             >
               <ChevronLeft className="w-4 h-4 mr-1" />

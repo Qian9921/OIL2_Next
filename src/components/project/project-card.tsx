@@ -245,7 +245,7 @@ export function ProjectCard({
           
           {/* Student continue button (if already joined) */}
           {showJoinButton && isJoined && !isCompleted && (
-            <Link href="/student/my-projects" className="w-full">
+            <Link href={`/student/my-projects?projectId=${project.id}`} className="w-full">
               <Button className="w-full">
                 <Target className="w-4 h-4 mr-2" />
                 Continue
@@ -256,13 +256,13 @@ export function ProjectCard({
           {/* Student completed project buttons */}
           {showJoinButton && isJoined && isCompleted && (
             <div className="flex flex-col space-y-2">
-              <Link href="/student/certificates" className="w-full">
+              <Link href={`/student/certificates?projectId=${project.id}`} className="w-full">
                 <Button variant="outline" className="w-full border-yellow-300 text-yellow-700 hover:bg-yellow-50">
                   <Award className="w-4 h-4 mr-2" />
                   View Certificate
                 </Button>
               </Link>
-              <Link href="/student/my-projects" className="w-full">
+              <Link href={`/student/my-projects?projectId=${project.id}`} className="w-full">
                 <Button variant="outline" className="w-full">
                   <BookOpen className="w-4 h-4 mr-2" />
                   View Project

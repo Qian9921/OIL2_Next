@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { MainLayout } from "@/components/layout/main-layout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -45,6 +45,7 @@ import { Timestamp } from "firebase/firestore";
 
 export default function ProjectDetailPage() {
   const params = useParams();
+  const router = useRouter();
   const { data: session } = useSession();
   const { toast } = useToast();
   const [project, setProject] = useState<Project | null>(null);
@@ -131,10 +132,13 @@ export default function ProjectDetailPage() {
         completedSubtasks: [],
         progress: 0
       });
-      
-      // Reload data to show updated state
-      await loadProjectData();
-      toast({ title: "Project Joined!", description: "Successfully joined the project!", variant: "default" });
+
+      toast({
+        title: "Project Joined!",
+        description: "Opening this project in your action queue.",
+        variant: "default"
+      });
+      router.push(`/student/my-projects?projectId=${project.id}`);
     } catch (error) {
       console.error("Error joining project:", error);
       toast({ title: "Join Failed", description: "Failed to join the project, please try again.", variant: "destructive" });
@@ -435,7 +439,7 @@ export default function ProjectDetailPage() {
                           Certificate Earned: {myCertificate.certificateNumber}
                         </p>
                         <div className="space-y-2">
-                          <Link href="/student/my-projects">
+                          <Link href={`/student/my-projects?projectId=${project.id}`}>
                             <Button className="w-full">
                               View My Projects
                             </Button>
@@ -452,7 +456,7 @@ export default function ProjectDetailPage() {
                         <p className="text-sm text-gray-600 mb-4">
                           Current Progress: {myParticipation.progress}%
                         </p>
-                        <Link href="/student/my-projects">
+                        <Link href={`/student/my-projects?projectId=${project.id}`}>
                           <Button className="w-full">
                             View My Projects
                           </Button>

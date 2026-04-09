@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import { useSession } from "next-auth/react";
+import { useSearchParams } from "next/navigation";
 import { MainLayout } from "@/components/layout/main-layout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -26,9 +27,11 @@ import {
   GraduationCap
 } from "lucide-react";
 
-export default function StudentCertificatesPage() {
+function StudentCertificatesPageContent() {
   const { data: session } = useSession();
+  const searchParams = useSearchParams();
   const { toast } = useToast();
+  const focusedProjectId = searchParams.get("projectId");
   
   const [certificates, setCertificates] = useState<Certificate[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -168,6 +171,36 @@ export default function StudentCertificatesPage() {
     }
   };
 
+  const orderedCertificates = useMemo(() => {
+    if (!focusedProjectId) {
+      return certificates;
+    }
+
+    return [...certificates].sort((left, right) => {
+      if (left.projectId === focusedProjectId && right.projectId !== focusedProjectId) {
+        return -1;
+      }
+
+      if (right.projectId === focusedProjectId && left.projectId !== focusedProjectId) {
+        return 1;
+      }
+
+      return right.issuedAt.toMillis() - left.issuedAt.toMillis();
+    });
+  }, [certificates, focusedProjectId]);
+
+  useEffect(() => {
+    if (!focusedProjectId || isLoading) {
+      return;
+    }
+
+    window.requestAnimationFrame(() => {
+      document
+        .getElementById(`certificate-${focusedProjectId}`)
+        ?.scrollIntoView({ behavior: "smooth", block: "center" });
+    });
+  }, [focusedProjectId, isLoading, orderedCertificates]);
+
   if (isLoading) {
     return (
       <MainLayout>
@@ -238,10 +271,17 @@ export default function StudentCertificatesPage() {
         </Card>
 
         {/* Certificates List */}
-        {certificates.length > 0 ? (
+        {orderedCertificates.length > 0 ? (
           <div className="space-y-4">
-            {certificates.map((certificate) => (
-              <Card key={certificate.id} className="overflow-hidden">
+            {orderedCertificates.map((certificate) => {
+              const isFocused = certificate.projectId === focusedProjectId;
+
+              return (
+              <Card
+                key={certificate.id}
+                id={`certificate-${certificate.projectId}`}
+                className={`overflow-hidden transition-all ${isFocused ? "border-blue-400 ring-2 ring-blue-200 shadow-lg" : ""}`}
+              >
                 <CardHeader>
                   <div className="flex items-start justify-between">
                     <div className="flex items-center space-x-4">
@@ -264,6 +304,11 @@ export default function StudentCertificatesPage() {
                         <Award className="w-3 h-3 mr-1 inline" />
                         Certified
                       </span>
+                      {isFocused && (
+                        <p className="text-xs font-medium text-blue-600 mt-2">
+                          Opened from My Projects
+                        </p>
+                      )}
                       <p className="text-xs text-gray-500 mt-2">
                         Certificate #{certificate.certificateNumber}
                       </p>
@@ -339,7 +384,7 @@ export default function StudentCertificatesPage() {
                   </div>
                 </CardContent>
               </Card>
-            ))}
+            )})}
           </div>
         ) : (
           <Card>
@@ -361,4 +406,21 @@ export default function StudentCertificatesPage() {
       </div>
     </MainLayout>
   );
-} 
+}
+
+export default function StudentCertificatesPage() {
+  return (
+    <Suspense
+      fallback={
+        <MainLayout>
+          <div className="flex items-center justify-center h-64">
+            <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
+            <span className="ml-2 text-gray-600">Loading your certificates...</span>
+          </div>
+        </MainLayout>
+      }
+    >
+      <StudentCertificatesPageContent />
+    </Suspense>
+  );
+}
