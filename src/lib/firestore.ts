@@ -17,6 +17,7 @@ import {
 } from "firebase/firestore";
 import { db, storage } from "./firebase";
 import { ref, uploadBytesResumable, getDownloadURL } from "firebase/storage";
+import { buildParticipationWriteData } from "./participation-payload";
 import {
   User,
   Project,
@@ -138,15 +139,11 @@ export async function createParticipation(participationData: Omit<Participation,
   
   // Create participation
   const participationRef = doc(collection(db, 'participations'));
-  batch.set(participationRef, {
-    ...participationData,
-    classId, // 添加班级关联
-    joinedAt: Timestamp.now(),
-    chatHistory: [],
-    submissions: [],
-    createdAt: Timestamp.now(),
-    updatedAt: Timestamp.now()
-  });
+  const now = Timestamp.now();
+  batch.set(participationRef, buildParticipationWriteData(participationData, {
+    classId,
+    now,
+  }));
   
   // Update project participant count
   const projectRef = doc(db, 'projects', participationData.projectId);
