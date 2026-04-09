@@ -2,7 +2,11 @@ import { NextAuthOptions } from 'next-auth';
 import GoogleProvider from 'next-auth/providers/google';
 
 import { getUserByEmail } from '@/lib/firestore';
-import { getEffectiveUserRole } from '@/lib/role-routing';
+import {
+  hydrateSessionUserFromToken,
+  withPendingRoleSelectionTokenFor,
+  withPersistedUserTokenFor,
+} from '@/lib/auth-session-utils';
 
 export const authOptions: NextAuthOptions = {
   providers: [
@@ -38,24 +42,14 @@ export const authOptions: NextAuthOptions = {
         const dbUser = await getUserByEmail(user.email!);
 
         if (dbUser) {
-          token.userId = dbUser.id;
-          token.role = getEffectiveUserRole(dbUser.role) ?? dbUser.role;
-          token.name = dbUser.name;
-          token.avatar = dbUser.avatar;
-          token.needsRoleSelection = false;
+          return withPersistedUserTokenFor(token, dbUser);
         } else {
-          token.email = user.email;
-          token.name = user.name;
-          token.needsRoleSelection = true;
+          return withPendingRoleSelectionTokenFor(token, user);
         }
       } else if (token.needsRoleSelection && token.email) {
         const dbUser = await getUserByEmail(token.email as string);
         if (dbUser) {
-          token.userId = dbUser.id;
-          token.role = getEffectiveUserRole(dbUser.role) ?? dbUser.role;
-          token.name = dbUser.name;
-          token.avatar = dbUser.avatar;
-          token.needsRoleSelection = false;
+          return withPersistedUserTokenFor(token, dbUser);
         }
       }
 
@@ -64,10 +58,7 @@ export const authOptions: NextAuthOptions = {
 
     async session({ session, token }) {
       if (token && session.user) {
-        session.user.id = token.userId as string;
-        session.user.role = token.role as string;
-        session.user.avatar = token.avatar as string;
-        session.user.needsRoleSelection = token.needsRoleSelection as boolean;
+        session.user = hydrateSessionUserFromToken(session.user, token);
       }
 
       return session;

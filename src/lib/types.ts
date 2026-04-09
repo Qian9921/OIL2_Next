@@ -159,7 +159,7 @@ export interface Submission {
   attachments?: string[];
   submittedAt: Timestamp;
   reviewedAt?: Timestamp;
-  reviewedBy?: string;
+  reviewedBy?: string | null;
   status: 'pending' | 'approved' | 'rejected' | 'needs_revision';
   teacherFeedback?: string;
   reviewComment?: string;

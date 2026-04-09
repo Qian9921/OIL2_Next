@@ -31,14 +31,25 @@ import {
   UserRole,
   NGODashboard,
   StudentDashboard,
-  ProjectStats,
   TeacherDashboard,
   Certificate,
   Class,
   ClassDashboard,
   StudentWithClass
 } from "./types";
-import { getEffectiveUserRole } from "./role-routing";
+import {
+  buildNGODashboardData,
+  buildTeacherDashboardData,
+  sortSubmissionsNewestFirst,
+} from "./ngo-review-utils";
+import {
+  buildCompletedProjectRecord,
+  buildSubmissionUpdateData,
+} from "./submission-review-utils";
+import {
+  buildUserAccountCleanupOperations,
+  UserCleanupOperation,
+} from "./account-cleanup-utils";
 
 // User operations
 export async function createUser(userData: Omit<User, 'id' | 'createdAt' | 'updatedAt'>) {
@@ -269,53 +280,22 @@ export async function handleRejectedProject(participationId: string) {
 
 // Dashboard data functions
 export async function getNGODashboard(ngoId: string): Promise<NGODashboard> {
-  // Get NGO's projects
   const projects = await getProjects({ ngoId });
-  const publishedProjects = projects.filter(p => p.status === 'published').length;
-  const completedProjects = projects.filter(p => p.status === 'completed').length;
-  
-  // Calculate total participants
-  let totalParticipants = 0;
-  const projectStats: ProjectStats[] = [];
-  
-  for (const project of projects) {
-    totalParticipants += project.currentParticipants;
-    
-    // Get participations for this project
-    const participations = await getParticipations({ projectId: project.id });
-    const completedCount = participations.filter(p => p.status === 'completed').length;
-    const completionRate = participations.length > 0 ? (completedCount / participations.length) * 100 : 0;
-    const averageProgress = participations.length > 0 
-      ? participations.reduce((sum, p) => sum + p.progress, 0) / participations.length 
-      : 0;
-    
-    projectStats.push({
-      projectId: project.id,
-      projectTitle: project.title,
-      participants: project.currentParticipants,
-      completionRate,
-      averageProgress
-    });
-  }
-  
-  // Get pending reviews (submissions waiting for approval)
+  const projectParticipations = await Promise.all(
+    projects.map((project) => getParticipations({ projectId: project.id }))
+  );
   const allSubmissions = await getDocs(
     query(collection(db, 'submissions'), where('status', '==', 'pending'))
   );
-  
-  // Filter submissions for NGO's projects
-  const ngoProjectIds = projects.map(p => p.id);
-  const pendingReviews = allSubmissions.docs.filter(doc => 
-    ngoProjectIds.includes(doc.data().projectId)
-  ).length;
-  
-  return {
-    publishedProjects,
-    totalParticipants,
-    completedProjects,
-    pendingReviews,
-    projectStats
-  };
+
+  return buildNGODashboardData({
+    projects,
+    participations: projectParticipations.flat(),
+    submissions: allSubmissions.docs.map((doc) => ({
+      projectId: doc.data().projectId as string,
+      status: doc.data().status as Submission["status"],
+    })),
+  });
 }
 
 export async function getStudentDashboard(studentId: string): Promise<StudentDashboard> {
@@ -652,14 +632,11 @@ export async function getTeacherDashboard(teacherId: string): Promise<TeacherDas
     projects.map((project) => getParticipations({ projectId: project.id }))
   );
   const submissions = await getSubmissionsForNgo(teacherId);
-  const uniqueStudentIds = new Set(projectParticipations.flat().map((participation) => participation.studentId));
-
-  return {
-    studentsSupervised: uniqueStudentIds.size,
-    projectsSupervised: projects.length,
-    pendingReviews: submissions.filter((submission) => submission.status === 'pending').length,
-    recentSubmissions: submissions.slice(0, 10),
-  };
+  return buildTeacherDashboardData({
+    projects,
+    participations: projectParticipations.flat(),
+    submissions,
+  });
 }
 
 // Submission operations
@@ -715,15 +692,10 @@ export async function getSubmissions(filters?: {
 }
 
 export async function updateSubmission(submissionId: string, submissionData: Partial<Submission>) {
-  // Remove undefined values to avoid Firebase errors
-  const cleanData = Object.fromEntries(
-    Object.entries(submissionData).filter(([_, value]) => value !== undefined)
+  await updateDoc(
+    doc(db, 'submissions', submissionId),
+    buildSubmissionUpdateData(submissionData, Timestamp.now())
   );
-  
-  await updateDoc(doc(db, 'submissions', submissionId), {
-    ...cleanData,
-    reviewedAt: Timestamp.now()
-  });
 }
 
 // Helper function to create sample data for testing
@@ -827,26 +799,22 @@ export async function getCompletedProjectsForNGO(ngoId: string) {
     const participations = await getParticipations({ projectId: project.id, status: 'completed' });
     
     for (const participation of participations) {
-      // Get submissions for this participation that are approved
-      const submissions = await getSubmissions({ participationId: participation.id, status: 'approved' });
-      
-      if (submissions.length > 0) {
-        const student = await getUser(participation.studentId);
-        if (student) {
-          // Check if certificate already exists
-          const existingCerts = await getCertificates({ 
-            participationId: participation.id 
-          });
-          
-          completedProjects.push({
-            participation,
-            project,
-            student,
-            submission: submissions[0], // Latest approved submission
-            hasCertificate: existingCerts.length > 0,
-            certificate: existingCerts[0] || null
-          });
-        }
+      const [submissions, student, existingCerts] = await Promise.all([
+        getSubmissions({ participationId: participation.id, status: 'approved' }),
+        getUser(participation.studentId),
+        getCertificates({ participationId: participation.id }),
+      ]);
+
+      const completedProjectRecord = buildCompletedProjectRecord({
+        participation,
+        project,
+        student,
+        submissions,
+        certificates: existingCerts,
+      });
+
+      if (completedProjectRecord) {
+        completedProjects.push(completedProjectRecord);
       }
     }
   }
@@ -861,82 +829,84 @@ export async function deleteUserAccount(userId: string) {
   if (!user) {
     throw new Error('User not found');
   }
-  const effectiveRole = getEffectiveUserRole(user.role);
 
   const batch = writeBatch(db);
-  
-  // 1. Handle role-specific cleanup
-  if (user.role === 'student') {
-    // Get all participations for this student
-    const participations = await getParticipations({ studentId: userId });
-    
-    for (const participation of participations) {
-      // For each project, decrement participant count
-      const projectRef = doc(db, 'projects', participation.projectId);
-      batch.update(projectRef, {
-        currentParticipants: increment(-1),
-        updatedAt: Timestamp.now()
-      });
-      
-      // Delete participation document
-      const participationRef = doc(db, 'participations', participation.id);
-      batch.delete(participationRef);
-      
-      // Delete any submissions
-      const submissions = await getSubmissions({ participationId: participation.id });
-      for (const submission of submissions) {
-        const submissionRef = doc(db, 'submissions', submission.id);
-        batch.delete(submissionRef);
-      }
-    }
-    
-    // Delete certificates
-    const certificates = await getCertificates({ studentId: userId });
-    for (const certificate of certificates) {
-      const certificateRef = doc(db, 'certificates', certificate.id);
-      batch.delete(certificateRef);
-    }
-  } 
-  else if (effectiveRole === 'ngo') {
-    // Get all projects created by this NGO
-    const projects = await getProjects({ ngoId: userId });
-    
-    for (const project of projects) {
-      // Handle each project: either delete or transfer ownership
-      const projectRef = doc(db, 'projects', project.id);
-      
-      // If project has participants, change status to archived
-      if (project.currentParticipants > 0) {
-        batch.update(projectRef, {
-          status: 'archived',
-          updatedAt: Timestamp.now()
-        });
-      } else {
-        // If no participants, delete the project
-        batch.delete(projectRef);
-      }
-    }
+  const now = Timestamp.now();
+  const isStudent = user.role === 'student';
+  const needsNgoCleanup = user.role === 'ngo' || user.role === 'teacher';
+  const needsTeacherReviewCleanup = user.role === 'teacher';
+
+  const studentParticipations = isStudent ? await getParticipations({ studentId: userId }) : [];
+  const submissionsByParticipation = isStudent
+    ? Object.fromEntries(
+        await Promise.all(
+          studentParticipations.map(async (participation) => [
+            participation.id,
+            await getSubmissions({ participationId: participation.id }),
+          ])
+        )
+      )
+    : {};
+  const studentCertificates = isStudent ? await getCertificates({ studentId: userId }) : [];
+  const ngoProjects = needsNgoCleanup ? await getProjects({ ngoId: userId }) : [];
+  const allSubmissions = needsTeacherReviewCleanup ? await getSubmissions({}) : [];
+
+  const operations = buildUserAccountCleanupOperations({
+    user,
+    now,
+    participations: studentParticipations,
+    submissionsByParticipation,
+    certificates: studentCertificates,
+    projects: ngoProjects,
+    submissions: allSubmissions,
+  });
+
+  for (const operation of operations) {
+    applyUserCleanupOperation(batch, operation);
   }
-  if (user.role === 'teacher') {
-    // For teachers, we need to handle submissions they've reviewed
-    const submissions = await getSubmissions({});
-    const reviewedSubmissions = submissions.filter(s => s.reviewedBy === userId);
-    
-    for (const submission of reviewedSubmissions) {
-      const submissionRef = doc(db, 'submissions', submission.id);
-      batch.update(submissionRef, {
-        reviewedBy: null,
-        updatedAt: Timestamp.now()
-      });
-    }
-  }
-  
-  // 2. Delete the user document
-  const userRef = doc(db, 'users', userId);
-  batch.delete(userRef);
-  
-  // 3. Commit all changes
+
   await batch.commit();
+}
+
+function applyUserCleanupOperation(
+  batch: ReturnType<typeof writeBatch>,
+  operation: UserCleanupOperation,
+) {
+  switch (operation.type) {
+    case 'updateProjectParticipantCount':
+      batch.update(doc(db, 'projects', operation.projectId), {
+        currentParticipants: increment(operation.delta),
+        updatedAt: operation.updatedAt,
+      });
+      return;
+    case 'archiveProject':
+      batch.update(doc(db, 'projects', operation.projectId), {
+        status: 'archived',
+        updatedAt: operation.updatedAt,
+      });
+      return;
+    case 'clearSubmissionReviewer':
+      batch.update(doc(db, 'submissions', operation.submissionId), {
+        reviewedBy: null,
+        updatedAt: operation.updatedAt,
+      });
+      return;
+    case 'deleteProject':
+      batch.delete(doc(db, 'projects', operation.id));
+      return;
+    case 'deleteParticipation':
+      batch.delete(doc(db, 'participations', operation.id));
+      return;
+    case 'deleteSubmission':
+      batch.delete(doc(db, 'submissions', operation.id));
+      return;
+    case 'deleteCertificate':
+      batch.delete(doc(db, 'certificates', operation.id));
+      return;
+    case 'deleteUser':
+      batch.delete(doc(db, 'users', operation.id));
+      return;
+  }
 }
 
 // Add a function to upload a profile picture and update user avatar
@@ -1552,7 +1522,5 @@ export async function getSubmissionsForNgo(ngoId: string): Promise<Submission[]>
     projects.map((project) => getSubmissions({ projectId: project.id }))
   );
 
-  return projectSubmissions
-    .flat()
-    .sort((a, b) => b.submittedAt.toMillis() - a.submittedAt.toMillis());
+  return sortSubmissionsNewestFirst(projectSubmissions.flat());
 }
