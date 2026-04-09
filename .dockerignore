@@ -9,6 +9,7 @@ README*
 *.md
 *.log
 coverage
+.playwright-mcp
 openimpactlab-v2-firebase-adminsdk-*.json
 scripts/*-firebase-adminsdk-*.json
 src/app/student/.page.tsx.swp

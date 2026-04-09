@@ -17,6 +17,11 @@ import {
 } from "firebase/firestore";
 import { db, storage } from "./firebase";
 import { ref, uploadBytesResumable, getDownloadURL } from "firebase/storage";
+import {
+  generateCertificateNumber,
+  generateInviteCode,
+  normalizeInviteCode,
+} from "./identifier-utils";
 import { buildParticipationWriteData } from "./participation-payload";
 import {
   User,
@@ -814,7 +819,7 @@ export async function getUsers(): Promise<User[]> {
 
 // Certificate operations
 export async function createCertificate(certificateData: Omit<Certificate, 'id' | 'issuedAt' | 'certificateNumber'>) {
-  const certificateNumber = `CERT-${Date.now()}-${Math.random().toString(36).substr(2, 9).toUpperCase()}`;
+  const certificateNumber = generateCertificateNumber();
   
   const certificateDoc = await addDoc(collection(db, 'certificates'), {
     ...certificateData,
@@ -1274,11 +1279,6 @@ export async function savePromptEvaluation(
 
 // ==================== 班级相关操作 ====================
 
-// 生成6位随机邀请码
-function generateInviteCode(): string {
-  return Math.random().toString(36).substring(2, 8).toUpperCase();
-}
-
 // 过滤掉undefined值的helper函数
 function filterUndefinedValues(obj: any): any {
   const filtered: any = {};
@@ -1331,7 +1331,12 @@ export async function getClass(classId: string): Promise<Class | null> {
 
 // 通过邀请码获取班级
 export async function getClassByInviteCode(inviteCode: string): Promise<Class | null> {
-  const q = query(collection(db, 'classes'), where('inviteCode', '==', inviteCode));
+  const normalizedCode = normalizeInviteCode(inviteCode);
+  if (!normalizedCode) {
+    return null;
+  }
+
+  const q = query(collection(db, 'classes'), where('inviteCode', '==', normalizedCode));
   const snapshot = await getDocs(q);
   if (!snapshot.empty) {
     const classDoc = snapshot.docs[0];
@@ -1355,8 +1360,14 @@ export async function getClassesByTeacher(teacherId: string): Promise<Class[]> {
 // 学生加入班级
 export async function joinClass(studentId: string, inviteCode: string): Promise<{ success: boolean; message: string; classId?: string }> {
   try {
+    const normalizedCode = normalizeInviteCode(inviteCode);
+
+    if (!normalizedCode) {
+      return { success: false, message: '邀请码无效' };
+    }
+
     // 检查邀请码是否有效
-    const classData = await getClassByInviteCode(inviteCode);
+    const classData = await getClassByInviteCode(normalizedCode);
     if (!classData) {
       return { success: false, message: '邀请码无效' };
     }

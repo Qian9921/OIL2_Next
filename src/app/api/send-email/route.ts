@@ -3,6 +3,11 @@ import { NextRequest, NextResponse } from 'next/server';
 import nodemailer from 'nodemailer';
 
 import { authOptions } from '@/lib/auth-options';
+import {
+  buildTeacherEmailHtml,
+  hasHeaderControlChars,
+  normalizeRecipientIds,
+} from '@/lib/email-utils';
 import { getUsersByRole, getUser } from '@/lib/firestore';
 
 interface EmailRequest {
@@ -31,12 +36,24 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const { senderEmail, senderPassword, subject, content, recipientIds }: EmailRequest = await request.json();
+    const body = (await request.json()) as Partial<EmailRequest>;
+    const senderEmail = typeof body.senderEmail === 'string' ? body.senderEmail.trim() : '';
+    const senderPassword = typeof body.senderPassword === 'string' ? body.senderPassword : '';
+    const subject = typeof body.subject === 'string' ? body.subject.trim() : '';
+    const content = typeof body.content === 'string' ? body.content : '';
+    const recipientIds = normalizeRecipientIds(body.recipientIds);
 
     // 验证必填字段
-    if (!senderEmail || !senderPassword || !subject || !content) {
+    if (!senderEmail || !senderPassword || !subject || !content || recipientIds === null) {
       return NextResponse.json(
-        { error: 'Sender email, password, subject, and content are all required' },
+        { error: 'Sender email, password, subject, content, and a valid recipient list are all required' },
+        { status: 400 }
+      );
+    }
+
+    if (hasHeaderControlChars(senderEmail) || hasHeaderControlChars(subject)) {
+      return NextResponse.json(
+        { error: 'Sender email or subject contains invalid control characters' },
         { status: 400 }
       );
     }
@@ -47,7 +64,9 @@ export async function POST(request: NextRequest) {
     if (recipientIds.length === 0) {
       // 发送给所有学生
       const allStudents = await getUsersByRole('student');
-      recipients = allStudents.map(student => student.email);
+      recipients = allStudents
+        .map(student => student.email)
+        .filter((email): email is string => typeof email === 'string' && email.length > 0);
     } else {
       // 发送给指定学生
       for (const studentId of recipientIds) {
@@ -73,9 +92,6 @@ export async function POST(request: NextRequest) {
       auth: {
         user: senderEmail,
         pass: senderPassword, // 建议使用应用专用密码而不是账户密码
-      },
-      tls: {
-        rejectUnauthorized: false
       }
     });
 
@@ -97,21 +113,7 @@ export async function POST(request: NextRequest) {
         from: senderEmail,
         to: recipient,
         subject: subject,
-        html: `
-          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-            <div style="background-color: #f8f9fa; padding: 20px; border-radius: 8px;">
-              <h2 style="color: #2c3e50; margin-bottom: 20px;">Message from Teacher</h2>
-              <div style="background-color: white; padding: 20px; border-radius: 8px; border-left: 4px solid #3498db;">
-                ${content.replace(/\n/g, '<br>')}
-              </div>
-              <div style="margin-top: 20px; padding: 15px; background-color: #e8f4f8; border-radius: 8px;">
-                <p style="margin: 0; color: #34495e; font-size: 14px;">
-                  This email is sent from Open Impact Lab Learning Platform
-                </p>
-              </div>
-            </div>
-          </div>
-        `,
+        html: buildTeacherEmailHtml(content),
         text: content, // 纯文本版本
       })
     );
