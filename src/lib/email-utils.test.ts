@@ -2,16 +2,17 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
-  buildTeacherEmailHtml,
+  buildOrganizationEmailHtml,
   hasHeaderControlChars,
   normalizeRecipientIds,
 } from './email-utils';
 
-test('buildTeacherEmailHtml escapes HTML while preserving line breaks', () => {
-  const html = buildTeacherEmailHtml('<script>alert(1)</script>\nHello');
+test('buildOrganizationEmailHtml escapes HTML while preserving line breaks', () => {
+  const html = buildOrganizationEmailHtml('<script>alert(1)</script>\nHello');
 
   assert.match(html, /&lt;script&gt;alert\(1\)&lt;\/script&gt;<br>Hello/);
   assert.doesNotMatch(html, /<script>/);
+  assert.match(html, /Message from Open Impact Lab/);
 });
 
 test('normalizeRecipientIds accepts string arrays and trims empty values', () => {

@@ -19,11 +19,11 @@ export function normalizeRecipientIds(value: unknown): string[] | null {
   return value.map((item) => item.trim()).filter(Boolean);
 }
 
-export function buildTeacherEmailHtml(content: string): string {
+export function buildOrganizationEmailHtml(content: string): string {
   return `
     <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
       <div style="background-color: #f8f9fa; padding: 20px; border-radius: 8px;">
-        <h2 style="color: #2c3e50; margin-bottom: 20px;">Message from Teacher</h2>
+        <h2 style="color: #2c3e50; margin-bottom: 20px;">Message from Open Impact Lab</h2>
         <div style="background-color: white; padding: 20px; border-radius: 8px; border-left: 4px solid #3498db;">
           ${escapeHtml(content).replace(/\r?\n/g, '<br>')}
         </div>
@@ -36,3 +36,5 @@ export function buildTeacherEmailHtml(content: string): string {
     </div>
   `;
 }
+
+export const buildTeacherEmailHtml = buildOrganizationEmailHtml;

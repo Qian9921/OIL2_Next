@@ -14,7 +14,8 @@ import {
   AlertCircle,
   Plus,
   TrendingUp,
-  BarChart3
+  BarChart3,
+  ClipboardCheck,
 } from "lucide-react";
 import Link from "next/link";
 import { LoadingState } from "@/components/ui/loading-state";
@@ -58,14 +59,22 @@ export default function NGODashboardPage() {
             Welcome back, {session?.user?.name}! 🚀
           </h1>
           <p className="text-purple-100 mb-4">
-            Monitor your projects and see the impact you're creating in the community.
+            Monitor your projects and see the impact you are creating in the community.
           </p>
-          <Link href="/ngo/projects/create">
-            <Button variant="secondary" className="bg-white text-purple-600 hover:bg-gray-100">
-              <Plus className="w-4 h-4 mr-2" />
-              Create New Project
-            </Button>
-          </Link>
+          <div className="flex flex-wrap gap-3">
+            <Link href="/ngo/projects/create">
+              <Button variant="secondary" className="bg-white text-purple-600 hover:bg-gray-100">
+                <Plus className="w-4 h-4 mr-2" />
+                Create New Project
+              </Button>
+            </Link>
+            <Link href="/ngo/submissions">
+              <Button variant="secondary" className="bg-white/15 text-white hover:bg-white/25 border-white/20">
+                <ClipboardCheck className="w-4 h-4 mr-2" />
+                Review Submissions
+              </Button>
+            </Link>
+          </div>
         </div>
 
         {/* Stats Cards */}
@@ -210,11 +219,11 @@ export default function NGODashboardPage() {
           <CardHeader>
             <CardTitle>Quick Actions</CardTitle>
             <CardDescription>
-              Manage your organization's projects and impact
+              Manage your organization projects and impact
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
               <Link href="/ngo/projects/create">
                 <Button variant="outline" className="w-full h-20 flex flex-col items-center justify-center space-y-2 hover:bg-blue-50">
                   <Plus className="w-6 h-6 text-blue-600" />
@@ -226,6 +235,13 @@ export default function NGODashboardPage() {
                 <Button variant="outline" className="w-full h-20 flex flex-col items-center justify-center space-y-2 hover:bg-green-50">
                   <FolderOpen className="w-6 h-6 text-green-600" />
                   <span>Manage Projects</span>
+                </Button>
+              </Link>
+
+              <Link href="/ngo/submissions">
+                <Button variant="outline" className="w-full h-20 flex flex-col items-center justify-center space-y-2 hover:bg-amber-50">
+                  <ClipboardCheck className="w-6 h-6 text-amber-600" />
+                  <span>Review Work</span>
                 </Button>
               </Link>
               

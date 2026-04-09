@@ -4,7 +4,7 @@ import React from "react";
 import { useSession } from "next-auth/react";
 import { Avatar } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
-import { getDefaultRouteForRole } from "@/lib/role-routing";
+import { getDefaultRouteForRole, getEffectiveUserRole } from "@/lib/role-routing";
 import { generateAvatar } from "@/lib/utils";
 import { 
   Home, 
@@ -15,6 +15,7 @@ import {
   Heart,
   Sparkles,
   Award,
+  ClipboardCheck,
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -31,9 +32,8 @@ interface NavItem {
 }
 
 const getNavItems = (role: string): NavItem[] => {
-  switch (role) {
+  switch (getEffectiveUserRole(role)) {
     case "student":
-    case "teacher":
       return [
         { label: "Dashboard", href: "/student", icon: Home },
         { label: "Browse Projects", href: "/student/projects", icon: FolderOpen },
@@ -44,6 +44,7 @@ const getNavItems = (role: string): NavItem[] => {
       return [
         { label: "Dashboard", href: "/ngo", icon: Home },
         { label: "Projects", href: "/ngo/projects", icon: FolderOpen },
+        { label: "Submissions", href: "/ngo/submissions", icon: ClipboardCheck },
         { label: "Certificates", href: "/ngo/certificates", icon: Award },
         { label: "Profile", href: "/ngo/profile", icon: Settings },
       ];
@@ -55,6 +56,7 @@ const getNavItems = (role: string): NavItem[] => {
 export function MainLayout({ children }: MainLayoutProps) {
   const { data: session } = useSession();
   const pathname = usePathname();
+  const effectiveRole = getEffectiveUserRole(session?.user?.role);
   
   const navItems = getNavItems(session?.user?.role || "");
   const homeRoute = getDefaultRouteForRole(session?.user?.role);
@@ -92,7 +94,7 @@ export function MainLayout({ children }: MainLayoutProps) {
                 {session?.user?.name}
               </p>
               <p className="text-xs text-gray-500 capitalize">
-                {session?.user?.role}
+                {effectiveRole ?? session?.user?.role}
               </p>
             </div>
           </div>

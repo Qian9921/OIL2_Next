@@ -638,7 +638,7 @@ export default function StudentMyProjectsPage() {
                     }`}>
                       <h4 className={`font-semibold mb-1 flex items-center`}>
                         <FileText className="w-3.5 h-3.5 mr-1.5 flex-shrink-0" />
-                        Teacher Feedback:
+                        Review Feedback:
                       </h4>
                       <p className="pl-5 line-clamp-2">
                         {submission.reviewComment}

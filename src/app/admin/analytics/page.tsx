@@ -11,7 +11,6 @@ import {
   Users, 
   ArrowLeft,
   Download,
-  Activity,
   Award,
   Target,
   BookOpen,
@@ -24,6 +23,7 @@ import {
   getCertificates,
   getSubmissions
 } from '@/lib/firestore';
+import { buildUserRoleAnalytics } from '@/lib/role-analytics';
 
 interface AnalyticsData {
   totalUsers: number;
@@ -31,16 +31,18 @@ interface AnalyticsData {
   totalParticipations: number;
   totalCertificates: number;
   totalSubmissions: number;
-  usersByRole: {
+  activeUsersByRole: {
     student: number;
-    teacher: number;
     ngo: number;
+  };
+  legacyUsersByRole: {
+    teacher: number;
   };
 }
 
 export default function AnalyticsPage() {
   const router = useRouter();
-  const { t } = useI18n();
+  useI18n();
   const [analyticsData, setAnalyticsData] = useState<AnalyticsData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
@@ -62,12 +64,7 @@ export default function AnalyticsPage() {
         getSubmissions()
       ]);
 
-      // 计算用户统计
-      const usersByRole = {
-        student: users.filter(u => u.role === 'student').length,
-        teacher: users.filter(u => u.role === 'teacher').length,
-        ngo: users.filter(u => u.role === 'ngo').length,
-      };
+      const roleAnalytics = buildUserRoleAnalytics(users);
 
       const data: AnalyticsData = {
         totalUsers: users.length,
@@ -75,7 +72,8 @@ export default function AnalyticsPage() {
         totalParticipations: participations.length,
         totalCertificates: certificates.length,
         totalSubmissions: submissions.length,
-        usersByRole
+        activeUsersByRole: roleAnalytics.activeUsersByRole,
+        legacyUsersByRole: roleAnalytics.legacyUsersByRole,
       };
 
       setAnalyticsData(data);
@@ -206,7 +204,7 @@ export default function AnalyticsPage() {
             value={analyticsData.totalUsers}
             icon={Users}
             color="bg-blue-600"
-            description={`学生: ${analyticsData.usersByRole.student}, 教师: ${analyticsData.usersByRole.teacher}, NGO: ${analyticsData.usersByRole.ngo}`}
+            description={`学生: ${analyticsData.activeUsersByRole.student}, NGO: ${analyticsData.activeUsersByRole.ngo}, 遗留Teacher: ${analyticsData.legacyUsersByRole.teacher}`}
           />
           <MetricCard
             title="项目总数"
@@ -279,15 +277,15 @@ export default function AnalyticsPage() {
                   <div className="space-y-4">
                     <div className="flex justify-between items-center">
                       <span>学生用户</span>
-                      <span className="font-semibold text-blue-600">{analyticsData.usersByRole.student}</span>
+                      <span className="font-semibold text-blue-600">{analyticsData.activeUsersByRole.student}</span>
                     </div>
                     <div className="flex justify-between items-center">
-                      <span>教师用户</span>
-                      <span className="font-semibold text-green-600">{analyticsData.usersByRole.teacher}</span>
+                      <span>NGO / 审核方</span>
+                      <span className="font-semibold text-purple-600">{analyticsData.activeUsersByRole.ngo}</span>
                     </div>
                     <div className="flex justify-between items-center">
-                      <span>NGO机构</span>
-                      <span className="font-semibold text-purple-600">{analyticsData.usersByRole.ngo}</span>
+                      <span>遗留 Teacher</span>
+                      <span className="font-semibold text-green-600">{analyticsData.legacyUsersByRole.teacher}</span>
                     </div>
                   </div>
                 </CardContent>
@@ -304,7 +302,7 @@ export default function AnalyticsPage() {
                 <CardContent>
                   <div className="text-center">
                     <div className="text-3xl font-bold text-blue-600">
-                      {analyticsData.usersByRole.student}
+                      {analyticsData.activeUsersByRole.student}
                     </div>
                     <p className="text-sm text-gray-600 mt-2">注册学生总数</p>
                   </div>
@@ -313,28 +311,28 @@ export default function AnalyticsPage() {
               
               <Card>
                 <CardHeader>
-                  <CardTitle>教师用户</CardTitle>
+                  <CardTitle>NGO / 审核方</CardTitle>
                 </CardHeader>
                 <CardContent>
                   <div className="text-center">
-                    <div className="text-3xl font-bold text-green-600">
-                      {analyticsData.usersByRole.teacher}
+                    <div className="text-3xl font-bold text-purple-600">
+                      {analyticsData.activeUsersByRole.ngo}
                     </div>
-                    <p className="text-sm text-gray-600 mt-2">注册教师总数</p>
+                    <p className="text-sm text-gray-600 mt-2">活跃 NGO / 审核账号总数</p>
                   </div>
                 </CardContent>
               </Card>
               
               <Card>
                 <CardHeader>
-                  <CardTitle>NGO机构</CardTitle>
+                  <CardTitle>遗留 Teacher</CardTitle>
                 </CardHeader>
                 <CardContent>
                   <div className="text-center">
-                    <div className="text-3xl font-bold text-purple-600">
-                      {analyticsData.usersByRole.ngo}
+                    <div className="text-3xl font-bold text-green-600">
+                      {analyticsData.legacyUsersByRole.teacher}
                     </div>
-                    <p className="text-sm text-gray-600 mt-2">注册NGO总数</p>
+                    <p className="text-sm text-gray-600 mt-2">仅保留兼容的旧角色账号</p>
                   </div>
                 </CardContent>
               </Card>

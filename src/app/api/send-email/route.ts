@@ -4,11 +4,12 @@ import nodemailer from 'nodemailer';
 
 import { authOptions } from '@/lib/auth-options';
 import {
-  buildTeacherEmailHtml,
+  buildOrganizationEmailHtml,
   hasHeaderControlChars,
   normalizeRecipientIds,
 } from '@/lib/email-utils';
 import { getUsersByRole, getUser } from '@/lib/firestore';
+import { getEffectiveUserRole } from '@/lib/role-routing';
 
 interface EmailRequest {
   senderEmail: string;
@@ -23,12 +24,12 @@ export async function POST(request: NextRequest) {
 
   if (process.env.ENABLE_LEGACY_TEACHER_EMAIL !== 'true') {
     return NextResponse.json(
-      { error: 'Legacy teacher email is currently disabled.' },
+      { error: 'Legacy organization email is currently disabled.' },
       { status: 410 }
     );
   }
 
-  if (!session?.user?.id || session.user.role !== 'teacher') {
+  if (!session?.user?.id || getEffectiveUserRole(session.user.role) !== 'ngo') {
     return NextResponse.json(
       { error: 'Unauthorized' },
       { status: 401 }
@@ -113,7 +114,7 @@ export async function POST(request: NextRequest) {
         from: senderEmail,
         to: recipient,
         subject: subject,
-        html: buildTeacherEmailHtml(content),
+        html: buildOrganizationEmailHtml(content),
         text: content, // 纯文本版本
       })
     );

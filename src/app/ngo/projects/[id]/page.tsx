@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { MainLayout } from "@/components/layout/main-layout";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Avatar } from "@/components/ui/avatar";
 import { getProject, getParticipations, updateProject } from "@/lib/firestore";
@@ -15,23 +15,19 @@ import {
   ArrowLeft, 
   Users, 
   Clock, 
-  Tag,
   Target,
   Settings,
   Edit,
   Eye,
-  BarChart3,
-  CheckCircle,
   Calendar,
-  Award,
   TrendingUp,
-  BookOpen
+  BookOpen,
+  ClipboardCheck,
 } from "lucide-react";
 import Link from "next/link";
 
 export default function NGOProjectDetailPage() {
   const params = useParams();
-  const router = useRouter();
   const { data: session } = useSession();
   const [project, setProject] = useState<Project | null>(null);
   const [participations, setParticipations] = useState<Participation[]>([]);
@@ -145,6 +141,12 @@ export default function NGOProjectDetailPage() {
             </div>
           </div>
           <div className="flex space-x-2">
+            <Link href={`/ngo/submissions?projectId=${project.id}`}>
+              <Button variant="outline">
+                <ClipboardCheck className="w-4 h-4 mr-2" />
+                Review Submissions
+              </Button>
+            </Link>
             <Link href={`/ngo/projects/${project.id}/edit`}>
               <Button variant="outline">
                 <Edit className="w-4 h-4 mr-2" />

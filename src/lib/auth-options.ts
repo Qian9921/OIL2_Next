@@ -2,6 +2,7 @@ import { NextAuthOptions } from 'next-auth';
 import GoogleProvider from 'next-auth/providers/google';
 
 import { getUserByEmail } from '@/lib/firestore';
+import { getEffectiveUserRole } from '@/lib/role-routing';
 
 export const authOptions: NextAuthOptions = {
   providers: [
@@ -38,7 +39,7 @@ export const authOptions: NextAuthOptions = {
 
         if (dbUser) {
           token.userId = dbUser.id;
-          token.role = dbUser.role;
+          token.role = getEffectiveUserRole(dbUser.role) ?? dbUser.role;
           token.name = dbUser.name;
           token.avatar = dbUser.avatar;
           token.needsRoleSelection = false;
@@ -51,7 +52,7 @@ export const authOptions: NextAuthOptions = {
         const dbUser = await getUserByEmail(token.email as string);
         if (dbUser) {
           token.userId = dbUser.id;
-          token.role = dbUser.role;
+          token.role = getEffectiveUserRole(dbUser.role) ?? dbUser.role;
           token.name = dbUser.name;
           token.avatar = dbUser.avatar;
           token.needsRoleSelection = false;

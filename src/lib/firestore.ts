@@ -38,6 +38,7 @@ import {
   ClassDashboard,
   StudentWithClass
 } from "./types";
+import { getEffectiveUserRole } from "./role-routing";
 
 // User operations
 export async function createUser(userData: Omit<User, 'id' | 'createdAt' | 'updatedAt'>) {
@@ -646,61 +647,18 @@ export async function getStudentDashboard(studentId: string): Promise<StudentDas
 }
 
 export async function getTeacherDashboard(teacherId: string): Promise<TeacherDashboard> {
-  // 获取教师的班级
-  const teacherClasses = await getClassesByTeacher(teacherId);
-  
-  if (teacherClasses.length === 0) {
-    // 如果教师没有班级，使用旧的逻辑（向后兼容）
-    const allParticipations = await getParticipations({});
-    const uniqueStudentIds = new Set(allParticipations.map(p => p.studentId));
-    const studentsSupervised = uniqueStudentIds.size;
-    const uniqueProjectIds = new Set(allParticipations.map(p => p.projectId));
-    const projectsSupervised = uniqueProjectIds.size;
-    const allSubmissions = await getSubmissions({ status: 'pending' });
-    const pendingReviews = allSubmissions.length;
-    const recentSubmissions = await getSubmissions({});
-
-    return {
-      studentsSupervised,
-      projectsSupervised,
-      pendingReviews,
-      recentSubmissions: recentSubmissions.slice(0, 10)
-    };
-  }
-
-  // 统计所有班级的数据
-  let totalStudents = 0;
-  let totalProjects = 0;
-  let totalPendingReviews = 0;
-  let allClassSubmissions: Submission[] = [];
-
-  for (const classItem of teacherClasses) {
-    totalStudents += classItem.studentIds.length;
-    
-    // 获取班级的提交（只包括待审核的）
-    const classSubmissions = await getSubmissions({ classId: classItem.id });
-    allClassSubmissions = [...allClassSubmissions, ...classSubmissions];
-    
-    // 统计待审核的提交
-    const pendingClassSubmissions = classSubmissions.filter(s => s.status === 'pending');
-    totalPendingReviews += pendingClassSubmissions.length;
-    
-    // 统计项目数（通过参与记录）
-    const classParticipations = await Promise.all(
-      classItem.studentIds.map(studentId => getParticipations({ studentId }))
-    );
-    const flatParticipations = classParticipations.flat();
-    const uniqueProjectIds = new Set(flatParticipations.map(p => p.projectId));
-    totalProjects += uniqueProjectIds.size;
-  }
+  const projects = await getProjects({ ngoId: teacherId });
+  const projectParticipations = await Promise.all(
+    projects.map((project) => getParticipations({ projectId: project.id }))
+  );
+  const submissions = await getSubmissionsForNgo(teacherId);
+  const uniqueStudentIds = new Set(projectParticipations.flat().map((participation) => participation.studentId));
 
   return {
-    studentsSupervised: totalStudents,
-    projectsSupervised: totalProjects,
-    pendingReviews: totalPendingReviews,
-    recentSubmissions: allClassSubmissions
-      .sort((a, b) => b.submittedAt.toMillis() - a.submittedAt.toMillis())
-      .slice(0, 10)
+    studentsSupervised: uniqueStudentIds.size,
+    projectsSupervised: projects.length,
+    pendingReviews: submissions.filter((submission) => submission.status === 'pending').length,
+    recentSubmissions: submissions.slice(0, 10),
   };
 }
 
@@ -903,6 +861,7 @@ export async function deleteUserAccount(userId: string) {
   if (!user) {
     throw new Error('User not found');
   }
+  const effectiveRole = getEffectiveUserRole(user.role);
 
   const batch = writeBatch(db);
   
@@ -938,7 +897,7 @@ export async function deleteUserAccount(userId: string) {
       batch.delete(certificateRef);
     }
   } 
-  else if (user.role === 'ngo') {
+  else if (effectiveRole === 'ngo') {
     // Get all projects created by this NGO
     const projects = await getProjects({ ngoId: userId });
     
@@ -958,7 +917,7 @@ export async function deleteUserAccount(userId: string) {
       }
     }
   }
-  else if (user.role === 'teacher') {
+  if (user.role === 'teacher') {
     // For teachers, we need to handle submissions they've reviewed
     const submissions = await getSubmissions({});
     const reviewedSubmissions = submissions.filter(s => s.reviewedBy === userId);
@@ -1580,21 +1539,20 @@ export async function deleteClass(classId: string): Promise<{ success: boolean; 
 
 // 获取教师班级的所有提交（用于审核页面）
 export async function getSubmissionsForTeacher(teacherId: string): Promise<Submission[]> {
-  // 获取教师的班级
-  const teacherClasses = await getClassesByTeacher(teacherId);
-  
-  if (teacherClasses.length === 0) {
-    // 如果教师没有班级，返回所有提交（向后兼容）
-    return await getSubmissions({});
-  }
-
-  // 获取所有班级的提交
-  let allClassSubmissions: Submission[] = [];
-  for (const classItem of teacherClasses) {
-    const classSubmissions = await getSubmissions({ classId: classItem.id });
-    allClassSubmissions = [...allClassSubmissions, ...classSubmissions];
-  }
-
-  // 按提交时间排序
-  return allClassSubmissions.sort((a, b) => b.submittedAt.toMillis() - a.submittedAt.toMillis());
+  return getSubmissionsForNgo(teacherId);
 } 
+
+export async function getSubmissionsForNgo(ngoId: string): Promise<Submission[]> {
+  const projects = await getProjects({ ngoId });
+  if (projects.length === 0) {
+    return [];
+  }
+
+  const projectSubmissions = await Promise.all(
+    projects.map((project) => getSubmissions({ projectId: project.id }))
+  );
+
+  return projectSubmissions
+    .flat()
+    .sort((a, b) => b.submittedAt.toMillis() - a.submittedAt.toMillis());
+}
