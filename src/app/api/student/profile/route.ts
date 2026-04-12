@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 
 import { authOptions } from "@/lib/auth-options";
 import { getEffectiveUserRole } from "@/lib/role-routing";
-import { getStudentProfileAdmin } from "@/lib/server-firestore";
+import { getStudentProfileAdmin, updateStudentProfileAdmin } from "@/lib/server-firestore";
 import { toIsoTimestamp } from "@/lib/timestamp-serialization";
 
 export async function GET() {
@@ -51,4 +51,52 @@ export async function GET() {
       },
     },
   );
+}
+
+export async function PATCH(request: Request) {
+  const session = await getServerSession(authOptions);
+
+  if (!session?.user?.id || getEffectiveUserRole(session.user.role) !== "student") {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const body = (await request.json().catch(() => null)) as
+    | {
+        name?: unknown;
+        bio?: unknown;
+        school?: unknown;
+        grade?: unknown;
+        interests?: unknown;
+      }
+    | null;
+
+  if (
+    !body ||
+    typeof body.name !== "string" ||
+    typeof body.bio !== "string" ||
+    typeof body.school !== "string" ||
+    typeof body.grade !== "string" ||
+    !Array.isArray(body.interests) ||
+    !body.interests.every((interest) => typeof interest === "string")
+  ) {
+    return NextResponse.json({ error: "Invalid profile payload" }, { status: 400 });
+  }
+
+  const user = await updateStudentProfileAdmin(session.user.id, {
+    name: body.name.trim(),
+    bio: body.bio,
+    school: body.school,
+    grade: body.grade,
+    interests: body.interests.map((interest) => interest.trim()).filter(Boolean),
+  });
+
+  return NextResponse.json({
+    user: user
+      ? {
+          ...user,
+          createdAt: toIsoTimestamp(user.createdAt),
+          updatedAt: toIsoTimestamp(user.updatedAt),
+        }
+      : null,
+  });
 }

@@ -5,7 +5,6 @@ import { useParams, useRouter } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import Link from 'next/link';
 import Image from 'next/image';
-import { Timestamp } from 'firebase/firestore';
 
 // UI Components
 import { MainLayout } from '@/components/layout/main-layout';
@@ -44,7 +43,13 @@ import { PromptFeedbackDisplay, PromptFeedbackMessage } from '@/components/task/
 import { DimensionScoreDisplay } from '@/components/task/score-components';
 
 // Utils and data
-import { getStudentTaskViewData, updateParticipation } from '@/lib/firestore';
+import {
+  clearStudentTaskChatHistory,
+  completeStudentSubtaskWithEvaluation,
+  getStudentTaskViewData,
+  saveStudentEvaluationHistoryEntry,
+  saveStudentPromptHistoryEntry,
+} from '@/lib/firestore';
 import { Project, Subtask, Participation, ChatMessage } from '@/lib/types';
 import { showSuccessToast, showErrorToast, showStreakToast, showInfoToast, showFeedbackToast } from '@/lib/toast-utils';
 import { GITHUB_SUBMISSION_SUBTASK_ID } from '@/lib/constants';
@@ -70,6 +75,8 @@ import { GitHubInfoButton } from '@/components/task/github-info-button';
  * 3. Storage in Firebase uses this consistent format
  * 4. Any old format with arrays is converted to the new format
  */
+type EvaluationHistoryEntry = NonNullable<Participation['evaluationHistory']>[string][number];
+
 export default function ProjectTaskPage() {
   const params = useParams();
   const router = useRouter();
@@ -132,27 +139,7 @@ export default function ProjectTaskPage() {
   const [isPageDisabled, setIsPageDisabled] = useState(false);
   
   // Add state for evaluation history
-  const [evaluationHistory, setEvaluationHistory] = useState<Array<{
-    timestamp: Timestamp;
-    score: number;
-    feedback: string;
-    success?: boolean;
-    message?: string;
-    evaluationId?: string;
-    status?: string;
-    result?: {
-      rawContent?: {
-        summary?: string;
-        assessment?: number;
-        checkpoints?: Array<{
-          status: string;
-          details: string;
-          requirement: string;
-        }>;
-        improvements?: string[];
-      }
-    }
-  }> | null>(null);
+  const [evaluationHistory, setEvaluationHistory] = useState<EvaluationHistoryEntry[] | null>(null);
   const [showHistoryDialog, setShowHistoryDialog] = useState(false);
   const [promptHistory, setPromptHistory] = useState<PromptHistoryEntry[] | null>(null);
   const [showPromptHistoryDialog, setShowPromptHistoryDialog] = useState(false);
@@ -296,89 +283,22 @@ export default function ProjectTaskPage() {
     }
   };
 
-  // Generic function to update history in Firebase
-  const updateHistoryInFirebase = async <T extends { timestamp: Timestamp }>(
-    participationId: string,
-    subtaskId: string,
-    historyType: 'evaluationHistory' | 'promptHistory',
-    entry: T,
-    currentHistory: T[] | null
-  ): Promise<{ success: boolean; newHistory?: T[]; historyUpdate?: any; error?: any }> => {
-    try {
-      console.log(`HISTORY DEBUG - ${historyType} update starting:`, {
-        participationId,
-        subtaskId,
-        currentHistoryLength: currentHistory?.length || 0,
-        entry
-      });
-      
-      // Create the new history array
-      const newHistory = [...(currentHistory || []), entry];
-      
-      // Log the update for debugging
-      console.log(`HISTORY DEBUG - ${historyType} array created:`, newHistory);
-      
-      // Get the current data from participation
-      const currentData = participation?.[historyType] || {};
-      console.log(`HISTORY DEBUG - Current ${historyType} data:`, currentData);
-      
-      // Prepare the update data
-      const historyUpdate = {
-        ...currentData,
-        [subtaskId]: newHistory
-      };
-      
-      console.log(`HISTORY DEBUG - ${historyType} update prepared:`, historyUpdate);
-      
-      // Update Firebase
-      await updateParticipation(participationId, {
-        [historyType]: historyUpdate
-      });
-      
-      console.log(`HISTORY DEBUG - ${historyType} Firebase update completed`);
-      
-      return { 
-        success: true, 
-        newHistory,
-        historyUpdate
-      };
-    } catch (error) {
-      console.error(`HISTORY DEBUG - Error updating ${historyType}:`, error);
-      return { success: false, error };
-    }
-  };
-
   // Create a helper function for updating evaluation history
   const updateEvaluationHistory = async (participationId: string, subtaskId: string, result: any, currentHistory: any[] | null) => {
     try {
-      // Create the evaluation entry
-      const evaluationResult = {
-        ...result,
-        timestamp: Timestamp.now()
-      };
-      
-      // Update in Firebase and get result
-      const updateResult = await updateHistoryInFirebase<typeof evaluationResult>(
+      void currentHistory;
+      const updateResult = await saveStudentEvaluationHistoryEntry(
         participationId,
         subtaskId,
-        'evaluationHistory',
-        evaluationResult,
-        currentHistory as (typeof evaluationResult)[] | null
+        result,
       );
-      
-      if (!updateResult.success) {
-        throw updateResult.error;
-      }
-      
-      // Update the local state
-      if (updateResult.newHistory) {
-        setEvaluationHistory(updateResult.newHistory as any);
-      }
+      setEvaluationHistory(updateResult.newHistory);
       
       return { 
         success: true, 
         evaluationHistoryUpdate: updateResult.historyUpdate,
-        latestResult: evaluationResult
+        latestResult: updateResult.entry,
+        newHistory: updateResult.newHistory,
       };
     } catch (error) {
       console.error("Error preparing evaluation history:", error);
@@ -444,42 +364,16 @@ export default function ProjectTaskPage() {
         console.log("PROMPT HISTORY DEBUG - Skipping save due to missing scores and feedback");
         return { success: false, error: "No scores or feedback available" };
       }
-      
-      // Create a timestamp for this prompt entry
-      const timestamp = Timestamp.now();
-      
-      // Create the new prompt entry object
-      const promptEntry = {
-        timestamp,
-        content: promptContent,
-        qualityScore: qualityData.qualityScore,
-        goalScore: qualityData.goalScore,
-        contextScore: qualityData.contextScore,
-        expectationsScore: qualityData.expectationsScore,
-        sourceScore: qualityData.sourceScore,
-        isGoodPrompt: qualityData.isGoodPrompt,
-        feedback: feedback // Use the standardized feedback format
-      };
-      
-      // Log for debugging
-      console.log("PROMPT HISTORY DEBUG - Created new prompt entry:", promptEntry);
-      
-      // Use the common function to update history in Firebase
-      const result = await updateHistoryInFirebase(
+      const result = await saveStudentPromptHistoryEntry(
         participationId,
         subtaskId,
-        'promptHistory',
-        promptEntry,
-        promptHistory
+        promptContent,
+        qualityData,
+        feedback,
       );
-      
-      if (result.success && result.newHistory) {
-        setPromptHistory(result.newHistory);
-        return { success: true, entry: promptEntry };
-      } else {
-        console.error("PROMPT HISTORY ERROR - Failed to save prompt history:", result.error);
-        return { success: false, error: result.error };
-      }
+      setPromptHistory(result.newHistory);
+      console.log("PROMPT HISTORY DEBUG - Created new prompt entry:", result.entry);
+      return { success: true, entry: result.entry };
     } catch (error) {
       console.error("PROMPT HISTORY ERROR - Exception in savePromptHistory:", error);
       return { success: false, error };
@@ -1019,11 +913,6 @@ export default function ProjectTaskPage() {
           
           // Check if the score meets the threshold (80%)
           if (!result.score || typeof result.score !== 'number' || score < 80) {
-            // Even if the score is low, save the evaluation history to Firebase
-            await updateParticipation(participation.id, {
-              evaluationHistory: historyUpdate.evaluationHistoryUpdate
-            });
-            
             showErrorToast(toast, "Task Incomplete", { 
               description: `Your work does not meet the required criteria (${score}%).`
             });
@@ -1035,30 +924,26 @@ export default function ProjectTaskPage() {
           }
 
           // If evaluation passed, continue with marking the task complete
-          const newCompletedSubtasks = [...completedSubtasks, subtask.id];
-          const totalSubtasks = project.subtasks.length;
-          const newProgress = Math.round((newCompletedSubtasks.length / totalSubtasks) * 100);
-          
-          // Single Firebase update with all changes
-          await updateParticipation(participation.id, {
-            completedSubtasks: newCompletedSubtasks,
-            progress: newProgress,
-            evaluationHistory: historyUpdate.evaluationHistoryUpdate
-          });
+          const completionResult = await completeStudentSubtaskWithEvaluation(
+            participation.id,
+            subtask.id,
+            result,
+          );
           
           // Update local state
           setParticipation({
             ...participation,
-            completedSubtasks: newCompletedSubtasks,
-            progress: newProgress,
-            evaluationHistory: historyUpdate.evaluationHistoryUpdate
+            completedSubtasks: completionResult.completedSubtasks,
+            progress: completionResult.progress,
+            evaluationHistory: completionResult.historyUpdate
           });
+          setEvaluationHistory(completionResult.newHistory);
           
           setIsSubtaskCompletedByStudent(true);
           showSuccessToast(toast, "Task Completed", { description: `You've completed this task with a score of ${score}%!` });
 
           // New code: Check if this is the last task and show submit dialog
-          if (isLastTask(project, subtask) && newCompletedSubtasks.length === project.subtasks.length) {
+          if (isLastTask(project, subtask) && completionResult.completedSubtasks.length === project.subtasks.length) {
             setTimeout(() => {
               setShowSubmitProjectDialog(true);
             }, 1000);
@@ -1159,12 +1044,10 @@ export default function ProjectTaskPage() {
     if (!participation?.id || !subtask) return;
     
     try {
-      const updatedChatHistory = { ...(participation.chatHistory || {}) };
-      delete updatedChatHistory[subtask.id];
-      
-      await updateParticipation(participation.id, {
-        chatHistory: updatedChatHistory
-      });
+      const updatedChatHistory = await clearStudentTaskChatHistory(
+        participation.id,
+        subtask.id,
+      );
       
       setChatMessages([]);
       setParticipation({

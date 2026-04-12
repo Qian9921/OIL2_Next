@@ -8,8 +8,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Avatar } from "@/components/ui/avatar";
 import {
-  createParticipation,
   getProjectViewerData,
+  joinProjectAsStudent,
 } from "@/lib/firestore";
 import { getProjectWorkspaceRoute, isStudentWorkspaceRole } from "@/lib/role-routing";
 import { Project, Participation, Certificate } from "@/lib/types";
@@ -116,14 +116,7 @@ export default function ProjectDetailPage() {
     setIsJoining(true);
     
     try {
-      await createParticipation({
-        projectId: project.id,
-        studentId: session.user.id,
-        studentName: session.user.name,
-        status: 'active',
-        completedSubtasks: [],
-        progress: 0
-      });
+      await joinProjectAsStudent(project.id);
 
       toast({
         title: "Project Joined!",

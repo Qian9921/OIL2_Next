@@ -99,6 +99,27 @@ export interface StudentTaskViewData {
   chatMessages?: ChatMessage[];
 }
 
+type PromptHistoryEntry = NonNullable<Participation["promptHistory"]>[string][number];
+type EvaluationHistoryEntry = NonNullable<Participation["evaluationHistory"]>[string][number];
+
+async function postStudentParticipationAction<T>(
+  participationId: string,
+  body: Record<string, unknown>,
+): Promise<T> {
+  const data = await fetchInternalJson<unknown>(
+    `/api/student/participations/${participationId}`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(body),
+    },
+  );
+
+  return deserializeFirestoreJson<T>(data);
+}
+
 // User operations
 export async function createUser(userData: Omit<User, 'id' | 'createdAt' | 'updatedAt'>) {
   const now = Timestamp.now();
@@ -486,6 +507,165 @@ export async function getStudentProfileData(): Promise<{
         : undefined,
     },
   };
+}
+
+export async function updateStudentProfile(input: {
+  name: string;
+  bio: string;
+  school: string;
+  grade: string;
+  interests: string[];
+}): Promise<User | null> {
+  const data = await fetchInternalJson<{ user: SerializedUser | null }>("/api/student/profile", {
+    method: "PATCH",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(input),
+  });
+
+  return data.user
+    ? {
+        ...data.user,
+        createdAt: fromIsoTimestamp(data.user.createdAt)!,
+        updatedAt: fromIsoTimestamp(data.user.updatedAt)!,
+      }
+    : null;
+}
+
+export async function joinProjectAsStudent(projectId: string): Promise<string> {
+  const data = await fetchInternalJson<{ participationId: string }>(
+    `/api/student/projects/${projectId}/join`,
+    {
+      method: "POST",
+    },
+  );
+
+  return data.participationId;
+}
+
+export async function saveStudentTaskChatHistory(
+  participationId: string,
+  subtaskId: string,
+  messages: ChatMessage[],
+): Promise<Record<string, ChatMessage[]>> {
+  const data = await postStudentParticipationAction<{ chatHistory: Record<string, ChatMessage[]> }>(
+    participationId,
+    {
+      action: "save-chat-history",
+      subtaskId,
+      messages,
+    },
+  );
+
+  return data.chatHistory;
+}
+
+export async function clearStudentTaskChatHistory(
+  participationId: string,
+  subtaskId: string,
+): Promise<Record<string, ChatMessage[]>> {
+  const data = await postStudentParticipationAction<{ chatHistory: Record<string, ChatMessage[]> }>(
+    participationId,
+    {
+      action: "clear-chat-history",
+      subtaskId,
+    },
+  );
+
+  return data.chatHistory;
+}
+
+export async function saveStudentGitHubRepo(
+  participationId: string,
+  subtaskId: string,
+  repoUrl: string,
+): Promise<{
+  completedSubtasks: string[];
+  progress: number;
+  studentGitHubRepo: string;
+}> {
+  return postStudentParticipationAction(participationId, {
+    action: "save-github-repo",
+    subtaskId,
+    repoUrl,
+  });
+}
+
+export async function saveStudentPromptHistoryEntry(
+  participationId: string,
+  subtaskId: string,
+  promptContent: string,
+  qualityData: {
+    qualityScore: number;
+    goalScore?: number;
+    contextScore?: number;
+    expectationsScore?: number;
+    sourceScore?: number;
+    isGoodPrompt?: boolean;
+  },
+  feedback?: {
+    feedback?: string;
+  } | null,
+): Promise<{
+  entry: PromptHistoryEntry;
+  newHistory: PromptHistoryEntry[];
+  historyUpdate: NonNullable<Participation["promptHistory"]>;
+}> {
+  return postStudentParticipationAction(participationId, {
+    action: "save-prompt-history",
+    subtaskId,
+    promptContent,
+    qualityData,
+    feedback: feedback ?? null,
+  });
+}
+
+export async function saveStudentEvaluationHistoryEntry(
+  participationId: string,
+  subtaskId: string,
+  result: Omit<EvaluationHistoryEntry, "timestamp">,
+): Promise<{
+  entry: EvaluationHistoryEntry;
+  newHistory: EvaluationHistoryEntry[];
+  historyUpdate: NonNullable<Participation["evaluationHistory"]>;
+}> {
+  return postStudentParticipationAction(participationId, {
+    action: "save-evaluation-history",
+    subtaskId,
+    result,
+  });
+}
+
+export async function completeStudentSubtaskWithEvaluation(
+  participationId: string,
+  subtaskId: string,
+  result: Omit<EvaluationHistoryEntry, "timestamp">,
+): Promise<{
+  completedSubtasks: string[];
+  progress: number;
+  newHistory: EvaluationHistoryEntry[];
+  historyUpdate: NonNullable<Participation["evaluationHistory"]>;
+}> {
+  return postStudentParticipationAction(participationId, {
+    action: "complete-subtask",
+    subtaskId,
+    result,
+  });
+}
+
+export async function submitStudentProject(
+  participationId: string,
+  content: string,
+): Promise<{
+  submissionId: string;
+  completedAt: Timestamp;
+  status: "completed";
+}> {
+  return postStudentParticipationAction(participationId, {
+    action: "submit-project",
+    content,
+  });
 }
 
 export async function getTeacherDashboard(teacherId: string): Promise<TeacherDashboard> {

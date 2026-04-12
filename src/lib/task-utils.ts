@@ -1,5 +1,8 @@
 import { Participation, Project, Subtask, ChatMessage } from '@/lib/types';
-import { updateParticipation } from '@/lib/firestore';
+import {
+  saveStudentGitHubRepo,
+  saveStudentTaskChatHistory,
+} from '@/lib/firestore';
 
 // Save GitHub repository URL
 export const saveGitHubRepoURL = async (
@@ -9,22 +12,13 @@ export const saveGitHubRepoURL = async (
   completedSubtasks: string[],
   totalSubtasksCount: number
 ) => {
-  // Only add if not already completed
-  if (!completedSubtasks.includes(subtaskId)) {
-    completedSubtasks.push(subtaskId);
-  }
-  
-  const newProgress = Math.round((completedSubtasks.length / totalSubtasksCount) * 100);
-  
-  await updateParticipation(participationId, {
-    studentGitHubRepo: githubRepoUrl,
-    completedSubtasks,
-    progress: newProgress
-  });
-  
+  void completedSubtasks;
+  void totalSubtasksCount;
+  const result = await saveStudentGitHubRepo(participationId, subtaskId, githubRepoUrl);
+
   return {
-    completedSubtasks,
-    progress: newProgress,
+    completedSubtasks: result.completedSubtasks,
+    progress: result.progress,
     studentGitHubRepo: githubRepoUrl
   };
 };
@@ -37,15 +31,13 @@ export const saveTaskChatHistory = async (
   newMessages: ChatMessage[]
 ) => {
   try {
-    const updatedChatHistory = {
-      ...(currentChatHistory || {}),
-      [subtaskId]: newMessages
-    };
-    
-    await updateParticipation(participationId, {
-      chatHistory: updatedChatHistory
-    });
-    
+    void currentChatHistory;
+    const updatedChatHistory = await saveStudentTaskChatHistory(
+      participationId,
+      subtaskId,
+      newMessages,
+    );
+
     return updatedChatHistory;
   } catch (error) {
     console.error('Error saving chat history:', error);

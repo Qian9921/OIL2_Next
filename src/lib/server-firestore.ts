@@ -9,14 +9,23 @@ import {
   buildNGODashboardData,
   sortSubmissionsNewestFirst,
 } from "@/lib/ngo-review-utils";
+import { buildParticipationWriteData } from "@/lib/participation-payload";
 import { buildUserRoleAnalytics } from "@/lib/role-analytics";
 import { buildStudentProjectCatalogData } from "@/lib/student-project-catalog";
 import { buildStudentTaskContext } from "@/lib/student-task-context";
+import {
+  buildClearedChatHistory,
+  buildCompletedSubtaskUpdate,
+  buildStudentProfileUpdate,
+  getProjectJoinBlockReason,
+  mergeParticipationHistoryEntry,
+} from "@/lib/student-write-utils";
 import {
   buildSubmissionUpdateData,
   selectLatestApprovedSubmission,
 } from "@/lib/submission-review-utils";
 import {
+  ChatMessage,
   Certificate,
   NGODashboard,
   Participation,
@@ -29,6 +38,8 @@ import {
 
 type FirestoreDoc<T> = T & { id: string };
 type PromptEvaluationRecord = NonNullable<Participation["promptEvaluations"]>[string][number];
+type PromptHistoryRecord = NonNullable<Participation["promptHistory"]>[string][number];
+type EvaluationHistoryRecord = NonNullable<Participation["evaluationHistory"]>[string][number];
 
 function toDoc<T>(id: string, data: FirebaseFirestore.DocumentData) {
   return { id, ...data } as FirestoreDoc<T>;
@@ -173,6 +184,136 @@ export async function getParticipationByProjectAndStudentAdmin(
 
   const doc = snapshot.docs[0];
   return toDoc<Participation>(doc.id, doc.data());
+}
+
+async function getOwnedStudentParticipationContext(
+  studentId: string,
+  participationId: string,
+) {
+  const participation = await getParticipationAdmin(participationId);
+  if (!participation) {
+    throw new Error("Participation not found");
+  }
+
+  if (participation.studentId !== studentId) {
+    throw new Error("Forbidden");
+  }
+
+  const project = await getProjectAdmin(participation.projectId);
+  if (!project) {
+    throw new Error("Project not found");
+  }
+
+  return { participation, project };
+}
+
+function assertProjectHasSubtask(project: Project, subtaskId: string) {
+  const hasSubtask = project.subtasks.some((subtask) => subtask.id === subtaskId);
+  if (!hasSubtask) {
+    throw new Error("Subtask not found");
+  }
+}
+
+export async function joinProjectAsStudentAdmin(studentId: string, projectId: string) {
+  const projectRef = adminDb.collection("projects").doc(projectId);
+  const studentRef = adminDb.collection("users").doc(studentId);
+  const participationRef = adminDb.collection("participations").doc();
+
+  return adminDb.runTransaction(async (transaction) => {
+    const [projectSnapshot, studentSnapshot, existingParticipationSnapshot] = await Promise.all([
+      transaction.get(projectRef),
+      transaction.get(studentRef),
+      transaction.get(
+        adminDb
+          .collection("participations")
+          .where("projectId", "==", projectId)
+          .where("studentId", "==", studentId)
+          .limit(1),
+      ),
+    ]);
+
+    if (!projectSnapshot.exists) {
+      throw new Error("Project not found");
+    }
+
+    if (!studentSnapshot.exists) {
+      throw new Error("User not found");
+    }
+
+    const project = toDoc<Project>(projectSnapshot.id, projectSnapshot.data()!);
+    const student = toDoc<User>(studentSnapshot.id, studentSnapshot.data()!);
+    const blockReason = getProjectJoinBlockReason({
+      project,
+      existingParticipationId: existingParticipationSnapshot.empty
+        ? null
+        : existingParticipationSnapshot.docs[0]?.id ?? null,
+    });
+
+    if (blockReason === "already_joined") {
+      throw new Error("Project already joined");
+    }
+
+    if (blockReason === "project_full") {
+      throw new Error("Project is full");
+    }
+
+    if (blockReason === "expired") {
+      throw new Error("Project has expired");
+    }
+
+    if (blockReason === "not_joinable") {
+      throw new Error("Project is not joinable");
+    }
+
+    const now = AdminTimestamp.now();
+    transaction.set(
+      participationRef,
+      buildParticipationWriteData(
+        {
+          projectId: project.id,
+          studentId,
+          studentName: student.name,
+          status: "active",
+          progress: 0,
+          completedSubtasks: [],
+        },
+        {
+          classId: student.classId,
+          now,
+        },
+      ),
+    );
+    transaction.update(projectRef, {
+      currentParticipants: AdminFieldValue.increment(1),
+      updatedAt: now,
+    });
+
+    return participationRef.id;
+  });
+}
+
+export async function updateStudentProfileAdmin(
+  studentId: string,
+  input: {
+    name: string;
+    bio: string;
+    school: string;
+    grade: string;
+    interests: string[];
+  },
+) {
+  const user = await getUserAdmin(studentId);
+  if (!user) {
+    throw new Error("User not found");
+  }
+
+  const updateData = buildStudentProfileUpdate(user, input);
+  await adminDb.collection("users").doc(studentId).update({
+    ...updateData,
+    updatedAt: AdminTimestamp.now(),
+  });
+
+  return getUserAdmin(studentId);
 }
 
 export async function getSubmissionsAdmin(filters?: {
@@ -800,6 +941,264 @@ export async function getStudentTaskViewAdmin(input: {
     project,
     participation,
     ...context,
+  };
+}
+
+export async function saveStudentTaskChatHistoryAdmin(input: {
+  studentId: string;
+  participationId: string;
+  subtaskId: string;
+  messages: ChatMessage[];
+}) {
+  const { participation, project } = await getOwnedStudentParticipationContext(
+    input.studentId,
+    input.participationId,
+  );
+  assertProjectHasSubtask(project, input.subtaskId);
+
+  const chatHistory = {
+    ...(participation.chatHistory ?? {}),
+    [input.subtaskId]: input.messages,
+  };
+
+  await adminDb.collection("participations").doc(participation.id).update({
+    chatHistory,
+    updatedAt: AdminTimestamp.now(),
+  });
+
+  return chatHistory;
+}
+
+export async function clearStudentTaskChatHistoryAdmin(input: {
+  studentId: string;
+  participationId: string;
+  subtaskId: string;
+}) {
+  const { participation, project } = await getOwnedStudentParticipationContext(
+    input.studentId,
+    input.participationId,
+  );
+  assertProjectHasSubtask(project, input.subtaskId);
+
+  const chatHistory = buildClearedChatHistory(participation.chatHistory, input.subtaskId);
+  await adminDb.collection("participations").doc(participation.id).update({
+    chatHistory,
+    updatedAt: AdminTimestamp.now(),
+  });
+
+  return chatHistory;
+}
+
+export async function saveStudentGitHubRepoAdmin(input: {
+  studentId: string;
+  participationId: string;
+  subtaskId: string;
+  repoUrl: string;
+}) {
+  const { participation, project } = await getOwnedStudentParticipationContext(
+    input.studentId,
+    input.participationId,
+  );
+  assertProjectHasSubtask(project, input.subtaskId);
+
+  const nextState = buildCompletedSubtaskUpdate({
+    completedSubtasks: participation.completedSubtasks,
+    subtaskId: input.subtaskId,
+    totalSubtasks: project.subtasks.length,
+  });
+
+  await adminDb.collection("participations").doc(participation.id).update({
+    studentGitHubRepo: input.repoUrl,
+    completedSubtasks: nextState.completedSubtasks,
+    progress: nextState.progress,
+    updatedAt: AdminTimestamp.now(),
+  });
+
+  return {
+    ...nextState,
+    studentGitHubRepo: input.repoUrl,
+  };
+}
+
+export async function saveStudentPromptHistoryAdmin(input: {
+  studentId: string;
+  participationId: string;
+  subtaskId: string;
+  promptContent: string;
+  qualityData: {
+    qualityScore: number;
+    goalScore?: number;
+    contextScore?: number;
+    expectationsScore?: number;
+    sourceScore?: number;
+    isGoodPrompt?: boolean;
+  };
+  feedback?: {
+    feedback?: string;
+  } | null;
+}) {
+  const { participation, project } = await getOwnedStudentParticipationContext(
+    input.studentId,
+    input.participationId,
+  );
+  assertProjectHasSubtask(project, input.subtaskId);
+
+  const promptEntry = {
+    timestamp: AdminTimestamp.now(),
+    content: input.promptContent,
+    qualityScore: input.qualityData.qualityScore,
+    goalScore: input.qualityData.goalScore,
+    contextScore: input.qualityData.contextScore,
+    expectationsScore: input.qualityData.expectationsScore,
+    sourceScore: input.qualityData.sourceScore,
+    isGoodPrompt: input.qualityData.isGoodPrompt,
+    feedback: input.feedback ?? null,
+  } as unknown as PromptHistoryRecord;
+
+  const { newHistory, historyUpdate } = mergeParticipationHistoryEntry(
+    participation.promptHistory,
+    input.subtaskId,
+    promptEntry,
+  );
+
+  await adminDb.collection("participations").doc(participation.id).update({
+    promptHistory: historyUpdate,
+    updatedAt: AdminTimestamp.now(),
+  });
+
+  return {
+    entry: promptEntry,
+    newHistory,
+    historyUpdate,
+  };
+}
+
+export async function saveStudentEvaluationHistoryAdmin(input: {
+  studentId: string;
+  participationId: string;
+  subtaskId: string;
+  result: Omit<
+    NonNullable<Participation["evaluationHistory"]>[string][number],
+    "timestamp"
+  >;
+}) {
+  const { participation, project } = await getOwnedStudentParticipationContext(
+    input.studentId,
+    input.participationId,
+  );
+  assertProjectHasSubtask(project, input.subtaskId);
+
+  const evaluationEntry = {
+    ...input.result,
+    timestamp: AdminTimestamp.now(),
+  } as unknown as EvaluationHistoryRecord;
+
+  const { newHistory, historyUpdate } = mergeParticipationHistoryEntry(
+    participation.evaluationHistory,
+    input.subtaskId,
+    evaluationEntry,
+  );
+
+  await adminDb.collection("participations").doc(participation.id).update({
+    evaluationHistory: historyUpdate,
+    updatedAt: AdminTimestamp.now(),
+  });
+
+  return {
+    entry: evaluationEntry,
+    newHistory,
+    historyUpdate,
+  };
+}
+
+export async function completeStudentSubtaskAdmin(input: {
+  studentId: string;
+  participationId: string;
+  subtaskId: string;
+  result: Omit<
+    NonNullable<Participation["evaluationHistory"]>[string][number],
+    "timestamp"
+  >;
+}) {
+  const { participation, project } = await getOwnedStudentParticipationContext(
+    input.studentId,
+    input.participationId,
+  );
+  assertProjectHasSubtask(project, input.subtaskId);
+
+  if (typeof input.result.score !== "number" || input.result.score < 80) {
+    throw new Error("Task evaluation score is below the completion threshold");
+  }
+
+  const evaluationEntry = {
+    ...input.result,
+    timestamp: AdminTimestamp.now(),
+  } as unknown as EvaluationHistoryRecord;
+  const { newHistory, historyUpdate } = mergeParticipationHistoryEntry(
+    participation.evaluationHistory,
+    input.subtaskId,
+    evaluationEntry,
+  );
+  const nextState = buildCompletedSubtaskUpdate({
+    completedSubtasks: participation.completedSubtasks,
+    subtaskId: input.subtaskId,
+    totalSubtasks: project.subtasks.length,
+  });
+
+  await adminDb.collection("participations").doc(participation.id).update({
+    completedSubtasks: nextState.completedSubtasks,
+    progress: nextState.progress,
+    evaluationHistory: historyUpdate,
+    updatedAt: AdminTimestamp.now(),
+  });
+
+  return {
+    ...nextState,
+    newHistory,
+    historyUpdate,
+  };
+}
+
+export async function submitStudentProjectForReviewAdmin(input: {
+  studentId: string;
+  participationId: string;
+  content: string;
+}) {
+  const { participation, project } = await getOwnedStudentParticipationContext(
+    input.studentId,
+    input.participationId,
+  );
+  const user = await getUserAdmin(input.studentId);
+  if (!user) {
+    throw new Error("User not found");
+  }
+
+  const submissionRef = adminDb.collection("submissions").doc();
+  const participationRef = adminDb.collection("participations").doc(participation.id);
+  const now = AdminTimestamp.now();
+
+  await adminDb.runTransaction(async (transaction) => {
+    transaction.set(submissionRef, {
+      participationId: participation.id,
+      projectId: project.id,
+      studentId: participation.studentId,
+      studentName: participation.studentName ?? user.name,
+      content: input.content,
+      status: "pending",
+      submittedAt: now,
+    });
+
+    transaction.update(participationRef, {
+      status: "completed",
+      completedAt: now,
+      updatedAt: now,
+    });
+  });
+
+  return {
+    submissionId: submissionRef.id,
+    completedAt: now,
+    status: "completed" as const,
   };
 }
 

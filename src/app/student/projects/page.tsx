@@ -7,8 +7,8 @@ import { MainLayout } from "@/components/layout/main-layout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {
-  createParticipation,
   getStudentProjectsCatalog,
+  joinProjectAsStudent,
   StudentProjectParticipationSummary,
 } from "@/lib/firestore";
 import { Project } from "@/lib/types";
@@ -122,14 +122,7 @@ export default function StudentProjectsPage() {
     setJoiningProject(projectToJoin.id);
     
     try {
-      await createParticipation({
-        projectId: projectToJoin.id,
-        studentId: session.user.id,
-        studentName: session.user.name,
-        status: 'active',
-        progress: 0,
-        completedSubtasks: []
-      });
+      await joinProjectAsStudent(projectToJoin.id);
 
       toast({
         title: "Project Joined",

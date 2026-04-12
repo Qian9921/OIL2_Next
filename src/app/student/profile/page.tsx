@@ -9,7 +9,7 @@ import { Avatar } from "@/components/ui/avatar";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import {
   getStudentProfileData,
-  updateUser,
+  updateStudentProfile,
   uploadProfilePicture,
   deleteUserAccount,
 } from "@/lib/firestore";
@@ -89,14 +89,12 @@ export default function StudentProfilePage() {
     if (!user) return;
     
     try {
-      await updateUser(user.id, {
+      await updateStudentProfile({
         name: editForm.name,
-        profile: {
-          bio: editForm.bio,
-          school: editForm.school,
-          grade: editForm.grade,
-          interests: editForm.interests
-        }
+        bio: editForm.bio,
+        school: editForm.school,
+        grade: editForm.grade,
+        interests: editForm.interests,
       });
       
       // Update session

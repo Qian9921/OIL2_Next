@@ -2,13 +2,12 @@ import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import { useToast } from '@/hooks/use-toast';
-import { Timestamp } from 'firebase/firestore';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { CheckCircle, Loader2, SendHorizonal } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
 import { showSuccessToast, showErrorToast } from '@/lib/toast-utils';
-import { updateParticipation, createSubmission } from '@/lib/firestore';
+import { submitStudentProject } from '@/lib/firestore';
 import { Project, Participation } from '@/lib/types';
 
 interface SubmitProjectDialogProps {
@@ -54,21 +53,7 @@ export function SubmitProjectDialog({
     setIsSubmittingProject(true);
     
     try {
-      // Call the API to create submission
-      await createSubmission({
-        participationId: participation.id,
-        projectId: project.id,
-        studentId: participation.studentId,
-        studentName: session.user.name || 'Student',
-        content: projectSubmissionSummary.trim(),
-        status: 'pending'
-      });
-      
-      // Update participation status
-      await updateParticipation(participation.id, {
-        status: 'completed',
-        completedAt: Timestamp.now()
-      });
+      await submitStudentProject(participation.id, projectSubmissionSummary.trim());
       
       showSuccessToast(toast, "Project Submitted", {
         description: "Your project is now in review. We’ll take you to My Projects for status updates."

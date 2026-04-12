@@ -4,7 +4,10 @@ import { Github, ChevronUp, ChevronDown, CheckCircle, Lock, Circle } from 'lucid
 import { Collapsible, CollapsibleContent } from "@/components/ui/collapsible";
 import Link from 'next/link';
 import { Project, Participation, ChatMessage } from '@/lib/types';
-import { updateParticipation } from '@/lib/firestore';
+import {
+  saveStudentGitHubRepo,
+  saveStudentTaskChatHistory,
+} from '@/lib/firestore';
 import { GITHUB_SUBMISSION_SUBTASK_ID } from '@/lib/constants';
 
 /**
@@ -48,12 +51,9 @@ export const saveTaskChatHistory = async (
   currentChatHistory: { [key: string]: ChatMessage[] } | undefined,
   messages: ChatMessage[]
 ) => {
-  const chatHistory = {
-    ...(currentChatHistory || {}),
-    [subtaskId]: messages
-  };
-  
-  await updateParticipation(participationId, { chatHistory });
+  const chatHistory = await saveStudentTaskChatHistory(participationId, subtaskId, messages);
+  void currentChatHistory;
+  return chatHistory;
 };
 
 /**
@@ -192,24 +192,11 @@ export const saveGitHubRepoURL = async (
   completedSubtasks: string[] = [],
   totalSubtasks: number
 ) => {
-  // Calculate new progress
-  const newCompletedSubtasks = completedSubtasks.includes(subtaskId)
-    ? completedSubtasks
-    : [...completedSubtasks, subtaskId];
-  
-  const newProgress = Math.round((newCompletedSubtasks.length / totalSubtasks) * 100);
-  
-  // Use the properly typed update object
-  const updateData: Partial<Participation> = {
-    completedSubtasks: newCompletedSubtasks,
-    progress: newProgress,
-    studentGitHubRepo: repoUrl
-  };
-  
-  await updateParticipation(participationId, updateData);
-  
+  void completedSubtasks;
+  void totalSubtasks;
+  const result = await saveStudentGitHubRepo(participationId, subtaskId, repoUrl);
   return {
-    completedSubtasks: newCompletedSubtasks,
-    progress: newProgress
+    completedSubtasks: result.completedSubtasks,
+    progress: result.progress
   };
 };
