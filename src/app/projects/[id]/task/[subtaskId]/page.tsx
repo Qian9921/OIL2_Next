@@ -44,7 +44,7 @@ import { PromptFeedbackDisplay, PromptFeedbackMessage } from '@/components/task/
 import { DimensionScoreDisplay } from '@/components/task/score-components';
 
 // Utils and data
-import { getProject, getParticipationByProjectAndStudent, updateParticipation } from '@/lib/firestore';
+import { getStudentTaskViewData, updateParticipation } from '@/lib/firestore';
 import { Project, Subtask, Participation, ChatMessage } from '@/lib/types';
 import { showSuccessToast, showErrorToast, showStreakToast, showInfoToast, showFeedbackToast } from '@/lib/toast-utils';
 import { GITHUB_SUBMISSION_SUBTASK_ID } from '@/lib/constants';
@@ -166,34 +166,13 @@ export default function ProjectTaskPage() {
       if (!currentProjectId || !subtaskId || !session?.user) return;
       
       try {
-        const projectData = await getProject(currentProjectId);
-        if (!projectData) {
-          router.push(myProjectsHref);
-          return;
-        }
-        
+        const taskView = await getStudentTaskViewData(currentProjectId, subtaskId);
+        const projectData = taskView.project;
+        const participationData = taskView.participation;
+        const targetSubtask = taskView.subtask;
+
         setProject(projectData);
-        
-        // Find the current subtask
-        const targetSubtask = projectData.subtasks.find(st => st.id === subtaskId);
-        if (!targetSubtask) {
-        router.push(`/projects/${currentProjectId}`);
-        return;
-      }
-        
         setSubtask(targetSubtask);
-        
-        // Get the user's participation in this project
-        const participationData = await getParticipationByProjectAndStudent(
-          currentProjectId, 
-          session.user.id
-        );
-        
-        if (!participationData) {
-        router.push(myProjectsHref);
-        return;
-      }
-        
         setParticipation(participationData);
         
         // Set GitHub repo URL if available
@@ -201,28 +180,12 @@ export default function ProjectTaskPage() {
           setGithubRepoUrlInput(participationData.studentGitHubRepo);
         }
         
-        // Set completed status
-        const isCompleted = participationData.completedSubtasks?.includes(subtaskId) || false;
-        setIsSubtaskCompletedByStudent(isCompleted);
-        
-        // Check if this task is available sequentially
-        const sortedSubtasks = [...projectData.subtasks].sort((a, b) => a.order - b.order);
-        const currentTaskIndex = sortedSubtasks.findIndex(t => t.id === subtaskId);
-        
-        // Task is available sequentially if:
-        // 1. It's the first task OR
-        // 2. All previous tasks are completed
-        const isAvailableSequentially = 
-          currentTaskIndex === 0 || 
-          sortedSubtasks
-            .slice(0, currentTaskIndex)
-            .every(t => participationData.completedSubtasks?.includes(t.id));
-        
-        setIsCurrentSequentially(isAvailableSequentially);
+        setIsSubtaskCompletedByStudent(taskView.isSubtaskCompletedByStudent);
+        setIsCurrentSequentially(taskView.isCurrentSequentially);
         
         // Load chat history for this task
-        if (participationData.chatHistory && participationData.chatHistory[subtaskId]) {
-          setChatMessages(participationData.chatHistory[subtaskId]);
+        if (taskView.chatMessages?.length) {
+          setChatMessages(taskView.chatMessages);
         } else {
           // Initialize with a system message
           const systemMessage: ChatMessage = {

@@ -28,11 +28,13 @@ import {
   Project,
   Participation,
   Submission,
+  Subtask,
   UserRole,
   NGODashboard,
   StudentDashboard,
   TeacherDashboard,
   Certificate,
+  ChatMessage,
   Class,
   ClassDashboard,
   StudentWithClass
@@ -44,6 +46,7 @@ import {
   buildSubmissionUpdateData,
 } from "./submission-review-utils";
 import { buildCertificatePersistencePlan } from "./certificate-access-utils";
+import { deserializeFirestoreJson } from "./firestore-json";
 import { fromIsoTimestamp } from "./timestamp-serialization";
 
 async function fetchInternalJson<T>(path: string, init?: RequestInit): Promise<T> {
@@ -80,6 +83,21 @@ export type StudentProjectParticipationSummary = Pick<
   Participation,
   "id" | "projectId" | "status" | "progress"
 >;
+
+export interface ProjectViewerData {
+  project: Project;
+  myParticipation: Participation | null;
+  myCertificate: Certificate | null;
+}
+
+export interface StudentTaskViewData {
+  project: Project;
+  participation: Participation;
+  subtask: Subtask;
+  isCurrentSequentially: boolean;
+  isSubtaskCompletedByStudent: boolean;
+  chatMessages?: ChatMessage[];
+}
 
 // User operations
 export async function createUser(userData: Omit<User, 'id' | 'createdAt' | 'updatedAt'>) {
@@ -135,6 +153,29 @@ export async function getProject(projectId: string): Promise<Project | null> {
     return { id: projectDoc.id, ...projectDoc.data() } as Project;
   }
   return null;
+}
+
+export async function getProjectViewerData(projectId: string): Promise<ProjectViewerData | null> {
+  const data = await fetchInternalJson<ProjectViewerData | { error: string }>(
+    `/api/projects/${projectId}/viewer`,
+  );
+
+  if (!data || ("error" in data && typeof data.error === "string")) {
+    return null;
+  }
+
+  return deserializeFirestoreJson<ProjectViewerData>(data);
+}
+
+export async function getStudentTaskViewData(
+  projectId: string,
+  subtaskId: string,
+): Promise<StudentTaskViewData> {
+  const data = await fetchInternalJson<unknown>(
+    `/api/student/projects/${projectId}/task/${subtaskId}`,
+  );
+
+  return deserializeFirestoreJson<StudentTaskViewData>(data);
 }
 
 export async function getProjects(filters?: {

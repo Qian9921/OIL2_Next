@@ -11,6 +11,7 @@ import {
 } from "@/lib/ngo-review-utils";
 import { buildUserRoleAnalytics } from "@/lib/role-analytics";
 import { buildStudentProjectCatalogData } from "@/lib/student-project-catalog";
+import { buildStudentTaskContext } from "@/lib/student-task-context";
 import {
   buildSubmissionUpdateData,
   selectLatestApprovedSubmission,
@@ -722,6 +723,83 @@ export async function getStudentProfileAdmin(studentId: string) {
   return {
     user,
     dashboard,
+  };
+}
+
+export async function getProjectViewerAdmin(input: {
+  projectId: string;
+  studentId?: string;
+}) {
+  const project = await getProjectAdmin(input.projectId);
+
+  if (!project) {
+    return null;
+  }
+
+  if (!input.studentId) {
+    return {
+      project,
+      myParticipation: null,
+      myCertificate: null,
+    };
+  }
+
+  const myParticipation = await getParticipationByProjectAndStudentAdmin(
+    input.projectId,
+    input.studentId,
+  );
+
+  if (!myParticipation) {
+    return {
+      project,
+      myParticipation: null,
+      myCertificate: null,
+    };
+  }
+
+  const certificates = await getCertificatesAdmin({
+    studentId: input.studentId,
+    projectId: input.projectId,
+  });
+
+  return {
+    project,
+    myParticipation:
+      myParticipation.status === "active" || myParticipation.status === "completed"
+        ? myParticipation
+        : null,
+    myCertificate: certificates[0] ?? null,
+  };
+}
+
+export async function getStudentTaskViewAdmin(input: {
+  projectId: string;
+  subtaskId: string;
+  studentId: string;
+}) {
+  const project = await getProjectAdmin(input.projectId);
+  if (!project) {
+    return null;
+  }
+
+  const participation = await getParticipationByProjectAndStudentAdmin(
+    input.projectId,
+    input.studentId,
+  );
+  if (!participation) {
+    return null;
+  }
+
+  const context = buildStudentTaskContext({
+    project,
+    participation,
+    subtaskId: input.subtaskId,
+  });
+
+  return {
+    project,
+    participation,
+    ...context,
   };
 }
 

@@ -9,9 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Avatar } from "@/components/ui/avatar";
 import {
   createParticipation,
-  getCertificates,
-  getParticipationByProjectAndStudent,
-  getProject,
+  getProjectViewerData,
 } from "@/lib/firestore";
 import { getProjectWorkspaceRoute, isStudentWorkspaceRole } from "@/lib/role-routing";
 import { Project, Participation, Certificate } from "@/lib/types";
@@ -75,9 +73,10 @@ export default function ProjectDetailPage() {
 
   const loadProjectData = async () => {
     try {
-      // Load regular project from Firebase
-      const projectData = await getProject(params.id as string);
-      setProject(projectData);
+      const projectView = await getProjectViewerData(params.id as string);
+      setProject(projectView?.project ?? null);
+      setMyParticipation(projectView?.myParticipation ?? null);
+      setMyCertificate(projectView?.myCertificate ?? null);
 
       const participantsResponse = await fetch(`/api/projects/${params.id as string}/participants`, {
         cache: "no-store",
@@ -86,33 +85,6 @@ export default function ProjectDetailPage() {
         setParticipations((await participantsResponse.json()) as ParticipantPreview[]);
       } else {
         setParticipations([]);
-      }
-      
-      if (session?.user?.id) {
-        const userParticipation = await getParticipationByProjectAndStudent(
-          params.id as string,
-          session.user.id,
-        );
-
-        setMyParticipation(
-          userParticipation &&
-            (userParticipation.status === "active" || userParticipation.status === "completed")
-            ? userParticipation
-            : null,
-        );
-        
-        // Check if user has a certificate for this project
-        if (userParticipation) {
-          try {
-            const certificates = await getCertificates({ 
-              studentId: session.user.id,
-              projectId: params.id as string 
-            });
-            setMyCertificate(certificates.length > 0 ? certificates[0] : null);
-          } catch (error) {
-            console.error("Error loading certificate:", error);
-          }
-        }
       }
     } catch (error) {
       console.error("Error loading project data:", error);
