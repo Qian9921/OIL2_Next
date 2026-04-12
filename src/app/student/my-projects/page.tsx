@@ -161,7 +161,10 @@ function StudentMyProjectsPageContent() {
           participations.map(async (participation): Promise<LoadedProjectWithDetails | null> => {
             const [project, submissions] = await Promise.all([
               getProject(participation.projectId),
-              getSubmissions({ participationId: participation.id }),
+              getSubmissions({
+                participationId: participation.id,
+                studentId,
+              }),
             ]);
 
             if (!project) {

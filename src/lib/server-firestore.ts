@@ -1,6 +1,10 @@
-import { Timestamp as AdminTimestamp } from "firebase-admin/firestore";
+import {
+  FieldValue as AdminFieldValue,
+  Timestamp as AdminTimestamp,
+} from "firebase-admin/firestore";
 
 import { adminDb } from "@/lib/firebase-admin";
+import { buildUserAccountCleanupOperations } from "@/lib/account-cleanup-utils";
 import {
   buildNGODashboardData,
   sortSubmissionsNewestFirst,
@@ -599,4 +603,86 @@ export async function updateProjectStatusesAdmin() {
     updatedAt: now.toDate(),
     changes: statusChanges,
   };
+}
+
+export async function deleteUserAccountAdmin(userId: string) {
+  const user = await getUserAdmin(userId);
+  if (!user) {
+    throw new Error("User not found");
+  }
+
+  const now = AdminTimestamp.now();
+  const isStudent = user.role === "student";
+  const needsNgoCleanup = user.role === "ngo" || user.role === "teacher";
+  const needsTeacherReviewCleanup = user.role === "teacher";
+
+  const studentParticipations = isStudent ? await getParticipationsAdmin({ studentId: userId }) : [];
+  const submissionsByParticipation = isStudent
+    ? Object.fromEntries(
+        await Promise.all(
+          studentParticipations.map(async (participation) => [
+            participation.id,
+            await getSubmissionsAdmin({
+              participationId: participation.id,
+              studentId: userId,
+            }),
+          ]),
+        ),
+      )
+    : {};
+  const studentCertificates = isStudent ? await getCertificatesAdmin({ studentId: userId }) : [];
+  const ngoProjects = needsNgoCleanup ? await getProjectsAdmin({ ngoId: userId }) : [];
+  const allSubmissions = needsTeacherReviewCleanup ? await getSubmissionsAdmin({}) : [];
+
+  const operations = buildUserAccountCleanupOperations({
+    user,
+    now,
+    participations: studentParticipations,
+    submissionsByParticipation,
+    certificates: studentCertificates,
+    projects: ngoProjects,
+    submissions: allSubmissions,
+  });
+
+  const batch = adminDb.batch();
+
+  for (const operation of operations) {
+    switch (operation.type) {
+      case "updateProjectParticipantCount":
+        batch.update(adminDb.collection("projects").doc(operation.projectId), {
+          currentParticipants: AdminFieldValue.increment(operation.delta),
+          updatedAt: operation.updatedAt,
+        });
+        break;
+      case "archiveProject":
+        batch.update(adminDb.collection("projects").doc(operation.projectId), {
+          status: "archived",
+          updatedAt: operation.updatedAt,
+        });
+        break;
+      case "clearSubmissionReviewer":
+        batch.update(adminDb.collection("submissions").doc(operation.submissionId), {
+          reviewedBy: null,
+          updatedAt: operation.updatedAt,
+        });
+        break;
+      case "deleteProject":
+        batch.delete(adminDb.collection("projects").doc(operation.id));
+        break;
+      case "deleteParticipation":
+        batch.delete(adminDb.collection("participations").doc(operation.id));
+        break;
+      case "deleteSubmission":
+        batch.delete(adminDb.collection("submissions").doc(operation.id));
+        break;
+      case "deleteCertificate":
+        batch.delete(adminDb.collection("certificates").doc(operation.id));
+        break;
+      case "deleteUser":
+        batch.delete(adminDb.collection("users").doc(operation.id));
+        break;
+    }
+  }
+
+  await batch.commit();
 }

@@ -43,10 +43,6 @@ import {
 import {
   buildSubmissionUpdateData,
 } from "./submission-review-utils";
-import {
-  buildUserAccountCleanupOperations,
-  UserCleanupOperation,
-} from "./account-cleanup-utils";
 import { buildCertificatePersistencePlan } from "./certificate-access-utils";
 import { fromIsoTimestamp } from "./timestamp-serialization";
 
@@ -747,7 +743,10 @@ export async function getUsers(): Promise<User[]> {
 
 // Certificate operations
 export async function createCertificate(certificateData: Omit<Certificate, 'id' | 'issuedAt' | 'certificateNumber'>) {
-  const existingCertificates = await getCertificates({ participationId: certificateData.participationId });
+  const existingCertificates = await getCertificates({
+    participationId: certificateData.participationId,
+    ngoId: certificateData.ngoId,
+  });
   const latestExistingCertificate = existingCertificates[0] ?? null;
   const plan = buildCertificatePersistencePlan({
     participationId: certificateData.participationId,
@@ -865,89 +864,13 @@ export async function getCompletedProjectsForNGO(_ngoId: string) {
 
 // Add a new function to delete a user account and handle associated data
 export async function deleteUserAccount(userId: string) {
-  // Get user data first to determine role and related actions
-  const user = await getUser(userId);
-  if (!user) {
-    throw new Error('User not found');
-  }
-
-  const batch = writeBatch(db);
-  const now = Timestamp.now();
-  const isStudent = user.role === 'student';
-  const needsNgoCleanup = user.role === 'ngo' || user.role === 'teacher';
-  const needsTeacherReviewCleanup = user.role === 'teacher';
-
-  const studentParticipations = isStudent ? await getParticipations({ studentId: userId }) : [];
-  const submissionsByParticipation = isStudent
-    ? Object.fromEntries(
-        await Promise.all(
-          studentParticipations.map(async (participation) => [
-            participation.id,
-            await getSubmissions({ participationId: participation.id }),
-          ])
-        )
-      )
-    : {};
-  const studentCertificates = isStudent ? await getCertificates({ studentId: userId }) : [];
-  const ngoProjects = needsNgoCleanup ? await getProjects({ ngoId: userId }) : [];
-  const allSubmissions = needsTeacherReviewCleanup ? await getSubmissions({}) : [];
-
-  const operations = buildUserAccountCleanupOperations({
-    user,
-    now,
-    participations: studentParticipations,
-    submissionsByParticipation,
-    certificates: studentCertificates,
-    projects: ngoProjects,
-    submissions: allSubmissions,
+  await fetchInternalJson<{ success: true }>("/api/account/delete", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ userId }),
   });
-
-  for (const operation of operations) {
-    applyUserCleanupOperation(batch, operation);
-  }
-
-  await batch.commit();
-}
-
-function applyUserCleanupOperation(
-  batch: ReturnType<typeof writeBatch>,
-  operation: UserCleanupOperation,
-) {
-  switch (operation.type) {
-    case 'updateProjectParticipantCount':
-      batch.update(doc(db, 'projects', operation.projectId), {
-        currentParticipants: increment(operation.delta),
-        updatedAt: operation.updatedAt,
-      });
-      return;
-    case 'archiveProject':
-      batch.update(doc(db, 'projects', operation.projectId), {
-        status: 'archived',
-        updatedAt: operation.updatedAt,
-      });
-      return;
-    case 'clearSubmissionReviewer':
-      batch.update(doc(db, 'submissions', operation.submissionId), {
-        reviewedBy: null,
-        updatedAt: operation.updatedAt,
-      });
-      return;
-    case 'deleteProject':
-      batch.delete(doc(db, 'projects', operation.id));
-      return;
-    case 'deleteParticipation':
-      batch.delete(doc(db, 'participations', operation.id));
-      return;
-    case 'deleteSubmission':
-      batch.delete(doc(db, 'submissions', operation.id));
-      return;
-    case 'deleteCertificate':
-      batch.delete(doc(db, 'certificates', operation.id));
-      return;
-    case 'deleteUser':
-      batch.delete(doc(db, 'users', operation.id));
-      return;
-  }
 }
 
 // Add a function to upload a profile picture and update user avatar
