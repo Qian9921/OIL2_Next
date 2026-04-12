@@ -10,6 +10,7 @@ import {
   sortSubmissionsNewestFirst,
 } from "@/lib/ngo-review-utils";
 import { buildUserRoleAnalytics } from "@/lib/role-analytics";
+import { buildStudentProjectCatalogData } from "@/lib/student-project-catalog";
 import {
   buildSubmissionUpdateData,
   selectLatestApprovedSubmission,
@@ -695,6 +696,32 @@ export async function getStudentMyProjectsAdmin(studentId: string) {
   return {
     projects: projects.filter((item) => item !== null),
     certificates,
+  };
+}
+
+export async function getStudentProjectsCatalogAdmin(studentId: string) {
+  const [publishedProjects, completedProjects, participations] = await Promise.all([
+    getProjectsAdmin({ status: "published" }),
+    getProjectsAdmin({ status: "completed" }),
+    getParticipationsAdmin({ studentId }),
+  ]);
+
+  return buildStudentProjectCatalogData({
+    publishedProjects,
+    completedProjects,
+    participations,
+  });
+}
+
+export async function getStudentProfileAdmin(studentId: string) {
+  const [user, dashboard] = await Promise.all([
+    getUserAdmin(studentId),
+    getStudentDashboardAdmin(studentId),
+  ]);
+
+  return {
+    user,
+    dashboard,
   };
 }
 

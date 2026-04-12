@@ -7,7 +7,12 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Avatar } from "@/components/ui/avatar";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
-import { getUser, updateUser, getStudentDashboard, uploadProfilePicture, deleteUserAccount } from "@/lib/firestore";
+import {
+  getStudentProfileData,
+  updateUser,
+  uploadProfilePicture,
+  deleteUserAccount,
+} from "@/lib/firestore";
 import { User, StudentDashboard } from "@/lib/types";
 import { generateAvatar } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
@@ -59,10 +64,7 @@ export default function StudentProfilePage() {
 
   const loadUserData = async () => {
     try {
-      const [userData, dashboardData] = await Promise.all([
-        getUser(session!.user!.id),
-        getStudentDashboard(session!.user!.id)
-      ]);
+      const { user: userData, dashboard: dashboardData } = await getStudentProfileData();
       
       setUser(userData);
       setDashboard(dashboardData);

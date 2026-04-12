@@ -13,7 +13,7 @@ import {
   DialogTitle, 
   DialogFooter 
 } from "@/components/ui/dialog";
-import { getCertificates } from "@/lib/firestore";
+import { getStudentCertificatesData } from "@/lib/firestore";
 import { Certificate } from "@/lib/types";
 import { useToast } from "@/hooks/use-toast";
 import { 
@@ -48,7 +48,7 @@ function StudentCertificatesPageContent() {
 
   const loadCertificates = async () => {
     try {
-      const data = await getCertificates({ studentId: session!.user!.id });
+      const data = await getStudentCertificatesData();
       setCertificates(data);
     } catch (error) {
       console.error("Error loading certificates:", error);

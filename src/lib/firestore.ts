@@ -60,6 +60,27 @@ async function fetchInternalJson<T>(path: string, init?: RequestInit): Promise<T
   return data;
 }
 
+type SerializedUser = Omit<User, "createdAt" | "updatedAt"> & {
+  createdAt: string;
+  updatedAt: string;
+};
+
+type SerializedProject = Omit<Project, "createdAt" | "updatedAt" | "deadline"> & {
+  createdAt: string;
+  updatedAt: string;
+  deadline: string | null;
+};
+
+type SerializedCertificate = Omit<Certificate, "issuedAt" | "completionDate"> & {
+  issuedAt: string;
+  completionDate: string;
+};
+
+export type StudentProjectParticipationSummary = Pick<
+  Participation,
+  "id" | "projectId" | "status" | "progress"
+>;
+
 // User operations
 export async function createUser(userData: Omit<User, 'id' | 'createdAt' | 'updatedAt'>) {
   const now = Timestamp.now();
@@ -332,6 +353,97 @@ export async function getStudentDashboard(studentId: string): Promise<StudentDas
           })),
         }
       : undefined,
+  };
+}
+
+export async function getStudentProjectsCatalog(): Promise<{
+  projects: Project[];
+  participations: StudentProjectParticipationSummary[];
+  userParticipationProjectIds: string[];
+}> {
+  const data = await fetchInternalJson<{
+    projects: SerializedProject[];
+    participations: StudentProjectParticipationSummary[];
+    userParticipationProjectIds: string[];
+  }>("/api/student/projects");
+
+  return {
+    ...data,
+    projects: data.projects.map((project) => ({
+      ...project,
+      createdAt: fromIsoTimestamp(project.createdAt)!,
+      updatedAt: fromIsoTimestamp(project.updatedAt)!,
+      deadline: fromIsoTimestamp(project.deadline ?? project.updatedAt)!,
+    })),
+  };
+}
+
+export async function getStudentCertificatesData(): Promise<Certificate[]> {
+  const data = await fetchInternalJson<{
+    certificates: SerializedCertificate[];
+  }>("/api/student/certificates");
+
+  return data.certificates.map((certificate) => ({
+    ...certificate,
+    issuedAt: fromIsoTimestamp(certificate.issuedAt)!,
+    completionDate: fromIsoTimestamp(certificate.completionDate)!,
+  }));
+}
+
+export async function getStudentProfileData(): Promise<{
+  user: User | null;
+  dashboard: StudentDashboard;
+}> {
+  const data = await fetchInternalJson<{
+    user: SerializedUser | null;
+    dashboard: {
+      activeProjects: number;
+      completedProjects: number;
+      totalHours: number;
+      certificates: number;
+      recentActivity: Array<StudentDashboard["recentActivity"][number] & { timestamp: string }>;
+      upcomingDeadlines: Array<StudentDashboard["upcomingDeadlines"][number] & { dueDate: string }>;
+      promptQualityMetrics?: Omit<
+        NonNullable<StudentDashboard["promptQualityMetrics"]>,
+        "recentPrompts"
+      > & {
+        recentPrompts: Array<
+          Omit<NonNullable<StudentDashboard["promptQualityMetrics"]>["recentPrompts"][number], "timestamp"> & {
+            timestamp: string;
+          }
+        >;
+      };
+    };
+  }>("/api/student/profile");
+
+  return {
+    user: data.user
+      ? {
+          ...data.user,
+          createdAt: fromIsoTimestamp(data.user.createdAt)!,
+          updatedAt: fromIsoTimestamp(data.user.updatedAt)!,
+        }
+      : null,
+    dashboard: {
+      ...data.dashboard,
+      recentActivity: data.dashboard.recentActivity.map((activity) => ({
+        ...activity,
+        timestamp: fromIsoTimestamp(activity.timestamp)!,
+      })),
+      upcomingDeadlines: data.dashboard.upcomingDeadlines.map((deadline) => ({
+        ...deadline,
+        dueDate: fromIsoTimestamp(deadline.dueDate)!,
+      })),
+      promptQualityMetrics: data.dashboard.promptQualityMetrics
+        ? {
+            ...data.dashboard.promptQualityMetrics,
+            recentPrompts: data.dashboard.promptQualityMetrics.recentPrompts.map((prompt) => ({
+              ...prompt,
+              timestamp: new Date(prompt.timestamp),
+            })),
+          }
+        : undefined,
+    },
   };
 }
 

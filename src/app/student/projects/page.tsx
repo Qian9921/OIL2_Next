@@ -6,7 +6,11 @@ import { useRouter } from "next/navigation";
 import { MainLayout } from "@/components/layout/main-layout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { getProjects, createParticipation, getParticipations } from "@/lib/firestore";
+import {
+  createParticipation,
+  getStudentProjectsCatalog,
+  StudentProjectParticipationSummary,
+} from "@/lib/firestore";
 import { Project } from "@/lib/types";
 import { 
   BookOpen, 
@@ -20,8 +24,6 @@ import { useToast } from "@/hooks/use-toast";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { ProjectCard } from "@/components/project/project-card";
 import { LoadingState } from "@/components/ui/loading-state";
-import { Timestamp } from "firebase/firestore";
-import { Participation } from "@/lib/types";
 import { isProjectExpired } from "@/lib/utils";
 
 export default function StudentProjectsPage() {
@@ -31,7 +33,7 @@ export default function StudentProjectsPage() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [filteredProjects, setFilteredProjects] = useState<Project[]>([]);
   const [userParticipations, setUserParticipations] = useState<string[]>([]);
-  const [participationDetails, setParticipationDetails] = useState<Participation[]>([]);
+  const [participationDetails, setParticipationDetails] = useState<StudentProjectParticipationSummary[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [difficultyFilter, setDifficultyFilter] = useState("all");
@@ -50,27 +52,10 @@ export default function StudentProjectsPage() {
 
   const loadProjects = async () => {
     try {
-      // Load published projects and completed projects (which may be expired)
-      const [publishedProjects, completedProjects] = await Promise.all([
-        getProjects({ status: 'published' }),
-        getProjects({ status: 'completed' })
-      ]);
-
-      // Combine and deduplicate projects
-      const allProjects = [...publishedProjects, ...completedProjects];
-      const uniqueProjects = allProjects.filter((project, index, self) =>
-        index === self.findIndex(p => p.id === project.id)
-      );
-
-      setProjects(uniqueProjects);
-      
-      if (session?.user?.id) {
-        const participations = await getParticipations({ studentId: session.user.id });
-        
-        const projectIds = participations.map(p => p.projectId);
-        setUserParticipations(projectIds);
-        setParticipationDetails(participations);
-      }
+      const data = await getStudentProjectsCatalog();
+      setProjects(data.projects);
+      setUserParticipations(data.userParticipationProjectIds);
+      setParticipationDetails(data.participations);
     } catch (error) {
       console.error("Error loading projects:", error);
     } finally {
