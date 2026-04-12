@@ -7,8 +7,8 @@ import { MainLayout } from "@/components/layout/main-layout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Avatar } from "@/components/ui/avatar";
-import { getProject, getParticipations, updateProject } from "@/lib/firestore";
-import { Project, Participation } from "@/lib/types";
+import { getProject, updateProject } from "@/lib/firestore";
+import { Project } from "@/lib/types";
 import { generateAvatar, getStatusColor, getDifficultyColor, calculateEstimatedHours } from "@/lib/utils";
 import { LoadingState } from "@/components/ui/loading-state";
 import { 
@@ -26,29 +26,43 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 
+interface ParticipationSummary {
+  id: string;
+  studentId: string;
+  studentName: string;
+  progress: number;
+  status: "active" | "completed" | "dropped";
+}
+
 export default function NGOProjectDetailPage() {
   const params = useParams();
   const { data: session } = useSession();
   const [project, setProject] = useState<Project | null>(null);
-  const [participations, setParticipations] = useState<Participation[]>([]);
+  const [participations, setParticipations] = useState<ParticipationSummary[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isUpdating, setIsUpdating] = useState(false);
 
   useEffect(() => {
-    if (params.id) {
+    if (params.id && session?.user?.id) {
       loadProjectData();
     }
-  }, [params.id]);
+  }, [params.id, session?.user?.id]);
 
   const loadProjectData = async () => {
     try {
-      const [projectData, participationData] = await Promise.all([
+      const [projectData, participationResponse] = await Promise.all([
         getProject(params.id as string),
-        getParticipations({ projectId: params.id as string })
+        fetch(`/api/ngo/projects/${params.id as string}/participations`, {
+          cache: "no-store",
+        }),
       ]);
       
       setProject(projectData);
-      setParticipations(participationData);
+      setParticipations(
+        participationResponse.ok
+          ? ((await participationResponse.json()) as ParticipationSummary[])
+          : [],
+      );
     } catch (error) {
       console.error("Error loading project data:", error);
     } finally {

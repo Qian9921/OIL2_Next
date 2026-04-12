@@ -8,8 +8,8 @@ import {
   hasHeaderControlChars,
   normalizeRecipientIds,
 } from '@/lib/email-utils';
-import { getUsersByRole, getUser } from '@/lib/firestore';
 import { getEffectiveUserRole } from '@/lib/role-routing';
+import { getUserAdmin, getUsersByRoleAdmin } from '@/lib/server-firestore';
 
 interface EmailRequest {
   senderEmail: string;
@@ -57,14 +57,14 @@ export async function POST(request: NextRequest) {
     
     if (recipientIds.length === 0) {
       // 发送给所有学生
-      const allStudents = await getUsersByRole('student');
+      const allStudents = await getUsersByRoleAdmin('student');
       recipients = allStudents
         .map(student => student.email)
         .filter((email): email is string => typeof email === 'string' && email.length > 0);
     } else {
       // 发送给指定学生
       for (const studentId of recipientIds) {
-        const student = await getUser(studentId);
+        const student = await getUserAdmin(studentId);
         if (student && student.email) {
           recipients.push(student.email);
         }

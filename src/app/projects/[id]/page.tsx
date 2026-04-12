@@ -7,7 +7,12 @@ import { MainLayout } from "@/components/layout/main-layout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Avatar } from "@/components/ui/avatar";
-import { getProject, getParticipations, createParticipation, getCertificates } from "@/lib/firestore";
+import {
+  createParticipation,
+  getCertificates,
+  getParticipationByProjectAndStudent,
+  getProject,
+} from "@/lib/firestore";
 import { getProjectWorkspaceRoute, isStudentWorkspaceRole } from "@/lib/role-routing";
 import { Project, Participation, Certificate } from "@/lib/types";
 import { generateAvatar, getDifficultyColor, formatDeadline, isProjectExpired } from "@/lib/utils";
@@ -41,7 +46,13 @@ import {
 } from "@/components/ui/alert-dialog";
 import { LoadingState } from "@/components/ui/loading-state";
 import { FormattedText } from "@/components/ui/formatted-text";
-import { Timestamp } from "firebase/firestore";
+
+interface ParticipantPreview {
+  id: string;
+  studentId: string;
+  studentName: string;
+  progress: number;
+}
 
 export default function ProjectDetailPage() {
   const params = useParams();
@@ -49,7 +60,7 @@ export default function ProjectDetailPage() {
   const { data: session } = useSession();
   const { toast } = useToast();
   const [project, setProject] = useState<Project | null>(null);
-  const [participations, setParticipations] = useState<Participation[]>([]);
+  const [participations, setParticipations] = useState<ParticipantPreview[]>([]);
   const [myParticipation, setMyParticipation] = useState<Participation | null>(null);
   const [myCertificate, setMyCertificate] = useState<Certificate | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -66,20 +77,29 @@ export default function ProjectDetailPage() {
     try {
       // Load regular project from Firebase
       const projectData = await getProject(params.id as string);
-      
-      const participationData = await getParticipations({ projectId: params.id as string });
-      
       setProject(projectData);
-      setParticipations(participationData);
+
+      const participantsResponse = await fetch(`/api/projects/${params.id as string}/participants`, {
+        cache: "no-store",
+      });
+      if (participantsResponse.ok) {
+        setParticipations((await participantsResponse.json()) as ParticipantPreview[]);
+      } else {
+        setParticipations([]);
+      }
       
-      // Check if current user has already joined (only consider active participations)
       if (session?.user?.id) {
-        const userParticipation = participationData.find(p => 
-          p.studentId === session.user.id && 
-          (p.status === 'active' || p.status === 'completed')
+        const userParticipation = await getParticipationByProjectAndStudent(
+          params.id as string,
+          session.user.id,
         );
-        
-        setMyParticipation(userParticipation || null);
+
+        setMyParticipation(
+          userParticipation &&
+            (userParticipation.status === "active" || userParticipation.status === "completed")
+            ? userParticipation
+            : null,
+        );
         
         // Check if user has a certificate for this project
         if (userParticipation) {
@@ -577,7 +597,7 @@ export default function ProjectDetailPage() {
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-3">
-                    {participations.slice(0, 5).map((participation) => (
+                    {participations.map((participation) => (
                       <div key={participation.id} className="flex items-center space-x-3">
                         <Avatar
                           src={generateAvatar(participation.studentId)}

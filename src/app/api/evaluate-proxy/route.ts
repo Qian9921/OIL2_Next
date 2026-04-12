@@ -8,8 +8,8 @@ import {
   parseEvaluationProxyRequest,
   verifyEvaluationAccessToken,
 } from '@/lib/evaluation-proxy-utils';
-import { getParticipation, getProject } from '@/lib/firestore';
 import { getEffectiveUserRole } from '@/lib/role-routing';
+import { getParticipationAdmin, getProjectAdmin } from '@/lib/server-firestore';
 
 const EVALUATION_API_URL =
   process.env.EVALUATION_API_URL ??
@@ -182,7 +182,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
-    const participation = await getParticipation(claims.participationId);
+    const participation = await getParticipationAdmin(claims.participationId);
     if (!participation || participation.studentId !== session.user.id) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
@@ -238,7 +238,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Evaluation proxy token secret is not configured' }, { status: 500 });
     }
 
-    const participation = await getParticipation(parsedRequest.participationId);
+    const participation = await getParticipationAdmin(parsedRequest.participationId);
     if (
       !participation ||
       participation.studentId !== session.user.id ||
@@ -247,7 +247,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
-    const project = await getProject(parsedRequest.projectId);
+    const project = await getProjectAdmin(parsedRequest.projectId);
     if (!project) {
       return NextResponse.json({ error: 'Project not found' }, { status: 404 });
     }

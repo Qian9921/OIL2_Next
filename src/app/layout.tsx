@@ -3,6 +3,7 @@
 import "./globals.css";
 import { SessionProvider } from "next-auth/react";
 import { Toaster } from "@/components/ui/toaster";
+import { FirebaseAuthBridge } from "@/components/auth/firebase-auth-bridge";
 
 export default function RootLayout({
   children,
@@ -17,8 +18,10 @@ export default function RootLayout({
       </head>
       <body className="antialiased">
         <SessionProvider>
-          {children}
-          <Toaster />
+          <FirebaseAuthBridge>
+            {children}
+            <Toaster />
+          </FirebaseAuthBridge>
         </SessionProvider>
       </body>
     </html>

@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { updateProjectStatuses } from '@/lib/firestore';
+import { updateProjectStatusesAdmin } from '@/lib/server-firestore';
 
 export const runtime = 'nodejs';
 export const maxDuration = 300; // 5 minute timeout
@@ -41,7 +41,7 @@ export async function GET(request: Request) {
     }
     
     // Run the status update process
-    const result = await updateProjectStatuses();
+    const result = await updateProjectStatusesAdmin();
     
     return NextResponse.json(result);
   } catch (error) {

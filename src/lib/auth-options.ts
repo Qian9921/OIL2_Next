@@ -1,7 +1,7 @@
 import { NextAuthOptions } from 'next-auth';
 import GoogleProvider from 'next-auth/providers/google';
 
-import { getUserByEmail } from '@/lib/firestore';
+import { getUserByEmailAdmin } from '@/lib/server-firestore';
 import {
   hydrateSessionUserFromToken,
   withPendingRoleSelectionTokenFor,
@@ -22,7 +22,7 @@ export const authOptions: NextAuthOptions = {
     async signIn({ user, account }) {
       if (account?.provider === 'google') {
         try {
-          const existingUser = await getUserByEmail(user.email!);
+          const existingUser = await getUserByEmailAdmin(user.email!);
 
           if (!existingUser) {
             return true;
@@ -38,8 +38,8 @@ export const authOptions: NextAuthOptions = {
     },
 
     async jwt({ token, user, account }) {
-      if (account && user) {
-        const dbUser = await getUserByEmail(user.email!);
+        if (account && user) {
+        const dbUser = await getUserByEmailAdmin(user.email!);
 
         if (dbUser) {
           return withPersistedUserTokenFor(token, dbUser);
@@ -47,7 +47,7 @@ export const authOptions: NextAuthOptions = {
           return withPendingRoleSelectionTokenFor(token, user);
         }
       } else if (token.needsRoleSelection && token.email) {
-        const dbUser = await getUserByEmail(token.email as string);
+        const dbUser = await getUserByEmailAdmin(token.email as string);
         if (dbUser) {
           return withPersistedUserTokenFor(token, dbUser);
         }

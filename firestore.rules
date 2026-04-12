@@ -1,0 +1,106 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function appRole() {
+      return request.auth.token.app_role;
+    }
+
+    function appEmail() {
+      return request.auth.token.app_email;
+    }
+
+    function isStudent() {
+      return isSignedIn() && appRole() == 'student';
+    }
+
+    function isNgo() {
+      return isSignedIn() && appRole() == 'ngo';
+    }
+
+    function isSelf(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isMonitorAdmin() {
+      return isSignedIn() && request.auth.token.monitor_admin == true;
+    }
+
+    function isPublicProjectStatus(status) {
+      return status in ['published', 'completed', 'archived'];
+    }
+
+    function projectParticipantCountOnlyChanged() {
+      return request.resource.data.diff(resource.data).changedKeys().hasOnly(['currentParticipants', 'updatedAt']) &&
+        (
+          request.resource.data.currentParticipants == resource.data.currentParticipants + 1 ||
+          request.resource.data.currentParticipants == resource.data.currentParticipants - 1
+        );
+    }
+
+    match /users/{userId} {
+      allow get, update, delete: if isSelf(userId) || isMonitorAdmin();
+
+      allow create: if isSignedIn() &&
+        request.resource.data.email is string &&
+        request.resource.data.email == appEmail() &&
+        request.resource.data.role in ['student', 'ngo'];
+
+      allow list: if isMonitorAdmin();
+    }
+
+    match /projects/{projectId} {
+      allow get, list: if isMonitorAdmin() ||
+        isPublicProjectStatus(resource.data.status) ||
+        (isNgo() && resource.data.ngoId == request.auth.uid);
+
+      allow create: if isNgo() && request.resource.data.ngoId == request.auth.uid;
+
+      allow update: if (isNgo() && resource.data.ngoId == request.auth.uid) ||
+        (isStudent() && isPublicProjectStatus(resource.data.status) && projectParticipantCountOnlyChanged());
+
+      allow delete: if isNgo() && resource.data.ngoId == request.auth.uid;
+    }
+
+    match /participations/{participationId} {
+      allow get, list: if isMonitorAdmin() ||
+        (isSignedIn() && resource.data.studentId == request.auth.uid);
+
+      allow create: if isStudent() && request.resource.data.studentId == request.auth.uid;
+
+      allow update, delete: if isStudent() && resource.data.studentId == request.auth.uid;
+    }
+
+    match /submissions/{submissionId} {
+      allow get, list: if isMonitorAdmin() ||
+        (isSignedIn() && resource.data.studentId == request.auth.uid);
+
+      allow create, update: if isStudent() &&
+        request.resource.data.studentId == request.auth.uid;
+
+      allow delete: if isStudent() && resource.data.studentId == request.auth.uid;
+    }
+
+    match /certificates/{certificateId} {
+      allow get, list: if isMonitorAdmin() ||
+        (isSignedIn() && (
+          resource.data.studentId == request.auth.uid ||
+          resource.data.ngoId == request.auth.uid
+        ));
+
+      allow create: if isNgo() && request.resource.data.ngoId == request.auth.uid;
+    }
+
+    match /classes/{classId} {
+      allow read, write: if false;
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

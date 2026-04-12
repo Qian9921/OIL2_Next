@@ -16,14 +16,6 @@ import {
   BookOpen,
   RefreshCw
 } from 'lucide-react';
-import { 
-  getUsers, 
-  getProjects, 
-  getParticipations, 
-  getCertificates,
-  getSubmissions
-} from '@/lib/firestore';
-import { buildUserRoleAnalytics } from '@/lib/role-analytics';
 
 interface AnalyticsData {
   totalUsers: number;
@@ -54,28 +46,16 @@ export default function AnalyticsPage() {
   const loadAnalyticsData = async () => {
     try {
       setIsLoading(true);
-      
-      // 获取所有基础数据
-      const [users, projects, participations, certificates, submissions] = await Promise.all([
-        getUsers(),
-        getProjects(),
-        getParticipations(),
-        getCertificates(),
-        getSubmissions()
-      ]);
 
-      const roleAnalytics = buildUserRoleAnalytics(users);
+      const response = await fetch('/api/admin/analytics', {
+        cache: 'no-store',
+      });
 
-      const data: AnalyticsData = {
-        totalUsers: users.length,
-        totalProjects: projects.length,
-        totalParticipations: participations.length,
-        totalCertificates: certificates.length,
-        totalSubmissions: submissions.length,
-        activeUsersByRole: roleAnalytics.activeUsersByRole,
-        legacyUsersByRole: roleAnalytics.legacyUsersByRole,
-      };
+      if (!response.ok) {
+        throw new Error(`Analytics request failed: ${response.status}`);
+      }
 
+      const data = (await response.json()) as AnalyticsData;
       setAnalyticsData(data);
       setLastUpdated(new Date());
     } catch (error) {

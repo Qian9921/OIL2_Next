@@ -9,10 +9,9 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Avatar } from "@/components/ui/avatar";
 import { LoadingState } from "@/components/ui/loading-state";
 import { toast } from "@/hooks/use-toast";
-import { getUsersByRole } from "@/lib/firestore";
 import { User } from "@/lib/types";
 import { generateAvatar } from "@/lib/utils";
-import { Mail, Send, Users, CheckSquare, Square, AlertCircle, Info, FileText } from "lucide-react";
+import { Mail, Send, Users, CheckSquare, Square, Info, FileText } from "lucide-react";
 
 interface EmailDialogProps {
   trigger: React.ReactNode;
@@ -41,7 +40,15 @@ export function EmailDialog({ trigger }: EmailDialogProps) {
   const loadStudents = async () => {
     setLoadingStudents(true);
     try {
-      const allStudents = await getUsersByRole('student');
+      const response = await fetch('/api/ngo/email-recipients', {
+        cache: 'no-store',
+      });
+
+      if (!response.ok) {
+        throw new Error(`Failed to load recipients: ${response.status}`);
+      }
+
+      const allStudents = (await response.json()) as User[];
       setStudents(allStudents);
     } catch (error) {
       console.error("Failed to load student list:", error);

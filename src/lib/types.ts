@@ -88,6 +88,9 @@ export interface Participation {
       timestamp: Timestamp;
       streak: number;
       bestStreak: number;
+      feedback?: {
+        feedback?: string;
+      } | null;
     }>;
   };
   evaluationHistory?: {

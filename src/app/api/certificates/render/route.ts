@@ -7,8 +7,8 @@ import {
   canAccessStoredCertificate,
   parseCertificateRenderRequest,
 } from '@/lib/certificate-access-utils';
-import { getCertificate } from '@/lib/firestore';
 import { getEffectiveUserRole } from '@/lib/role-routing';
+import { getCertificateAdmin } from '@/lib/server-firestore';
 
 const CERTIFICATE_RENDER_API_URL =
   process.env.CERTIFICATE_RENDER_API_URL ??
@@ -39,7 +39,7 @@ export async function POST(request: Request) {
             return renderRequest.payload;
           })()
         : await (async () => {
-            const certificate = await getCertificate(renderRequest.certificateId);
+            const certificate = await getCertificateAdmin(renderRequest.certificateId);
             if (!certificate) {
               return undefined;
             }

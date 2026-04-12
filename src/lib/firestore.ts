@@ -38,12 +38,9 @@ import {
   StudentWithClass
 } from "./types";
 import {
-  buildNGODashboardData,
   buildTeacherDashboardData,
-  sortSubmissionsNewestFirst,
 } from "./ngo-review-utils";
 import {
-  buildCompletedProjectRecord,
   buildSubmissionUpdateData,
 } from "./submission-review-utils";
 import {
@@ -51,6 +48,21 @@ import {
   UserCleanupOperation,
 } from "./account-cleanup-utils";
 import { buildCertificatePersistencePlan } from "./certificate-access-utils";
+import { fromIsoTimestamp } from "./timestamp-serialization";
+
+async function fetchInternalJson<T>(path: string, init?: RequestInit): Promise<T> {
+  const response = await fetch(path, {
+    cache: "no-store",
+    ...init,
+  });
+
+  const data = (await response.json()) as T & { error?: string };
+  if (!response.ok) {
+    throw new Error(data.error || `Request failed: ${response.status}`);
+  }
+
+  return data;
+}
 
 // User operations
 export async function createUser(userData: Omit<User, 'id' | 'createdAt' | 'updatedAt'>) {
@@ -280,23 +292,8 @@ export async function handleRejectedProject(participationId: string) {
 }
 
 // Dashboard data functions
-export async function getNGODashboard(ngoId: string): Promise<NGODashboard> {
-  const projects = await getProjects({ ngoId });
-  const projectParticipations = await Promise.all(
-    projects.map((project) => getParticipations({ projectId: project.id }))
-  );
-  const allSubmissions = await getDocs(
-    query(collection(db, 'submissions'), where('status', '==', 'pending'))
-  );
-
-  return buildNGODashboardData({
-    projects,
-    participations: projectParticipations.flat(),
-    submissions: allSubmissions.docs.map((doc) => ({
-      projectId: doc.data().projectId as string,
-      status: doc.data().status as Submission["status"],
-    })),
-  });
+export async function getNGODashboard(_ngoId: string): Promise<NGODashboard> {
+  return fetchInternalJson<NGODashboard>("/api/ngo/dashboard");
 }
 
 export async function getStudentDashboard(studentId: string): Promise<StudentDashboard> {
@@ -828,38 +825,42 @@ export async function getCertificates(filters?: {
   return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Certificate));
 }
 
-export async function getCompletedProjectsForNGO(ngoId: string) {
-  // Get NGO's projects
-  const projects = await getProjects({ ngoId });
-  
-  const completedProjects = [];
-  
-  for (const project of projects) {
-    // Get participations for this project that are completed
-    const participations = await getParticipations({ projectId: project.id, status: 'completed' });
-    
-    for (const participation of participations) {
-      const [submissions, student, existingCerts] = await Promise.all([
-        getSubmissions({ participationId: participation.id, status: 'approved' }),
-        getUser(participation.studentId),
-        getCertificates({ participationId: participation.id }),
-      ]);
+export async function getCompletedProjectsForNGO(_ngoId: string) {
+  const records = await fetchInternalJson<
+    Array<{
+      participation: Participation & { completedAt?: string | null };
+      project: Project;
+      student: { id: string; name: string };
+      submission: Submission & { submittedAt: string; reviewedAt?: string | null };
+      hasCertificate: boolean;
+      certificate: (Certificate & {
+        issuedAt?: string | null;
+        completionDate?: string | null;
+      }) | null;
+    }>
+  >("/api/ngo/certificates/completed-projects");
 
-      const completedProjectRecord = buildCompletedProjectRecord({
-        participation,
-        project,
-        student,
-        submissions,
-        certificates: existingCerts,
-      });
-
-      if (completedProjectRecord) {
-        completedProjects.push(completedProjectRecord);
-      }
-    }
-  }
-  
-  return completedProjects;
+  return records.map((record) => ({
+    ...record,
+    participation: {
+      ...record.participation,
+      ...(record.participation.completedAt
+        ? { completedAt: fromIsoTimestamp(record.participation.completedAt) }
+        : {}),
+    },
+    submission: {
+      ...record.submission,
+      submittedAt: fromIsoTimestamp(record.submission.submittedAt)!,
+      reviewedAt: fromIsoTimestamp(record.submission.reviewedAt),
+    },
+    certificate: record.certificate
+      ? {
+          ...record.certificate,
+          issuedAt: fromIsoTimestamp(record.certificate.issuedAt),
+          completionDate: fromIsoTimestamp(record.certificate.completionDate),
+        }
+      : null,
+  }));
 }
 
 // Add a new function to delete a user account and handle associated data
@@ -1552,15 +1553,40 @@ export async function getSubmissionsForTeacher(teacherId: string): Promise<Submi
   return getSubmissionsForNgo(teacherId);
 } 
 
-export async function getSubmissionsForNgo(ngoId: string): Promise<Submission[]> {
-  const projects = await getProjects({ ngoId });
-  if (projects.length === 0) {
-    return [];
-  }
+export async function getSubmissionsForNgo(_ngoId: string): Promise<Submission[]> {
+  const submissions = await fetchInternalJson<
+    Array<Submission & {
+      projectTitle?: string;
+      participationProgress?: number;
+      githubRepo?: string;
+      submittedAt: string;
+      reviewedAt?: string | null;
+    }>
+  >("/api/ngo/submissions");
 
-  const projectSubmissions = await Promise.all(
-    projects.map((project) => getSubmissions({ projectId: project.id }))
+  return submissions.map((submission) => ({
+    ...submission,
+    submittedAt: fromIsoTimestamp(submission.submittedAt)!,
+    reviewedAt: fromIsoTimestamp(submission.reviewedAt),
+  }));
+}
+
+export async function reviewSubmissionForNgo(
+  submissionId: string,
+  input: {
+    status: "approved" | "rejected" | "needs_revision";
+    reviewComment?: string;
+    rating?: number;
+  },
+) {
+  return fetchInternalJson<{ success: boolean }>(
+    `/api/ngo/submissions/${submissionId}/review`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(input),
+    },
   );
-
-  return sortSubmissionsNewestFirst(projectSubmissions.flat());
 }

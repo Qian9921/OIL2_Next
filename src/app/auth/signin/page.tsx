@@ -4,9 +4,7 @@ import { useState, useEffect } from "react";
 import { signIn, useSession } from "next-auth/react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { createUser } from "@/lib/firestore";
 import { getDefaultRouteForRole, SignupRole } from "@/lib/role-routing";
-import { generateAvatar } from "@/lib/utils";
 import { Heart, GraduationCap, Building } from "lucide-react";
 import { useRouter } from "next/navigation";
 
@@ -61,14 +59,20 @@ export default function SignIn() {
     setIsLoading(true);
     setError(null);
     try {
-      await createUser({
-        name: userInfo.name,
-        email: userInfo.email,
-        role,
-        avatar: generateAvatar(userInfo.email),
+      const response = await fetch("/api/auth/complete-signup", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ role }),
       });
 
-      await new Promise(resolve => setTimeout(resolve, 1500));
+      const result = (await response.json()) as { error?: string };
+      if (!response.ok) {
+        throw new Error(result.error || "Failed to complete signup");
+      }
+
+      window.location.reload();
     } catch (error) {
       console.error("Role selection error:", error);
       setError("创建用户失败，请重试：" + error);

@@ -1,13 +1,17 @@
 import { getServerSession } from 'next-auth';
 import { NextRequest, NextResponse } from 'next/server';
 import { authOptions } from '@/lib/auth-options';
-import { getProject, getParticipationByProjectAndStudent, savePromptEvaluation } from '@/lib/firestore'; // Assuming these exist
 import {
   generateJsonContentForTask,
   generateTextContentForTask,
   getTaskModelConfig,
 } from '@/lib/vertex-ai-utils';
 import { Subtask } from '@/lib/types';
+import {
+  getParticipationByProjectAndStudentAdmin,
+  getProjectAdmin,
+  savePromptEvaluationAdmin,
+} from '@/lib/server-firestore';
 
 interface ChatRequestData {
   userId: string;
@@ -61,13 +65,13 @@ export async function POST(req: NextRequest) {
     }
 
     // 2. Verify student is enrolled in the project
-    const participation = await getParticipationByProjectAndStudent(projectId, userId);
+    const participation = await getParticipationByProjectAndStudentAdmin(projectId, userId);
     if (!participation) {
       return NextResponse.json({ message: 'User is not enrolled in this project.' }, { status: 403 });
     }
 
     // 3. Get project and subtask details for context
-    const project = await getProject(projectId);
+    const project = await getProjectAdmin(projectId);
     if (!project) {
       return NextResponse.json({ message: 'Project not found.' }, { status: 404 });
     }
@@ -234,7 +238,7 @@ export async function POST(req: NextRequest) {
               prompt: message
             };
             
-            const streakInfo: any = await savePromptEvaluation(
+            const streakInfo: any = await savePromptEvaluationAdmin(
               participation.id,
               subtaskId,
               evaluationObj,

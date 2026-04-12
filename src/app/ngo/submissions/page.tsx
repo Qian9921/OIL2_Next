@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useSession } from "next-auth/react";
-import { Timestamp } from "firebase/firestore";
 import {
   AlertCircle,
   BarChart3,
@@ -37,14 +36,11 @@ import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { LoadingState } from "@/components/ui/loading-state";
 import { useToast } from "@/hooks/use-toast";
 import {
-  getParticipation,
-  getProject,
   getSubmissionsForNgo,
-  updateParticipation,
-  updateSubmission,
+  reviewSubmissionForNgo,
 } from "@/lib/firestore";
 import { showErrorToast, showSuccessToast } from "@/lib/toast-utils";
-import { Participation, Submission } from "@/lib/types";
+import { Submission } from "@/lib/types";
 import { generateAvatar, getStatusColor } from "@/lib/utils";
 
 interface EnhancedSubmission extends Submission {
@@ -83,26 +79,7 @@ export default function NGOSubmissionsPage() {
     setIsLoading(true);
     try {
       const submissionsData = await getSubmissionsForNgo(session?.user?.id || "");
-      const enhancementPromises = submissionsData.map(async (submission) => {
-        try {
-          const [project, participation] = await Promise.all([
-            getProject(submission.projectId),
-            getParticipation(submission.participationId),
-          ]);
-
-          return {
-            ...submission,
-            projectTitle: project?.title || "Unknown Project",
-            participationProgress: participation?.progress || 0,
-            githubRepo: participation?.studentGitHubRepo,
-          } satisfies EnhancedSubmission;
-        } catch (error) {
-          console.error(`Error enhancing submission ${submission.id}:`, error);
-          return submission as EnhancedSubmission;
-        }
-      });
-
-      setSubmissions(await Promise.all(enhancementPromises));
+      setSubmissions(submissionsData as EnhancedSubmission[]);
     } catch (error) {
       console.error("Error loading NGO submissions:", error);
       showErrorToast(toast, "Load Failed", {
@@ -128,28 +105,11 @@ export default function NGOSubmissionsPage() {
     setProcessingSubmission(submissionId);
 
     try {
-      const updateData: Partial<Submission> = {
+      await reviewSubmissionForNgo(submissionId, {
         status,
         reviewComment: comment,
-        reviewedBy: session?.user?.id,
-        reviewedAt: Timestamp.now(),
-      };
-
-      if (status === "approved" && rating !== undefined) {
-        updateData.rating = rating;
-      }
-
-      await updateSubmission(submissionId, updateData);
-
-      if (status === "approved") {
-        const submission = submissions.find((item) => item.id === submissionId);
-        if (submission) {
-          await updateParticipation(submission.participationId, {
-            status: "completed",
-            completedAt: Timestamp.now(),
-          } satisfies Partial<Participation>);
-        }
-      }
+        rating,
+      });
 
       await loadSubmissions();
       showSuccessToast(toast, "Review Saved", {
