@@ -14,6 +14,7 @@ import { buildUserRoleAnalytics } from "@/lib/role-analytics";
 import { buildStudentProjectCatalogData } from "@/lib/student-project-catalog";
 import { buildStudentTaskContext } from "@/lib/student-task-context";
 import {
+  buildNgoProfileUpdate,
   buildClearedChatHistory,
   buildCompletedSubtaskUpdate,
   buildStudentProfileUpdate,
@@ -314,6 +315,55 @@ export async function updateStudentProfileAdmin(
   });
 
   return getUserAdmin(studentId);
+}
+
+export async function getNgoProfileAdmin(ngoId: string): Promise<{
+  user: User | null;
+  dashboard: NGODashboard;
+}> {
+  const [user, dashboard] = await Promise.all([
+    getUserAdmin(ngoId),
+    getNGODashboardAdmin(ngoId),
+  ]);
+
+  return {
+    user,
+    dashboard,
+  };
+}
+
+export async function updateNgoProfileAdmin(
+  ngoId: string,
+  input: {
+    name: string;
+    bio: string;
+    website: string;
+    location: string;
+    focusAreas: string[];
+    signature: string;
+  },
+) {
+  const user = await getUserAdmin(ngoId);
+  if (!user) {
+    throw new Error("User not found");
+  }
+
+  const updateData = buildNgoProfileUpdate(user, input);
+  await adminDb.collection("users").doc(ngoId).update({
+    ...updateData,
+    updatedAt: AdminTimestamp.now(),
+  });
+
+  return getUserAdmin(ngoId);
+}
+
+export async function updateCurrentUserAvatarAdmin(userId: string, avatar: string) {
+  await adminDb.collection("users").doc(userId).update({
+    avatar,
+    updatedAt: AdminTimestamp.now(),
+  });
+
+  return getUserAdmin(userId);
 }
 
 export async function getSubmissionsAdmin(filters?: {

@@ -533,6 +533,52 @@ export async function updateStudentProfile(input: {
     : null;
 }
 
+export async function getNgoProfileData(): Promise<{
+  user: User | null;
+  dashboard: NGODashboard;
+}> {
+  const data = await fetchInternalJson<{
+    user: SerializedUser | null;
+    dashboard: NGODashboard;
+  }>("/api/ngo/profile");
+
+  return {
+    user: data.user
+      ? {
+          ...data.user,
+          createdAt: fromIsoTimestamp(data.user.createdAt)!,
+          updatedAt: fromIsoTimestamp(data.user.updatedAt)!,
+        }
+      : null,
+    dashboard: data.dashboard,
+  };
+}
+
+export async function updateNgoProfile(input: {
+  name: string;
+  bio: string;
+  website: string;
+  location: string;
+  focusAreas: string[];
+  signature: string;
+}): Promise<User | null> {
+  const data = await fetchInternalJson<{ user: SerializedUser | null }>("/api/ngo/profile", {
+    method: "PATCH",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(input),
+  });
+
+  return data.user
+    ? {
+        ...data.user,
+        createdAt: fromIsoTimestamp(data.user.createdAt)!,
+        updatedAt: fromIsoTimestamp(data.user.updatedAt)!,
+      }
+    : null;
+}
+
 export async function joinProjectAsStudent(projectId: string): Promise<string> {
   const data = await fetchInternalJson<{ participationId: string }>(
     `/api/student/projects/${projectId}/join`,
@@ -946,11 +992,17 @@ export async function uploadProfilePicture(userId: string, file: File): Promise<
         // Upload completed successfully, get the download URL
         try {
           const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
+          const persisted = await fetchInternalJson<{ avatar: string }>("/api/profile/avatar", {
+            method: "PATCH",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              avatar: downloadURL,
+            }),
+          });
           
-          // Update user document with new avatar URL
-          await updateUser(userId, { avatar: downloadURL });
-          
-          resolve(downloadURL);
+          resolve(persisted.avatar);
         } catch (error) {
           reject(error);
         }

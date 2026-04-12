@@ -24,7 +24,7 @@ import {
   AlertDialogHeader, 
   AlertDialogTitle 
 } from "@/components/ui/alert-dialog";
-import { getCompletedProjectsForNGO, getUser, createCertificate } from "@/lib/firestore";
+import { createCertificate, getCompletedProjectsForNGO, getNgoProfileData } from "@/lib/firestore";
 import { generateAvatar } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { 
@@ -84,7 +84,7 @@ export default function NGOCertificatesPage() {
       setCompletedProjects(data);
       
       // Load NGO signature from profile
-      const ngoUser = await getUser(session!.user!.id);
+      const { user: ngoUser } = await getNgoProfileData();
       if (ngoUser?.profile?.signature) {
         setNgoSignature(ngoUser.profile.signature);
       }

@@ -7,7 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Avatar } from "@/components/ui/avatar";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
-import { getUser, updateUser, getNGODashboard, uploadProfilePicture, deleteUserAccount } from "@/lib/firestore";
+import { deleteUserAccount, getNgoProfileData, updateNgoProfile, uploadProfilePicture } from "@/lib/firestore";
 import { User, NGODashboard } from "@/lib/types";
 import { generateAvatar } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
@@ -61,10 +61,7 @@ export default function NGOProfilePage() {
 
   const loadUserData = async () => {
     try {
-      const [userData, dashboardData] = await Promise.all([
-        getUser(session!.user!.id),
-        getNGODashboard(session!.user!.id)
-      ]);
+      const { user: userData, dashboard: dashboardData } = await getNgoProfileData();
       
       setUser(userData);
       setDashboard(dashboardData);
@@ -90,16 +87,13 @@ export default function NGOProfilePage() {
     if (!user) return;
     
     try {
-      await updateUser(user.id, {
+      await updateNgoProfile({
         name: editForm.name,
-        profile: {
-          ...user.profile,
-          bio: editForm.bio,
-          website: editForm.website,
-          location: editForm.location,
-          focusAreas: editForm.focusAreas,
-          signature: editForm.signature
-        }
+        bio: editForm.bio,
+        website: editForm.website,
+        location: editForm.location,
+        focusAreas: editForm.focusAreas,
+        signature: editForm.signature,
       });
       
       // Update session

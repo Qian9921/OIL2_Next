@@ -55,6 +55,30 @@ export function buildStudentProfileUpdate(user: User, input: StudentProfileInput
   } satisfies Partial<User>;
 }
 
+export function buildNgoProfileUpdate(
+  user: User,
+  input: {
+    name: string;
+    bio: string;
+    website: string;
+    location: string;
+    focusAreas: string[];
+    signature: string;
+  },
+) {
+  return {
+    name: input.name,
+    profile: {
+      ...(user.profile ?? {}),
+      bio: input.bio,
+      website: input.website,
+      location: input.location,
+      focusAreas: input.focusAreas,
+      signature: input.signature,
+    },
+  } satisfies Partial<User>;
+}
+
 export function mergeParticipationHistoryEntry<T>(
   currentHistory: Record<string, T[]> | undefined,
   subtaskId: string,

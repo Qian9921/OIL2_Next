@@ -4,6 +4,7 @@ import { Timestamp } from "firebase/firestore";
 
 import type { ChatMessage, Project, User } from "./types";
 import {
+  buildNgoProfileUpdate,
   buildClearedChatHistory,
   buildCompletedSubtaskUpdate,
   buildStudentProfileUpdate,
@@ -124,6 +125,37 @@ test("buildStudentProfileUpdate merges editable fields without dropping other pr
   assert.deepEqual(update.profile?.interests, ["AI", "Design"]);
   assert.equal(update.profile?.website, "https://example.com");
   assert.equal(update.profile?.location, "Taipei");
+});
+
+test("buildNgoProfileUpdate merges editable fields without dropping unrelated profile data", () => {
+  const user = createUser({
+    role: "ngo",
+    profile: {
+      bio: "Old org bio",
+      website: "https://ngo.example.com",
+      location: "Kaohsiung",
+      focusAreas: ["Education"],
+      signature: "Director",
+      school: "Should stay untouched",
+    },
+  });
+
+  const update = buildNgoProfileUpdate(user, {
+    name: "Updated NGO",
+    bio: "New org bio",
+    website: "https://updated.example.com",
+    location: "Tainan",
+    focusAreas: ["Health", "Youth"],
+    signature: "New Director",
+  });
+
+  assert.equal(update.name, "Updated NGO");
+  assert.equal(update.profile?.bio, "New org bio");
+  assert.equal(update.profile?.website, "https://updated.example.com");
+  assert.equal(update.profile?.location, "Tainan");
+  assert.deepEqual(update.profile?.focusAreas, ["Health", "Youth"]);
+  assert.equal(update.profile?.signature, "New Director");
+  assert.equal(update.profile?.school, "Should stay untouched");
 });
 
 test("mergeParticipationHistoryEntry appends a subtask-scoped entry and preserves other keys", () => {
