@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
 import { MainLayout } from "@/components/layout/main-layout";
+import { EmailDialog } from "@/components/teacher/email-dialog";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Avatar } from "@/components/ui/avatar";
@@ -36,6 +37,7 @@ import {
   FileText,
   AlertTriangle,
   Loader2,
+  Mail,
   Eye,
   Send
 } from "lucide-react";
@@ -374,6 +376,14 @@ export default function NGOCertificatesPage() {
               Award and manage certificates for students who completed your projects 🏆
             </p>
           </div>
+          <EmailDialog
+            trigger={
+              <Button variant="outline">
+                <Mail className="w-4 h-4 mr-2" />
+                Send Email
+              </Button>
+            }
+          />
         </div>
 
         {/* Signature Warning */}

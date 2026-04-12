@@ -7,6 +7,7 @@ import { getEffectiveUserRole } from "@/lib/role-routing";
 import {
   clearStudentTaskChatHistoryAdmin,
   completeStudentSubtaskAdmin,
+  leaveStudentProjectAdmin,
   saveStudentEvaluationHistoryAdmin,
   saveStudentGitHubRepoAdmin,
   saveStudentPromptHistoryAdmin,
@@ -22,7 +23,9 @@ type StudentParticipationAction =
   | "save-prompt-history"
   | "save-evaluation-history"
   | "complete-subtask"
-  | "submit-project";
+  | "submit-project"
+  | "leave-project"
+  | "accept-rejected-exit";
 
 function isObject(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
@@ -210,6 +213,17 @@ export async function POST(
           studentId: session.user.id,
           participationId,
           content: body.content.trim(),
+        });
+
+        return NextResponse.json(serializeFirestoreJson(result));
+      }
+
+      case "leave-project":
+      case "accept-rejected-exit": {
+        const result = await leaveStudentProjectAdmin({
+          studentId: session.user.id,
+          participationId,
+          mode: action === "accept-rejected-exit" ? "rejected_exit" : "leave",
         });
 
         return NextResponse.json(serializeFirestoreJson(result));

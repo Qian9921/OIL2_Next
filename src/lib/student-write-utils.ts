@@ -14,6 +14,13 @@ type JoinBlockReason =
   | "not_joinable"
   | "expired";
 
+export type StudentParticipationExitMode = "leave" | "rejected_exit";
+
+export type StudentParticipationExitOperation =
+  | { type: "delete-participation"; participationId: string }
+  | { type: "decrement-project-participants"; projectId: string }
+  | { type: "delete-submission"; submissionId: string };
+
 export function getProjectJoinBlockReason(input: {
   project: Project;
   existingParticipationId: string | null;
@@ -117,4 +124,33 @@ export function buildClearedChatHistory(
   const nextHistory = { ...(chatHistory ?? {}) };
   delete nextHistory[subtaskId];
   return nextHistory;
+}
+
+export function buildStudentParticipationExitOperations(input: {
+  participationId: string;
+  projectId: string;
+  submissionIds: string[];
+  mode: StudentParticipationExitMode;
+}) {
+  const operations: StudentParticipationExitOperation[] = [
+    {
+      type: "delete-participation",
+      participationId: input.participationId,
+    },
+    {
+      type: "decrement-project-participants",
+      projectId: input.projectId,
+    },
+  ];
+
+  if (input.mode === "rejected_exit") {
+    operations.push(
+      ...input.submissionIds.map((submissionId) => ({
+        type: "delete-submission" as const,
+        submissionId,
+      })),
+    );
+  }
+
+  return operations;
 }

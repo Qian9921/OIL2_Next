@@ -5,15 +5,19 @@ import {
 
 import { adminDb } from "@/lib/firebase-admin";
 import { buildUserAccountCleanupOperations } from "@/lib/account-cleanup-utils";
+import { buildCertificatePersistencePlan } from "@/lib/certificate-access-utils";
+import { generateCertificateNumber } from "@/lib/identifier-utils";
 import {
   buildNGODashboardData,
   sortSubmissionsNewestFirst,
 } from "@/lib/ngo-review-utils";
+import { assertProjectStatusTransition } from "@/lib/project-write-utils";
 import { buildParticipationWriteData } from "@/lib/participation-payload";
 import { buildUserRoleAnalytics } from "@/lib/role-analytics";
 import { buildStudentProjectCatalogData } from "@/lib/student-project-catalog";
 import { buildStudentTaskContext } from "@/lib/student-task-context";
 import {
+  buildStudentParticipationExitOperations,
   buildNgoProfileUpdate,
   buildClearedChatHistory,
   buildCompletedSubtaskUpdate,
@@ -48,6 +52,20 @@ function toDoc<T>(id: string, data: FirebaseFirestore.DocumentData) {
 
 function normalizeEmail(email: string) {
   return email.trim().toLowerCase();
+}
+
+function toAdminTimestamp(
+  value: { toDate(): Date } | Date | null | undefined,
+) {
+  if (!value) {
+    return undefined;
+  }
+
+  if (value instanceof Date) {
+    return AdminTimestamp.fromDate(value);
+  }
+
+  return AdminTimestamp.fromDate(value.toDate());
 }
 
 export async function createUserAdmin(
@@ -131,6 +149,88 @@ export async function getProjectsAdmin(filters?: {
 
   const snapshot = await query.get();
   return snapshot.docs.map((doc) => toDoc<Project>(doc.id, doc.data()));
+}
+
+export async function createNgoProjectAdmin(
+  ngoId: string,
+  input: Omit<Project, "id" | "createdAt" | "updatedAt" | "currentParticipants" | "ngoId" | "ngoName">,
+) {
+  const ngo = await getUserAdmin(ngoId);
+  if (!ngo) {
+    throw new Error("User not found");
+  }
+
+  assertProjectStatusTransition({
+    oldStatus: "draft",
+    newStatus: input.status,
+    deadline: input.deadline,
+    subtaskCount: input.subtasks.length,
+  });
+
+  const now = AdminTimestamp.now();
+  const projectRef = await adminDb.collection("projects").add({
+    ...input,
+    ngoId,
+    ngoName: ngo.name,
+    deadline: toAdminTimestamp(input.deadline),
+    currentParticipants: 0,
+    createdAt: now,
+    updatedAt: now,
+  });
+
+  return projectRef.id;
+}
+
+export async function updateNgoProjectAdmin(
+  ngoId: string,
+  projectId: string,
+  input: Partial<
+    Omit<Project, "id" | "createdAt" | "updatedAt" | "currentParticipants" | "ngoId" | "ngoName">
+  >,
+) {
+  const project = await getProjectAdmin(projectId);
+  if (!project) {
+    throw new Error("Project not found");
+  }
+
+  if (project.ngoId !== ngoId) {
+    throw new Error("Forbidden");
+  }
+
+  const nextStatus = input.status ?? project.status;
+  const nextDeadline = input.deadline ?? project.deadline;
+  const nextSubtasks = input.subtasks ?? project.subtasks;
+
+  assertProjectStatusTransition({
+    oldStatus: project.status,
+    newStatus: nextStatus,
+    deadline: nextDeadline,
+    subtaskCount: nextSubtasks.length,
+  });
+
+  const updateData: Record<string, unknown> = {
+    ...input,
+    updatedAt: AdminTimestamp.now(),
+  };
+
+  if ("deadline" in input) {
+    updateData.deadline = toAdminTimestamp(input.deadline);
+  }
+
+  await adminDb.collection("projects").doc(projectId).update(updateData);
+}
+
+export async function deleteNgoProjectAdmin(ngoId: string, projectId: string) {
+  const project = await getProjectAdmin(projectId);
+  if (!project) {
+    throw new Error("Project not found");
+  }
+
+  if (project.ngoId !== ngoId) {
+    throw new Error("Forbidden");
+  }
+
+  await adminDb.collection("projects").doc(projectId).delete();
 }
 
 export async function getParticipationAdmin(
@@ -432,6 +532,77 @@ export async function getCertificatesAdmin(filters?: {
 
   const snapshot = await query.get();
   return snapshot.docs.map((doc) => toDoc<Certificate>(doc.id, doc.data()));
+}
+
+export async function issueNgoCertificateAdmin(
+  ngoId: string,
+  input: Omit<Certificate, "id" | "issuedAt" | "certificateNumber" | "ngoId">,
+) {
+  const [project, participation] = await Promise.all([
+    getProjectAdmin(input.projectId),
+    getParticipationAdmin(input.participationId),
+  ]);
+
+  if (!project) {
+    throw new Error("Project not found");
+  }
+
+  if (project.ngoId !== ngoId) {
+    throw new Error("Forbidden");
+  }
+
+  if (!participation || participation.projectId !== input.projectId) {
+    throw new Error("Participation not found");
+  }
+
+  const existingCertificates = await getCertificatesAdmin({
+    participationId: input.participationId,
+    ngoId,
+  });
+  const latestExistingCertificate = existingCertificates[0] ?? null;
+  const plan = buildCertificatePersistencePlan({
+    participationId: input.participationId,
+    generatedCertificateNumber: generateCertificateNumber(),
+    existingCertificate: latestExistingCertificate
+      ? {
+          id: latestExistingCertificate.id,
+          certificateNumber: latestExistingCertificate.certificateNumber,
+        }
+      : null,
+  });
+
+  if (!plan.shouldCreate) {
+    return {
+      id: plan.documentId,
+      certificateNumber: plan.certificateNumber,
+    };
+  }
+
+  const certificateRef = adminDb.collection("certificates").doc(plan.documentId);
+  let persistedCertificateNumber = plan.certificateNumber;
+
+  await adminDb.runTransaction(async (transaction) => {
+    const existingCertificateDoc = await transaction.get(certificateRef);
+
+    if (existingCertificateDoc.exists) {
+      const existingCertificate = existingCertificateDoc.data() as Certificate;
+      persistedCertificateNumber = existingCertificate.certificateNumber;
+      return;
+    }
+
+    transaction.set(certificateRef, {
+      ...input,
+      ngoId,
+      certificateNumber: persistedCertificateNumber,
+      completionDate: toAdminTimestamp(input.completionDate),
+      issuedAt: AdminTimestamp.now(),
+    });
+  });
+
+  return {
+    id: plan.documentId,
+    certificateNumber: persistedCertificateNumber,
+  };
 }
 
 export async function savePromptEvaluationAdmin(
@@ -1206,6 +1377,58 @@ export async function completeStudentSubtaskAdmin(input: {
     ...nextState,
     newHistory,
     historyUpdate,
+  };
+}
+
+export async function leaveStudentProjectAdmin(input: {
+  studentId: string;
+  participationId: string;
+  mode: "leave" | "rejected_exit";
+}) {
+  const { participation } = await getOwnedStudentParticipationContext(
+    input.studentId,
+    input.participationId,
+  );
+
+  const relatedSubmissions =
+    input.mode === "rejected_exit"
+      ? await getSubmissionsAdmin({
+          participationId: participation.id,
+          studentId: input.studentId,
+        })
+      : [];
+
+  const operations = buildStudentParticipationExitOperations({
+    participationId: participation.id,
+    projectId: participation.projectId,
+    submissionIds: relatedSubmissions.map((submission) => submission.id),
+    mode: input.mode,
+  });
+
+  const batch = adminDb.batch();
+
+  for (const operation of operations) {
+    switch (operation.type) {
+      case "delete-participation":
+        batch.delete(adminDb.collection("participations").doc(operation.participationId));
+        break;
+      case "decrement-project-participants":
+        batch.update(adminDb.collection("projects").doc(operation.projectId), {
+          currentParticipants: AdminFieldValue.increment(-1),
+          updatedAt: AdminTimestamp.now(),
+        });
+        break;
+      case "delete-submission":
+        batch.delete(adminDb.collection("submissions").doc(operation.submissionId));
+        break;
+    }
+  }
+
+  await batch.commit();
+
+  return {
+    success: true as const,
+    removedSubmissionCount: relatedSubmissions.length,
   };
 }
 

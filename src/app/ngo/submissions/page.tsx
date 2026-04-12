@@ -13,6 +13,7 @@ import {
   FileText,
   Filter,
   Github,
+  Mail,
   MessageSquare,
   Search,
   Star,
@@ -20,6 +21,7 @@ import {
 } from "lucide-react";
 
 import { MainLayout } from "@/components/layout/main-layout";
+import { EmailDialog } from "@/components/teacher/email-dialog";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -317,7 +319,17 @@ export default function NGOSubmissionsPage() {
             <h1 className="text-3xl font-bold text-gray-900">Submission Reviews</h1>
             <p className="text-gray-600 mt-2">Review project work, leave feedback, and close out completions.</p>
           </div>
-          <div className="text-sm text-gray-600">{sortedSubmissions.length} submissions</div>
+          <div className="flex items-center gap-3">
+            <EmailDialog
+              trigger={
+                <Button variant="outline">
+                  <Mail className="w-4 h-4 mr-2" />
+                  Send Email
+                </Button>
+              }
+            />
+            <div className="text-sm text-gray-600">{sortedSubmissions.length} submissions</div>
+          </div>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">

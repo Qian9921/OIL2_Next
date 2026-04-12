@@ -4,6 +4,7 @@ import { Timestamp } from "firebase/firestore";
 
 import type { ChatMessage, Project, User } from "./types";
 import {
+  buildStudentParticipationExitOperations,
   buildNgoProfileUpdate,
   buildClearedChatHistory,
   buildCompletedSubtaskUpdate,
@@ -211,4 +212,52 @@ test("buildClearedChatHistory removes only the selected subtask history", () => 
 
   assert.equal(result["task-1"], undefined);
   assert.deepEqual(result["task-2"], [chatMessage]);
+});
+
+test("buildStudentParticipationExitOperations keeps normal leave scoped to participation and project count", () => {
+  const result = buildStudentParticipationExitOperations({
+    participationId: "participation-1",
+    projectId: "project-1",
+    submissionIds: ["submission-1", "submission-2"],
+    mode: "leave",
+  });
+
+  assert.deepEqual(result, [
+    {
+      type: "delete-participation",
+      participationId: "participation-1",
+    },
+    {
+      type: "decrement-project-participants",
+      projectId: "project-1",
+    },
+  ]);
+});
+
+test("buildStudentParticipationExitOperations removes related submissions for rejected exits", () => {
+  const result = buildStudentParticipationExitOperations({
+    participationId: "participation-1",
+    projectId: "project-1",
+    submissionIds: ["submission-1", "submission-2"],
+    mode: "rejected_exit",
+  });
+
+  assert.deepEqual(result, [
+    {
+      type: "delete-participation",
+      participationId: "participation-1",
+    },
+    {
+      type: "decrement-project-participants",
+      projectId: "project-1",
+    },
+    {
+      type: "delete-submission",
+      submissionId: "submission-1",
+    },
+    {
+      type: "delete-submission",
+      submissionId: "submission-2",
+    },
+  ]);
 });

@@ -1,5 +1,9 @@
 import { VertexAI, HarmCategory, HarmBlockThreshold } from '@google-cloud/vertexai';
 import { GoogleAuth } from 'google-auth-library';
+import {
+  assertCloudRunVertexRuntimeConfig,
+  resolveVertexRuntimeConfig,
+} from './runtime-config';
 
 export type LLMTaskType =
   | 'chat'
@@ -27,25 +31,8 @@ interface GenerativeModelBundle {
   fallbackLocation: string | null;
 }
 
-const CONFIGURED_PROJECT_ID =
-  process.env.GOOGLE_CLOUD_PROJECT ?? process.env.GCLOUD_PROJECT ?? 'openimpactlab-v2';
-const CONFIGURED_LOCATION = process.env.GOOGLE_CLOUD_LOCATION;
-const CONFIGURED_FAST_MODEL = process.env.VERTEX_FAST_MODEL;
-const CONFIGURED_COMPLEX_MODEL = process.env.VERTEX_COMPLEX_MODEL;
-const CONFIGURED_FAST_FALLBACK_MODEL = process.env.VERTEX_FAST_FALLBACK_MODEL;
-const CONFIGURED_COMPLEX_FALLBACK_MODEL = process.env.VERTEX_COMPLEX_FALLBACK_MODEL;
-const CONFIGURED_GENERIC_MODEL = process.env.VERTEX_MODEL_NAME;
-const CONFIGURED_REGIONAL_LOCATION = process.env.VERTEX_REGIONAL_LOCATION;
-
-const MODEL_ALIASES: Record<string, string> = {
-  'gemini-3-pro-preview': 'gemini-3.1-pro-preview',
-};
-
-const DEFAULT_FAST_MODEL = 'gemini-3-flash-preview';
-const DEFAULT_COMPLEX_MODEL = 'gemini-3.1-pro-preview';
-const DEFAULT_FAST_FALLBACK_MODEL = 'gemini-2.5-flash';
-const DEFAULT_COMPLEX_FALLBACK_MODEL = 'gemini-2.5-pro';
-const DEFAULT_REGIONAL_LOCATION = 'asia-east1';
+assertCloudRunVertexRuntimeConfig(process.env);
+const VERTEX_RUNTIME_CONFIG = resolveVertexRuntimeConfig(process.env);
 
 const SAFETY_SETTINGS = [
   { category: HarmCategory.HARM_CATEGORY_HARASSMENT, threshold: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE },
@@ -54,7 +41,7 @@ const SAFETY_SETTINGS = [
   { category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT, threshold: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE },
 ];
 
-export const PROJECT_ID = CONFIGURED_PROJECT_ID;
+export const PROJECT_ID = VERTEX_RUNTIME_CONFIG.projectId;
 
 const googleAuth = new GoogleAuth({
   scopes: ['https://www.googleapis.com/auth/cloud-platform'],
@@ -135,7 +122,10 @@ export async function generateTextContentForTask(
       error,
     );
 
-    const text = await attempt(config.fallbackModel, config.fallbackLocation || DEFAULT_REGIONAL_LOCATION);
+    const text = await attempt(
+      config.fallbackModel,
+      config.fallbackLocation || VERTEX_RUNTIME_CONFIG.regionalLocation,
+    );
     return { text, usedModel: config.fallbackModel, usedFallback: true };
   }
 }
@@ -152,37 +142,32 @@ export async function generateJsonContentForTask(
   );
 }
 
-function normalizeModelName(modelName: string | undefined | null, fallback: string) {
-  const requestedModel = modelName?.trim() || fallback;
-  return MODEL_ALIASES[requestedModel] || requestedModel;
-}
-
 function resolveLocationForModel(_modelName: string) {
-  return CONFIGURED_LOCATION || CONFIGURED_REGIONAL_LOCATION || DEFAULT_REGIONAL_LOCATION;
+  return VERTEX_RUNTIME_CONFIG.location;
 }
 
 function getPrimaryModelForTask(taskType: LLMTaskType) {
-  if (CONFIGURED_GENERIC_MODEL) {
-    return normalizeModelName(CONFIGURED_GENERIC_MODEL, DEFAULT_COMPLEX_MODEL);
+  if (VERTEX_RUNTIME_CONFIG.genericModel) {
+    return VERTEX_RUNTIME_CONFIG.genericModel;
   }
 
   if (taskType === 'chat' || taskType === 'prompt-evaluation') {
-    return normalizeModelName(CONFIGURED_FAST_MODEL, DEFAULT_FAST_MODEL);
+    return VERTEX_RUNTIME_CONFIG.fastModel;
   }
 
-  return normalizeModelName(CONFIGURED_COMPLEX_MODEL, DEFAULT_COMPLEX_MODEL);
+  return VERTEX_RUNTIME_CONFIG.complexModel;
 }
 
 function getFallbackModelForTask(taskType: LLMTaskType) {
-  if (CONFIGURED_GENERIC_MODEL) {
-    return normalizeModelName(CONFIGURED_COMPLEX_FALLBACK_MODEL, DEFAULT_COMPLEX_FALLBACK_MODEL);
+  if (VERTEX_RUNTIME_CONFIG.genericModel) {
+    return VERTEX_RUNTIME_CONFIG.complexFallbackModel;
   }
 
   if (taskType === 'chat' || taskType === 'prompt-evaluation') {
-    return normalizeModelName(CONFIGURED_FAST_FALLBACK_MODEL, DEFAULT_FAST_FALLBACK_MODEL);
+    return VERTEX_RUNTIME_CONFIG.fastFallbackModel;
   }
 
-  return normalizeModelName(CONFIGURED_COMPLEX_FALLBACK_MODEL, DEFAULT_COMPLEX_FALLBACK_MODEL);
+  return VERTEX_RUNTIME_CONFIG.complexFallbackModel;
 }
 
 export function getTaskModelConfig(taskType: LLMTaskType) {
@@ -230,7 +215,7 @@ export function createGenerativeModelBundle(taskType: LLMTaskType, overrides: Ge
   const fallback = config.fallbackModel
     ? createGenerativeModelInstance(
         config.fallbackModel,
-        config.fallbackLocation || DEFAULT_REGIONAL_LOCATION,
+        config.fallbackLocation || VERTEX_RUNTIME_CONFIG.regionalLocation,
         overrides,
       )
     : null;

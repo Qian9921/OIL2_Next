@@ -3,10 +3,11 @@
 import { useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
 import { MainLayout } from "@/components/layout/main-layout";
+import { EmailDialog } from "@/components/teacher/email-dialog";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
-import { getProjects, updateProject, deleteProject, handleStatusChange as updateProjectStatus } from "@/lib/firestore";
+import { getProjects, deleteProject, handleStatusChange as updateProjectStatus } from "@/lib/firestore";
 import { Project } from "@/lib/types";
 import { getStatusColor, getDifficultyColor, formatDeadline } from "@/lib/utils";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
@@ -19,6 +20,7 @@ import {
   Edit,
   Trash2,
   Eye,
+  Mail,
   BarChart3,
   Settings,
   AlertCircle
@@ -199,12 +201,22 @@ export default function NGOProjectsPage() {
               Manage the social impact projects you create 🚀
             </p>
           </div>
-          <Link href="/ngo/projects/create">
-            <Button>
-              <Plus className="w-4 h-4 mr-2" />
-              Create New Project
-            </Button>
-          </Link>
+          <div className="flex items-center gap-3">
+            <EmailDialog
+              trigger={
+                <Button variant="outline">
+                  <Mail className="w-4 h-4 mr-2" />
+                  Send Email
+                </Button>
+              }
+            />
+            <Link href="/ngo/projects/create">
+              <Button>
+                <Plus className="w-4 h-4 mr-2" />
+                Create New Project
+              </Button>
+            </Link>
+          </div>
         </div>
 
         {/* Filter Tabs */}

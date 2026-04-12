@@ -1,168 +1,133 @@
 "use client";
 
-import React, { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { useI18n } from '@/lib/i18n';
-import { LanguageSwitcher } from '@/components/monitor/language-switcher';
-import { 
-  Settings, 
-  Globe, 
-  Monitor,
-  Bell,
-  Shield,
-  ArrowLeft,
-  Save,
-  RotateCcw,
-  Check,
+import React, { useCallback, useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import {
   AlertTriangle,
-  Clock,
-  Download
-} from 'lucide-react';
+  ArrowLeft,
+  Download,
+  RefreshCw,
+  Shield,
+  Bell,
+  Globe,
+  Server,
+} from "lucide-react";
 
-interface SystemSettings {
-  general: {
-    systemName: string;
-    defaultLanguage: string;
-    timezone: string;
-    maxUsers: number;
-  };
-  monitoring: {
-    refreshInterval: number;
-    dataRetention: number;
-    alertsEnabled: boolean;
-  };
-  notifications: {
-    emailEnabled: boolean;
-    adminEmail: string;
-    alertThreshold: number;
-  };
-  security: {
-    sessionTimeout: number;
-    passwordMinLength: number;
-    twoFactorEnabled: boolean;
-  };
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { LanguageSwitcher } from "@/components/monitor/language-switcher";
+import { LoadingState } from "@/components/ui/loading-state";
+import type { RuntimeAdminSettingsSnapshot } from "@/lib/admin-settings";
+
+type SectionCardProps = {
+  title: string;
+  description: string;
+  icon: React.ElementType;
+  rows: Array<{ label: string; value: string; status?: "ok" | "warn" }>;
+};
+
+function StatusPill({ status }: { status?: "ok" | "warn" }) {
+  if (!status) {
+    return null;
+  }
+
+  return (
+    <span
+      className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
+        status === "ok"
+          ? "bg-green-100 text-green-800"
+          : "bg-amber-100 text-amber-800"
+      }`}
+    >
+      {status === "ok" ? "Configured" : "Fallback"}
+    </span>
+  );
+}
+
+function SectionCard({ title, description, icon: Icon, rows }: SectionCardProps) {
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <Icon className="h-5 w-5 text-blue-600" />
+          <span>{title}</span>
+        </CardTitle>
+        <CardDescription>{description}</CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        {rows.map((row) => (
+          <div key={row.label} className="flex items-start justify-between gap-4 border-b pb-3 last:border-b-0 last:pb-0">
+            <span className="text-sm text-gray-600">{row.label}</span>
+            <div className="flex items-center gap-2 text-right">
+              <span className="text-sm font-medium text-gray-900 break-all">{row.value}</span>
+              <StatusPill status={row.status} />
+            </div>
+          </div>
+        ))}
+      </CardContent>
+    </Card>
+  );
 }
 
 export default function SettingsPage() {
   const router = useRouter();
-  const { t } = useI18n();
-  const [settings, setSettings] = useState<SystemSettings>({
-    general: {
-      systemName: 'OIL2 学习平台',
-      defaultLanguage: 'zh-CN',
-      timezone: 'Asia/Shanghai',
-      maxUsers: 10000
-    },
-    monitoring: {
-      refreshInterval: 30,
-      dataRetention: 365,
-      alertsEnabled: true
-    },
-    notifications: {
-      emailEnabled: true,
-      adminEmail: 'admin@oil2.org',
-      alertThreshold: 100
-    },
-    security: {
-      sessionTimeout: 3600,
-      passwordMinLength: 8,
-      twoFactorEnabled: false
+  const [settings, setSettings] = useState<RuntimeAdminSettingsSnapshot | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
+  const loadSettings = useCallback(async () => {
+    try {
+      setIsRefreshing(true);
+      const response = await fetch("/api/admin/settings", {
+        cache: "no-store",
+      });
+
+      if (!response.ok) {
+        throw new Error(`Settings request failed: ${response.status}`);
+      }
+
+      const data = (await response.json()) as RuntimeAdminSettingsSnapshot;
+      setSettings(data);
+    } catch (error) {
+      console.error("Error loading admin settings:", error);
+    } finally {
+      setIsLoading(false);
+      setIsRefreshing(false);
     }
-  });
-
-  const [hasChanges, setHasChanges] = useState(false);
-  const [isSaving, setIsSaving] = useState(false);
-  const [lastSaved, setLastSaved] = useState<Date | null>(null);
-
-  useEffect(() => {
-    loadSettings();
   }, []);
 
-  const loadSettings = async () => {
-    try {
-      const savedSettings = localStorage.getItem('adminSettings');
-      if (savedSettings) {
-        setSettings(JSON.parse(savedSettings));
-      }
-    } catch (error) {
-      console.error('Error loading settings:', error);
+  useEffect(() => {
+    void loadSettings();
+  }, [loadSettings]);
+
+  const exportSnapshot = () => {
+    if (!settings) {
+      return;
     }
-  };
 
-  const handleInputChange = (section: keyof typeof settings, field: string, value: any) => {
-    setSettings(prev => ({
-      ...prev,
-      [section]: {
-        ...prev[section] as any,
-        [field]: value
-      }
-    }));
-    setHasChanges(true);
-  };
-
-  const handleSave = async () => {
-    try {
-      setIsSaving(true);
-      localStorage.setItem('adminSettings', JSON.stringify(settings));
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      setHasChanges(false);
-      setLastSaved(new Date());
-    } catch (error) {
-      console.error('Error saving settings:', error);
-    } finally {
-      setIsSaving(false);
-    }
-  };
-
-  const handleReset = () => {
-    const defaultSettings: SystemSettings = {
-      general: {
-        systemName: 'OIL2 学习平台',
-        defaultLanguage: 'zh-CN',
-        timezone: 'Asia/Shanghai',
-        maxUsers: 10000
-      },
-      monitoring: {
-        refreshInterval: 30,
-        dataRetention: 365,
-        alertsEnabled: true
-      },
-      notifications: {
-        emailEnabled: true,
-        adminEmail: 'admin@oil2.org',
-        alertThreshold: 100
-      },
-      security: {
-        sessionTimeout: 3600,
-        passwordMinLength: 8,
-        twoFactorEnabled: false
-      }
-    };
-    
-    setSettings(defaultSettings);
-    setHasChanges(true);
-  };
-
-  const exportSettings = () => {
-    const dataStr = JSON.stringify(settings, null, 2);
-    const dataBlob = new Blob([dataStr], { type: 'application/json' });
-    const url = URL.createObjectURL(dataBlob);
-    const link = document.createElement('a');
+    const blob = new Blob([JSON.stringify(settings, null, 2)], {
+      type: "application/json",
+    });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
     link.href = url;
-    link.download = `settings-backup-${new Date().toISOString().split('T')[0]}.json`;
+    link.download = `runtime-settings-${new Date().toISOString().split("T")[0]}.json`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
   };
 
+  if (isLoading || !settings) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <LoadingState text="Loading runtime settings..." />
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* 页面头部 */}
       <div className="bg-white shadow-sm border-b">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16">
@@ -177,292 +142,192 @@ export default function SettingsPage() {
                 <span>返回</span>
               </Button>
               <div>
-                <h1 className="text-xl font-bold text-gray-900">系统设置</h1>
-                {lastSaved && (
-                  <p className="text-sm text-gray-600">
-                    最后保存: {lastSaved.toLocaleString('zh-CN')}
-                  </p>
-                )}
+                <h1 className="text-xl font-bold text-gray-900">运行配置摘要</h1>
+                <p className="text-sm text-gray-600">
+                  Updated at {new Date(settings.generatedAt).toLocaleString("zh-CN")}
+                </p>
               </div>
             </div>
-            <div className="flex items-center space-x-3">
+            <div className="flex items-center gap-3">
               <LanguageSwitcher />
               <Button
-                onClick={exportSettings}
+                onClick={() => void loadSettings()}
                 variant="outline"
-                className="flex items-center space-x-2"
+                className="flex items-center gap-2"
+                disabled={isRefreshing}
               >
+                <RefreshCw className={`h-4 w-4 ${isRefreshing ? "animate-spin" : ""}`} />
+                <span>刷新</span>
+              </Button>
+              <Button onClick={exportSnapshot} className="flex items-center gap-2">
                 <Download className="h-4 w-4" />
-                <span>导出配置</span>
-              </Button>
-              <Button
-                onClick={handleReset}
-                variant="outline"
-                className="flex items-center space-x-2"
-              >
-                <RotateCcw className="h-4 w-4" />
-                <span>重置</span>
-              </Button>
-              <Button
-                onClick={handleSave}
-                disabled={!hasChanges || isSaving}
-                className="flex items-center space-x-2"
-              >
-                {isSaving ? (
-                  <Clock className="h-4 w-4 animate-spin" />
-                ) : (
-                  <Save className="h-4 w-4" />
-                )}
-                <span>{isSaving ? '保存中...' : '保存设置'}</span>
+                <span>导出快照</span>
               </Button>
             </div>
           </div>
         </div>
       </div>
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* 状态提示 */}
-        {hasChanges && (
-          <div className="mb-6 p-4 bg-yellow-50 border border-yellow-200 rounded-lg flex items-center space-x-2">
-            <AlertTriangle className="h-5 w-5 text-yellow-600" />
-            <span className="text-yellow-800">您有未保存的更改，请记得保存设置。</span>
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
+        <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 flex items-start gap-3">
+          <AlertTriangle className="h-5 w-5 text-amber-600 mt-0.5" />
+          <div className="space-y-1">
+            <p className="font-medium text-amber-900">This page is read-only.</p>
+            <p className="text-sm text-amber-800">
+              It shows the effective server runtime configuration. Editing values here no longer pretends to change production behavior.
+            </p>
           </div>
+        </div>
+
+        {settings.notes.length > 0 && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Runtime Notes</CardTitle>
+              <CardDescription>These are configuration risks detected from the live server environment.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              {settings.notes.map((note) => (
+                <div key={note} className="rounded-md bg-gray-50 px-3 py-2 text-sm text-gray-700">
+                  {note}
+                </div>
+              ))}
+            </CardContent>
+          </Card>
         )}
 
-        {lastSaved && !hasChanges && (
-          <div className="mb-6 p-4 bg-green-50 border border-green-200 rounded-lg flex items-center space-x-2">
-            <Check className="h-5 w-5 text-green-600" />
-            <span className="text-green-800">设置已成功保存。</span>
-          </div>
-        )}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <SectionCard
+            title="General"
+            description="Core runtime identity and deployment values."
+            icon={Globe}
+            rows={[
+              { label: "System Name", value: settings.general.systemName },
+              { label: "Default Language", value: settings.general.defaultLanguage },
+              { label: "Timezone", value: settings.general.timezone },
+              {
+                label: "App URL",
+                value: settings.general.appUrlConfigured ? "Configured" : "Missing",
+                status: settings.general.appUrlConfigured ? "ok" : "warn",
+              },
+              {
+                label: "Deployment Project",
+                value: settings.general.deploymentProjectId ?? "Unavailable",
+                status: settings.general.deploymentProjectId ? "ok" : "warn",
+              },
+            ]}
+          />
 
-        {/* 设置标签页 */}
-        <Tabs defaultValue="general" className="space-y-6">
-          <TabsList className="grid w-full grid-cols-4">
-            <TabsTrigger value="general">常规设置</TabsTrigger>
-            <TabsTrigger value="monitoring">监控设置</TabsTrigger>
-            <TabsTrigger value="notifications">通知设置</TabsTrigger>
-            <TabsTrigger value="security">安全设置</TabsTrigger>
-          </TabsList>
+          <SectionCard
+            title="Monitoring"
+            description="Monitor access and session protection values."
+            icon={Server}
+            rows={[
+              {
+                label: "Monitor Access",
+                value: settings.monitoring.monitorAccessConfigured ? "Configured" : "Missing env",
+                status: settings.monitoring.monitorAccessConfigured ? "ok" : "warn",
+              },
+              {
+                label: "Session Timeout",
+                value: `${settings.monitoring.sessionTimeoutSeconds} seconds`,
+              },
+              { label: "Session Cookie", value: settings.monitoring.cookieName },
+            ]}
+          />
 
-          <TabsContent value="general" className="space-y-6">
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center space-x-2">
-                  <Globe className="h-5 w-5 text-blue-600" />
-                  <span>基本信息</span>
-                </CardTitle>
-                <CardDescription>系统的基本配置信息</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    系统名称
-                  </label>
-                  <Input
-                    value={settings.general.systemName}
-                    onChange={(e) => handleInputChange('general', 'systemName', e.target.value)}
-                    placeholder="请输入系统名称"
-                  />
-                </div>
-                
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    默认语言
-                  </label>
-                  <select
-                    value={settings.general.defaultLanguage}
-                    onChange={(e) => handleInputChange('general', 'defaultLanguage', e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  >
-                    <option value="zh-CN">中文简体</option>
-                    <option value="en">English</option>
-                  </select>
-                </div>
-                
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    时区
-                  </label>
-                  <select
-                    value={settings.general.timezone}
-                    onChange={(e) => handleInputChange('general', 'timezone', e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  >
-                    <option value="Asia/Shanghai">亚洲/上海</option>
-                    <option value="UTC">UTC</option>
-                    <option value="America/New_York">美国/纽约</option>
-                  </select>
-                </div>
-                
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    最大用户数
-                  </label>
-                  <Input
-                    type="number"
-                    value={settings.general.maxUsers}
-                    onChange={(e) => handleInputChange('general', 'maxUsers', parseInt(e.target.value))}
-                    placeholder="请输入最大用户数"
-                  />
-                </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
+          <SectionCard
+            title="Notifications"
+            description="Current email delivery mode and admin alert setup."
+            icon={Bell}
+            rows={[
+              { label: "Email Mode", value: "NGO sender credentials per request" },
+              {
+                label: "Platform SMTP",
+                value: settings.notifications.platformEmailConfigured ? "Configured" : "Not configured",
+                status: settings.notifications.platformEmailConfigured ? "ok" : "warn",
+              },
+              {
+                label: "Admin Email Env",
+                value: settings.notifications.adminEmailConfigured ? "Configured" : "Missing",
+                status: settings.notifications.adminEmailConfigured ? "ok" : "warn",
+              },
+            ]}
+          />
 
-          <TabsContent value="monitoring" className="space-y-6">
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center space-x-2">
-                  <Monitor className="h-5 w-5 text-green-600" />
-                  <span>监控配置</span>
-                </CardTitle>
-                <CardDescription>系统监控相关的设置</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    刷新间隔 (秒)
-                  </label>
-                  <Input
-                    type="number"
-                    value={settings.monitoring.refreshInterval}
-                    onChange={(e) => handleInputChange('monitoring', 'refreshInterval', parseInt(e.target.value))}
-                    placeholder="请输入刷新间隔"
-                  />
-                </div>
-                
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    数据保留期 (天)
-                  </label>
-                  <Input
-                    type="number"
-                    value={settings.monitoring.dataRetention}
-                    onChange={(e) => handleInputChange('monitoring', 'dataRetention', parseInt(e.target.value))}
-                    placeholder="请输入数据保留天数"
-                  />
-                </div>
-                
-                <div className="flex items-center space-x-2">
-                  <input
-                    type="checkbox"
-                    id="alertsEnabled"
-                    checked={settings.monitoring.alertsEnabled}
-                    onChange={(e) => handleInputChange('monitoring', 'alertsEnabled', e.target.checked)}
-                    className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                  />
-                  <label htmlFor="alertsEnabled" className="text-sm font-medium text-gray-700">
-                    启用系统警报
-                  </label>
-                </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
+          <SectionCard
+            title="Security"
+            description="Secrets and auth bridge state derived from server env."
+            icon={Shield}
+            rows={[
+              {
+                label: "NextAuth Secret",
+                value: settings.security.nextAuthSecretConfigured ? "Configured" : "Missing",
+                status: settings.security.nextAuthSecretConfigured ? "ok" : "warn",
+              },
+              {
+                label: "Monitor Session Secret",
+                value: settings.security.monitorSessionSecretConfigured ? "Configured" : "Fallback to NEXTAUTH_SECRET or missing",
+                status: settings.security.monitorSessionSecretConfigured ? "ok" : "warn",
+              },
+              {
+                label: "Firebase Auth Bridge",
+                value: settings.security.firebaseAuthBridgeEnabled ? "Available" : "Unavailable",
+                status: settings.security.firebaseAuthBridgeEnabled ? "ok" : "warn",
+              },
+            ]}
+          />
 
-          <TabsContent value="notifications" className="space-y-6">
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center space-x-2">
-                  <Bell className="h-5 w-5 text-yellow-600" />
-                  <span>通知配置</span>
-                </CardTitle>
-                <CardDescription>系统通知和邮件设置</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="flex items-center space-x-2">
-                  <input
-                    type="checkbox"
-                    id="emailEnabled"
-                    checked={settings.notifications.emailEnabled}
-                    onChange={(e) => handleInputChange('notifications', 'emailEnabled', e.target.checked)}
-                    className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                  />
-                  <label htmlFor="emailEnabled" className="text-sm font-medium text-gray-700">
-                    启用邮件通知
-                  </label>
-                </div>
-                
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    管理员邮箱
-                  </label>
-                  <Input
-                    type="email"
-                    value={settings.notifications.adminEmail}
-                    onChange={(e) => handleInputChange('notifications', 'adminEmail', e.target.value)}
-                    placeholder="请输入管理员邮箱地址"
-                  />
-                </div>
-                
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    警报阈值
-                  </label>
-                  <Input
-                    type="number"
-                    value={settings.notifications.alertThreshold}
-                    onChange={(e) => handleInputChange('notifications', 'alertThreshold', parseInt(e.target.value))}
-                    placeholder="请输入警报阈值"
-                  />
-                </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
+          <SectionCard
+            title="Firebase Client"
+            description="Browser-side Firebase runtime values."
+            icon={Globe}
+            rows={[
+              {
+                label: "Project ID",
+                value: settings.integrations.firebaseClient.effectiveProjectId,
+                status: settings.integrations.firebaseClient.usesFallback ? "warn" : "ok",
+              },
+              { label: "Auth Domain", value: settings.integrations.firebaseClient.authDomain },
+              { label: "Storage Bucket", value: settings.integrations.firebaseClient.storageBucket },
+              {
+                label: "Env Completeness",
+                value: settings.integrations.firebaseClient.envConfigured ? "Complete" : "Partial",
+                status: settings.integrations.firebaseClient.envConfigured ? "ok" : "warn",
+              },
+            ]}
+          />
 
-          <TabsContent value="security" className="space-y-6">
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center space-x-2">
-                  <Shield className="h-5 w-5 text-red-600" />
-                  <span>安全配置</span>
-                </CardTitle>
-                <CardDescription>系统安全相关的设置</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    会话超时 (秒)
-                  </label>
-                  <Input
-                    type="number"
-                    value={settings.security.sessionTimeout}
-                    onChange={(e) => handleInputChange('security', 'sessionTimeout', parseInt(e.target.value))}
-                    placeholder="请输入会话超时时间"
-                  />
-                </div>
-                
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    密码最小长度
-                  </label>
-                  <Input
-                    type="number"
-                    value={settings.security.passwordMinLength}
-                    onChange={(e) => handleInputChange('security', 'passwordMinLength', parseInt(e.target.value))}
-                    placeholder="请输入密码最小长度"
-                    min="6"
-                    max="32"
-                  />
-                </div>
-                
-                <div className="flex items-center space-x-2">
-                  <input
-                    type="checkbox"
-                    id="twoFactorEnabled"
-                    checked={settings.security.twoFactorEnabled}
-                    onChange={(e) => handleInputChange('security', 'twoFactorEnabled', e.target.checked)}
-                    className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                  />
-                  <label htmlFor="twoFactorEnabled" className="text-sm font-medium text-gray-700">
-                    启用双因素认证
-                  </label>
-                </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
-        </Tabs>
+          <SectionCard
+            title="Firebase Admin / Vertex"
+            description="Server-side project selection and model routing."
+            icon={Server}
+            rows={[
+              {
+                label: "Firebase Admin Project",
+                value: settings.integrations.firebaseAdmin.effectiveProjectId,
+                status: settings.integrations.firebaseAdmin.usesFallback ? "warn" : "ok",
+              },
+              {
+                label: "Service Account ID",
+                value: settings.integrations.firebaseAdmin.serviceAccountIdConfigured ? "Explicitly configured" : "Derived or default",
+                status: settings.integrations.firebaseAdmin.serviceAccountIdConfigured ? "ok" : "warn",
+              },
+              {
+                label: "Vertex Project",
+                value: settings.integrations.vertexAI.effectiveProjectId,
+                status: settings.integrations.vertexAI.usesProjectFallback ? "warn" : "ok",
+              },
+              {
+                label: "Vertex Location",
+                value: settings.integrations.vertexAI.location,
+                status: settings.integrations.vertexAI.usesLocationFallback ? "warn" : "ok",
+              },
+              { label: "Fast Model", value: settings.integrations.vertexAI.fastModel },
+              { label: "Complex Model", value: settings.integrations.vertexAI.complexModel },
+            ]}
+          />
+        </div>
       </div>
     </div>
   );
-} 
+}
