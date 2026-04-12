@@ -269,7 +269,8 @@ export async function handleRejectedProject(participationId: string) {
     // Also delete any submissions related to this participation
     const submissionsQuery = query(
       collection(db, 'submissions'),
-      where('participationId', '==', participationId)
+      where('participationId', '==', participationId),
+      where('studentId', '==', participation.studentId),
     );
     const submissionsSnapshot = await getDocs(submissionsQuery);
     submissionsSnapshot.docs.forEach(submissionDoc => {
@@ -293,330 +294,44 @@ export async function getNGODashboard(_ngoId: string): Promise<NGODashboard> {
 }
 
 export async function getStudentDashboard(studentId: string): Promise<StudentDashboard> {
-  // Get student's participations
-  const participations = await getParticipations({ studentId });
-  const activeProjects = participations.filter(p => p.status === 'active').length;
-  const completedProjects = participations.filter(p => p.status === 'completed').length;
-  
-  // Calculate total hours (from completed tasks, not just completed projects)
-  let totalHours = 0;
-  
-  // Process all participations to sum up hours from completed tasks
-  for (const participation of participations) {
-    const project = await getProject(participation.projectId);
-    if (!project || !project.subtasks) continue;
-    
-    // Get completed subtasks for this participation
-    const completedSubtasks = participation.completedSubtasks || [];
-    
-    // Sum hours only for completed subtasks
-    for (const subtask of project.subtasks) {
-      if (completedSubtasks.includes(subtask.id) && subtask.estimatedHours) {
-        totalHours += subtask.estimatedHours;
-      }
-    }
-  }
-  
-  // Get certificates count
-  const certificatesSnapshot = await getDocs(
-    query(collection(db, 'certificates'), where('studentId', '==', studentId))
-  );
-  const certificates = certificatesSnapshot.size;
-  
-  // Get recent activity from various sources
-  const recentActivity = [];
-
-  // 1. Add activities from project joins
-  for (const participation of participations.slice(0, 5)) {
-    const project = await getProject(participation.projectId);
-    if (project) {
-      recentActivity.push({
-        id: `join-${participation.id}`,
-        type: 'project_joined' as const,
-        title: `Joined ${project.title}`,
-        description: `You joined a project by ${project.ngoName}`,
-        timestamp: participation.joinedAt
-      });
-    }
-  }
-
-  // 2. Add activities from completed subtasks
-  for (const participation of participations) {
-    const project = await getProject(participation.projectId);
-    if (!project || !project.subtasks) continue;
-    
-    // Get completed subtasks for this participation
-    const completedSubtasks = participation.completedSubtasks || [];
-    
-    // Add activities for recently completed subtasks (last 5)
-    if (participation.evaluationHistory) {
-      for (const [subtaskId, evaluations] of Object.entries(participation.evaluationHistory)) {
-        if (!evaluations || !evaluations.length) continue;
-        
-        // Sort evaluations by timestamp (newest first)
-        const sortedEvals = [...evaluations].sort((a, b) => 
-          b.timestamp.toMillis() - a.timestamp.toMillis()
-        );
-        
-        // Get only the latest evaluation with score >= 80 (successful)
-        const latestSuccessful = sortedEvals.find(evaluation => evaluation.score >= 80);
-        
-        if (latestSuccessful && completedSubtasks.includes(subtaskId)) {
-          const subtask = project.subtasks.find(st => st.id === subtaskId);
-          if (subtask) {
-            recentActivity.push({
-              id: `complete-${participation.id}-${subtaskId}`,
-              type: 'subtask_completed' as const,
-              title: `Completed "${subtask.title}"`,
-              description: `You completed a task in ${project.title} with a score of ${latestSuccessful.score}%`,
-              timestamp: latestSuccessful.timestamp
-            });
-          }
+  const data = await fetchInternalJson<{
+    activeProjects: number;
+    completedProjects: number;
+    totalHours: number;
+    certificates: number;
+    recentActivity: Array<StudentDashboard["recentActivity"][number] & { timestamp: string }>;
+    upcomingDeadlines: Array<StudentDashboard["upcomingDeadlines"][number] & { dueDate: string }>;
+    promptQualityMetrics?: Omit<
+      NonNullable<StudentDashboard["promptQualityMetrics"]>,
+      "recentPrompts"
+    > & {
+      recentPrompts: Array<
+        Omit<NonNullable<StudentDashboard["promptQualityMetrics"]>["recentPrompts"][number], "timestamp"> & {
+          timestamp: string;
         }
-      }
-    }
-  }
-
-  // 3. Add activities from submissions
-  const studentSubmissions = await getSubmissions({ studentId });
-  for (const submission of studentSubmissions.slice(0, 5)) {
-    const project = await getProject(submission.projectId);
-    if (project) {
-      recentActivity.push({
-        id: `submission-${submission.id}`,
-        type: 'submission_made' as const,
-        title: `Submitted work for ${project.title}`,
-        description: submission.status === 'pending' 
-          ? `Your submission is awaiting review` 
-          : `Your submission was ${submission.status}`,
-        timestamp: submission.submittedAt
-      });
-    }
-  }
-
-  // 4. Add activities from certificates
-  const studentCertificates = await getCertificates({ studentId });
-  for (const certificate of studentCertificates.slice(0, 3)) {
-    recentActivity.push({
-      id: `certificate-${certificate.id}`,
-      type: 'certificate_earned' as const,
-      title: `Earned Certificate for ${certificate.projectTitle}`,
-      description: `You received a certificate for completing the project`,
-      timestamp: certificate.issuedAt
-    });
-  }
-  
-  // Remove previously added activities since we now get them from other sources
-  // Sort by timestamp and limit to 5 most recent
-  recentActivity.sort((a, b) => b.timestamp.toMillis() - a.timestamp.toMillis());
-  const finalRecentActivity = recentActivity.slice(0, 5);
-  
-  // Collect and analyze prompt history data
-  let totalPrompts = 0;
-  let totalQualityScore = 0;
-  let goodPromptsCount = 0;
-  let bestStreak = 0;
-  let totalGoalScore = 0;
-  let totalContextScore = 0;
-  let totalExpectationsScore = 0;
-  let totalSourceScore = 0;
-  let promptsWithGoalScore = 0;
-  let promptsWithContextScore = 0;
-  let promptsWithExpectationsScore = 0;
-  let promptsWithSourceScore = 0;
-  
-  // Collect recent prompts for display
-  const recentPrompts: Array<{
-    id: string;
-    projectId: string;
-    projectTitle: string;
-    subtaskId: string;
-    taskTitle: string;
-    content: string;
-    qualityScore: number;
-    timestamp: Date;
-    feedback?: {
-      feedback?: string;
+      >;
     };
-  }> = [];
+  }>("/api/student/dashboard");
 
-  // Process all participations to gather prompt history
-  for (const participation of participations) {
-    const project = await getProject(participation.projectId);
-    if (!project) continue;
-    
-    // Process prompt history for each subtask
-    if (participation.promptHistory) {
-      for (const [subtaskId, prompts] of Object.entries(participation.promptHistory)) {
-        if (!prompts || !prompts.length) continue;
-        
-        // Find the subtask info
-        const subtask = project.subtasks.find(st => st.id === subtaskId);
-        if (!subtask) continue;
-        
-        totalPrompts += prompts.length;
-        
-        // Process each prompt
-        for (const prompt of prompts) {
-          // Add to quality totals
-          totalQualityScore += prompt.qualityScore || 0;
-          if (prompt.isGoodPrompt) goodPromptsCount++;
-          
-          // Track best streak
-          if (prompt.goalScore) {
-            totalGoalScore += prompt.goalScore;
-            promptsWithGoalScore++;
-          }
-          if (prompt.contextScore) {
-            totalContextScore += prompt.contextScore;
-            promptsWithContextScore++;
-          }
-          if (prompt.expectationsScore) {
-            totalExpectationsScore += prompt.expectationsScore;
-            promptsWithExpectationsScore++;
-          }
-          if (prompt.sourceScore) {
-            totalSourceScore += prompt.sourceScore;
-            promptsWithSourceScore++;
-          }
-          
-          // Add to recent prompts array (limit to 20 most recent for processing)
-          if (recentPrompts.length < 20) {
-            // Convert old feedback format to new format if needed
-            let feedbackForDisplay: { feedback?: string } | undefined = undefined;
-            if (prompt.feedback) {
-              // Check if it's the new format already (has a feedback property)
-              if ('feedback' in prompt.feedback && typeof prompt.feedback.feedback === 'string') {
-                // New format - just pass it through
-                feedbackForDisplay = {
-                  feedback: prompt.feedback.feedback
-                };
-              } else if ('strengths' in prompt.feedback || 'tips' in prompt.feedback) {
-                // Old format - combine strengths and tips into a single paragraph
-                const strengths = 'strengths' in prompt.feedback && Array.isArray(prompt.feedback.strengths) 
-                  ? prompt.feedback.strengths.join(' ') 
-                  : '';
-                const tips = 'tips' in prompt.feedback && Array.isArray(prompt.feedback.tips) 
-                  ? prompt.feedback.tips.join(' ') 
-                  : '';
-                feedbackForDisplay = {
-                  feedback: `${strengths} ${tips}`.trim()
-                };
-              } else {
-                // Unknown format, set an empty feedback object
-                feedbackForDisplay = {
-                  feedback: "Feedback available but in an unsupported format."
-                };
-              }
-            }
-            
-            recentPrompts.push({
-              id: `${participation.id}-${subtaskId}-${prompt.timestamp.toMillis()}`,
-              projectId: participation.projectId,
-              projectTitle: project.title,
-              subtaskId,
-              taskTitle: subtask.title,
-              content: prompt.content,
-              qualityScore: prompt.qualityScore || 0,
-              timestamp: prompt.timestamp.toDate(),
-              feedback: feedbackForDisplay
-            });
-          }
-        }
-      }
-    }
-    
-    // Check for best streak in promptEvaluations (for backward compatibility)
-    if (participation.promptEvaluations) {
-      for (const evaluations of Object.values(participation.promptEvaluations)) {
-        for (const evaluation of evaluations) {
-          if (evaluation.bestStreak && evaluation.bestStreak > bestStreak) {
-            bestStreak = evaluation.bestStreak;
-          }
-        }
-      }
-    }
-  }
-  
-  // Sort recent prompts by timestamp (newest first) and limit to 5
-  recentPrompts.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
-  const finalRecentPrompts = recentPrompts.slice(0, 5);
-  
-  // Calculate averages
-  const averageQualityScore = totalPrompts > 0 ? totalQualityScore / totalPrompts : 0;
-  const goodPromptsPercentage = totalPrompts > 0 ? Math.round((goodPromptsCount / totalPrompts) * 100) : 0;
-  const averageGoalScore = promptsWithGoalScore > 0 ? totalGoalScore / promptsWithGoalScore : 0;
-  const averageContextScore = promptsWithContextScore > 0 ? totalContextScore / promptsWithContextScore : 0;
-  const averageExpectationsScore = promptsWithExpectationsScore > 0 ? totalExpectationsScore / promptsWithExpectationsScore : 0;
-  const averageSourceScore = promptsWithSourceScore > 0 ? totalSourceScore / promptsWithSourceScore : 0;
-  
-  // Generate upcoming deadlines from active projects
-  const upcomingDeadlines = [];
-  for (const participation of participations.filter(p => p.status === 'active')) {
-    const project = await getProject(participation.projectId);
-    if (project) {
-      // Use project deadline if available, otherwise use estimated calculation
-      let dueDate: Date;
-      let priority: 'high' | 'medium' | 'low';
-      
-      if (project.deadline) {
-        dueDate = project.deadline.toDate();
-        
-        // Calculate priority based on how close the deadline is
-        const today = new Date();
-        const daysUntilDeadline = Math.ceil((dueDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
-        
-        if (daysUntilDeadline <= 7) {
-          priority = 'high';
-        } else if (daysUntilDeadline <= 14) {
-          priority = 'medium';
-        } else {
-          priority = 'low';
-        }
-      } else {
-        // Fallback to a simple calculation if no deadline is set
-        const remainingProgress = 100 - participation.progress;
-        
-        // Calculate estimated days based on remaining progress and subtask count
-        // Assume each subtask takes 2-5 days depending on difficulty
-        const subtaskCount = project.subtasks?.length || 1;
-        const difficultyFactor = project.difficulty === 'advanced' ? 5 : 
-                               project.difficulty === 'intermediate' ? 3 : 2;
-        
-        const estimatedDaysToComplete = Math.ceil((remainingProgress / 100) * subtaskCount * difficultyFactor);
-        dueDate = new Date();
-        dueDate.setDate(dueDate.getDate() + estimatedDaysToComplete);
-        priority = (participation.progress < 50 ? 'high' : participation.progress < 80 ? 'medium' : 'low');
-      }
-      
-      upcomingDeadlines.push({
-        id: participation.id,
-        title: `Complete ${project.title}`,
-        projectTitle: project.title,
-        dueDate: Timestamp.fromDate(dueDate),
-        priority
-      });
-    }
-  }
-  
   return {
-    activeProjects,
-    completedProjects,
-    totalHours,
-    certificates,
-    recentActivity: finalRecentActivity,
-    upcomingDeadlines,
-    promptQualityMetrics: {
-      totalPrompts,
-      averageScore: averageQualityScore,
-      goodPromptsPercentage,
-      bestStreak,
-      averageGoalScore,
-      averageContextScore,
-      averageExpectationsScore,
-      averageSourceScore,
-      recentPrompts: finalRecentPrompts
-    }
+    ...data,
+    recentActivity: data.recentActivity.map((activity) => ({
+      ...activity,
+      timestamp: fromIsoTimestamp(activity.timestamp)!,
+    })),
+    upcomingDeadlines: data.upcomingDeadlines.map((deadline) => ({
+      ...deadline,
+      dueDate: fromIsoTimestamp(deadline.dueDate)!,
+    })),
+    promptQualityMetrics: data.promptQualityMetrics
+      ? {
+          ...data.promptQualityMetrics,
+          recentPrompts: data.promptQualityMetrics.recentPrompts.map((prompt) => ({
+            ...prompt,
+            timestamp: new Date(prompt.timestamp),
+          })),
+        }
+      : undefined,
   };
 }
 

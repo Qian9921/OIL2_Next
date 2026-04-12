@@ -1,7 +1,11 @@
 "use client";
 
 import { PropsWithChildren, useEffect, useState } from "react";
-import { signInWithCustomToken, signOut as signOutFromFirebase } from "firebase/auth";
+import {
+  onIdTokenChanged,
+  signInWithCustomToken,
+  signOut as signOutFromFirebase,
+} from "firebase/auth";
 import { useSession } from "next-auth/react";
 
 import { LoadingState } from "@/components/ui/loading-state";
@@ -30,6 +34,7 @@ export function FirebaseAuthBridge({ children }: PropsWithChildren) {
       }
 
       if (auth.currentUser?.uid === session.user.id) {
+        await auth.currentUser.getIdToken();
         if (!isCancelled) {
           setIsReady(true);
         }
@@ -57,7 +62,32 @@ export function FirebaseAuthBridge({ children }: PropsWithChildren) {
         throw new Error("Firebase custom token missing from response");
       }
 
-      await signInWithCustomToken(auth, data.token);
+      const credential = await signInWithCustomToken(auth, data.token);
+      await credential.user.getIdToken();
+
+      await new Promise<void>((resolve, reject) => {
+        const timeoutId = window.setTimeout(() => {
+          unsubscribe();
+          reject(new Error("Timed out waiting for Firebase auth state"));
+        }, 10000);
+
+        const unsubscribe = onIdTokenChanged(auth, async (user) => {
+          if (user?.uid !== session.user.id) {
+            return;
+          }
+
+          try {
+            await user.getIdToken();
+            window.clearTimeout(timeoutId);
+            unsubscribe();
+            resolve();
+          } catch (error) {
+            window.clearTimeout(timeoutId);
+            unsubscribe();
+            reject(error);
+          }
+        });
+      });
 
       if (!isCancelled) {
         setIsReady(true);

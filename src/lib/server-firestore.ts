@@ -19,6 +19,7 @@ import {
   NGODashboard,
   Participation,
   Project,
+  StudentDashboard,
   Submission,
   User,
   UserRole,
@@ -344,6 +345,357 @@ export async function getNGODashboardAdmin(ngoId: string): Promise<NGODashboard>
       status: submission.status,
     })),
   });
+}
+
+export async function getStudentDashboardAdmin(
+  studentId: string,
+): Promise<StudentDashboard> {
+  const participations = await getParticipationsAdmin({ studentId });
+  const activeProjects = participations.filter((participation) => participation.status === "active").length;
+  const completedProjects = participations.filter(
+    (participation) => participation.status === "completed",
+  ).length;
+
+  let totalHours = 0;
+
+  for (const participation of participations) {
+    const project = await getProjectAdmin(participation.projectId);
+    if (!project?.subtasks) {
+      continue;
+    }
+
+    const completedSubtasks = participation.completedSubtasks || [];
+    for (const subtask of project.subtasks) {
+      if (completedSubtasks.includes(subtask.id) && subtask.estimatedHours) {
+        totalHours += subtask.estimatedHours;
+      }
+    }
+  }
+
+  const studentCertificates = await getCertificatesAdmin({ studentId });
+  const certificates = studentCertificates.length;
+
+  const recentActivity: StudentDashboard["recentActivity"] = [];
+
+  for (const participation of participations.slice(0, 5)) {
+    const project = await getProjectAdmin(participation.projectId);
+    if (!project) {
+      continue;
+    }
+
+    recentActivity.push({
+      id: `join-${participation.id}`,
+      type: "project_joined",
+      title: `Joined ${project.title}`,
+      description: `You joined a project by ${project.ngoName}`,
+      timestamp: participation.joinedAt,
+    });
+  }
+
+  for (const participation of participations) {
+    const project = await getProjectAdmin(participation.projectId);
+    if (!project?.subtasks) {
+      continue;
+    }
+
+    const completedSubtasks = participation.completedSubtasks || [];
+    if (participation.evaluationHistory) {
+      for (const [subtaskId, evaluations] of Object.entries(participation.evaluationHistory)) {
+        if (!evaluations?.length) {
+          continue;
+        }
+
+        const sortedEvaluations = [...evaluations].sort(
+          (left, right) => right.timestamp.toMillis() - left.timestamp.toMillis(),
+        );
+        const latestSuccessful = sortedEvaluations.find((evaluation) => evaluation.score >= 80);
+        if (!latestSuccessful || !completedSubtasks.includes(subtaskId)) {
+          continue;
+        }
+
+        const subtask = project.subtasks.find((item) => item.id === subtaskId);
+        if (!subtask) {
+          continue;
+        }
+
+        recentActivity.push({
+          id: `complete-${participation.id}-${subtaskId}`,
+          type: "subtask_completed",
+          title: `Completed "${subtask.title}"`,
+          description: `You completed a task in ${project.title} with a score of ${latestSuccessful.score}%`,
+          timestamp: latestSuccessful.timestamp,
+        });
+      }
+    }
+  }
+
+  const studentSubmissions = await getSubmissionsAdmin({ studentId });
+  for (const submission of studentSubmissions.slice(0, 5)) {
+    const project = await getProjectAdmin(submission.projectId);
+    if (!project) {
+      continue;
+    }
+
+    recentActivity.push({
+      id: `submission-${submission.id}`,
+      type: "submission_made",
+      title: `Submitted work for ${project.title}`,
+      description:
+        submission.status === "pending"
+          ? "Your submission is awaiting review"
+          : `Your submission was ${submission.status}`,
+      timestamp: submission.submittedAt,
+    });
+  }
+
+  for (const certificate of studentCertificates.slice(0, 3)) {
+    recentActivity.push({
+      id: `certificate-${certificate.id}`,
+      type: "certificate_earned",
+      title: `Earned Certificate for ${certificate.projectTitle}`,
+      description: "You received a certificate for completing the project",
+      timestamp: certificate.issuedAt,
+    });
+  }
+
+  recentActivity.sort((left, right) => right.timestamp.toMillis() - left.timestamp.toMillis());
+  const finalRecentActivity = recentActivity.slice(0, 5);
+
+  let totalPrompts = 0;
+  let totalQualityScore = 0;
+  let goodPromptsCount = 0;
+  let bestStreak = 0;
+  let totalGoalScore = 0;
+  let totalContextScore = 0;
+  let totalExpectationsScore = 0;
+  let totalSourceScore = 0;
+  let promptsWithGoalScore = 0;
+  let promptsWithContextScore = 0;
+  let promptsWithExpectationsScore = 0;
+  let promptsWithSourceScore = 0;
+
+  const recentPrompts: NonNullable<StudentDashboard["promptQualityMetrics"]>["recentPrompts"] = [];
+
+  for (const participation of participations) {
+    const project = await getProjectAdmin(participation.projectId);
+    if (!project) {
+      continue;
+    }
+
+    if (participation.promptHistory) {
+      for (const [subtaskId, prompts] of Object.entries(participation.promptHistory)) {
+        if (!prompts?.length) {
+          continue;
+        }
+
+        const subtask = project.subtasks.find((item) => item.id === subtaskId);
+        if (!subtask) {
+          continue;
+        }
+
+        totalPrompts += prompts.length;
+
+        for (const prompt of prompts) {
+          totalQualityScore += prompt.qualityScore || 0;
+          if (prompt.isGoodPrompt) {
+            goodPromptsCount += 1;
+          }
+          if (prompt.goalScore) {
+            totalGoalScore += prompt.goalScore;
+            promptsWithGoalScore += 1;
+          }
+          if (prompt.contextScore) {
+            totalContextScore += prompt.contextScore;
+            promptsWithContextScore += 1;
+          }
+          if (prompt.expectationsScore) {
+            totalExpectationsScore += prompt.expectationsScore;
+            promptsWithExpectationsScore += 1;
+          }
+          if (prompt.sourceScore) {
+            totalSourceScore += prompt.sourceScore;
+            promptsWithSourceScore += 1;
+          }
+
+          if (recentPrompts.length < 20) {
+            let feedbackForDisplay: { feedback?: string } | null = null;
+            if (prompt.feedback) {
+              if (
+                "feedback" in prompt.feedback &&
+                typeof prompt.feedback.feedback === "string"
+              ) {
+                feedbackForDisplay = { feedback: prompt.feedback.feedback };
+              } else if ("strengths" in prompt.feedback || "tips" in prompt.feedback) {
+                const strengths =
+                  "strengths" in prompt.feedback && Array.isArray(prompt.feedback.strengths)
+                    ? prompt.feedback.strengths.join(" ")
+                    : "";
+                const tips =
+                  "tips" in prompt.feedback && Array.isArray(prompt.feedback.tips)
+                    ? prompt.feedback.tips.join(" ")
+                    : "";
+                feedbackForDisplay = {
+                  feedback: `${strengths} ${tips}`.trim(),
+                };
+              } else {
+                feedbackForDisplay = {
+                  feedback: "Feedback available but in an unsupported format.",
+                };
+              }
+            }
+
+            recentPrompts.push({
+              id: `${participation.id}-${subtaskId}-${prompt.timestamp.toMillis()}`,
+              projectId: participation.projectId,
+              projectTitle: project.title,
+              subtaskId,
+              taskTitle: subtask.title,
+              content: prompt.content,
+              qualityScore: prompt.qualityScore || 0,
+              timestamp: prompt.timestamp.toDate(),
+              feedback: feedbackForDisplay,
+            });
+          }
+        }
+      }
+    }
+
+    if (participation.promptEvaluations) {
+      for (const evaluations of Object.values(participation.promptEvaluations)) {
+        for (const evaluation of evaluations) {
+          if (evaluation.bestStreak && evaluation.bestStreak > bestStreak) {
+            bestStreak = evaluation.bestStreak;
+          }
+        }
+      }
+    }
+  }
+
+  recentPrompts.sort((left, right) => right.timestamp.getTime() - left.timestamp.getTime());
+  const finalRecentPrompts = recentPrompts.slice(0, 5);
+
+  const averageQualityScore = totalPrompts > 0 ? totalQualityScore / totalPrompts : 0;
+  const goodPromptsPercentage =
+    totalPrompts > 0 ? Math.round((goodPromptsCount / totalPrompts) * 100) : 0;
+  const averageGoalScore =
+    promptsWithGoalScore > 0 ? totalGoalScore / promptsWithGoalScore : 0;
+  const averageContextScore =
+    promptsWithContextScore > 0 ? totalContextScore / promptsWithContextScore : 0;
+  const averageExpectationsScore =
+    promptsWithExpectationsScore > 0
+      ? totalExpectationsScore / promptsWithExpectationsScore
+      : 0;
+  const averageSourceScore =
+    promptsWithSourceScore > 0 ? totalSourceScore / promptsWithSourceScore : 0;
+
+  const upcomingDeadlines: StudentDashboard["upcomingDeadlines"] = [];
+
+  for (const participation of participations.filter((item) => item.status === "active")) {
+    const project = await getProjectAdmin(participation.projectId);
+    if (!project) {
+      continue;
+    }
+
+    let dueDate: Date;
+    let priority: "high" | "medium" | "low";
+
+    if (project.deadline) {
+      dueDate = project.deadline.toDate();
+      const today = new Date();
+      const daysUntilDeadline = Math.ceil(
+        (dueDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24),
+      );
+
+      if (daysUntilDeadline <= 7) {
+        priority = "high";
+      } else if (daysUntilDeadline <= 14) {
+        priority = "medium";
+      } else {
+        priority = "low";
+      }
+    } else {
+      const remainingProgress = 100 - participation.progress;
+      const subtaskCount = project.subtasks?.length || 1;
+      const difficultyFactor =
+        project.difficulty === "advanced" ? 5 : project.difficulty === "intermediate" ? 3 : 2;
+      const estimatedDaysToComplete = Math.ceil(
+        (remainingProgress / 100) * subtaskCount * difficultyFactor,
+      );
+      dueDate = new Date();
+      dueDate.setDate(dueDate.getDate() + estimatedDaysToComplete);
+      priority =
+        participation.progress < 50 ? "high" : participation.progress < 80 ? "medium" : "low";
+    }
+
+    upcomingDeadlines.push({
+      id: participation.id,
+      title: `Complete ${project.title}`,
+      projectTitle: project.title,
+      dueDate: AdminTimestamp.fromDate(dueDate) as StudentDashboard["upcomingDeadlines"][number]["dueDate"],
+      priority,
+    });
+  }
+
+  return {
+    activeProjects,
+    completedProjects,
+    totalHours,
+    certificates,
+    recentActivity: finalRecentActivity,
+    upcomingDeadlines,
+    promptQualityMetrics: {
+      totalPrompts,
+      averageScore: averageQualityScore,
+      goodPromptsPercentage,
+      bestStreak,
+      averageGoalScore,
+      averageContextScore,
+      averageExpectationsScore,
+      averageSourceScore,
+      recentPrompts: finalRecentPrompts,
+    },
+  };
+}
+
+export async function getStudentMyProjectsAdmin(studentId: string) {
+  const participations = await getParticipationsAdmin({ studentId });
+  const certificates = await getCertificatesAdmin({ studentId });
+
+  const projects = await Promise.all(
+    participations.map(async (participation) => {
+      const [project, submissions] = await Promise.all([
+        getProjectAdmin(participation.projectId),
+        getSubmissionsAdmin({
+          participationId: participation.id,
+          studentId,
+        }),
+      ]);
+
+      if (!project) {
+        return null;
+      }
+
+      const sortedSubtasks = [...project.subtasks].sort((left, right) => left.order - right.order);
+      const nextSubtask =
+        participation.status === "active"
+          ? sortedSubtasks.find(
+              (subtask) => !participation.completedSubtasks?.includes(subtask.id),
+            )
+          : undefined;
+
+      return {
+        ...participation,
+        project,
+        submission: submissions[0] ?? null,
+        nextSubtask,
+      };
+    }),
+  );
+
+  return {
+    projects: projects.filter((item) => item !== null),
+    certificates,
+  };
 }
 
 export interface NgoSubmissionRecord extends Submission {

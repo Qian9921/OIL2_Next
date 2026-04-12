@@ -41,12 +41,9 @@ import {
 } from "@/lib/student-project-actions";
 import {
   deleteParticipation,
-  getCertificates,
-  getParticipations,
-  getProject,
-  getSubmissions,
   handleRejectedProject,
 } from "@/lib/firestore";
+import { fromIsoTimestamp } from "@/lib/timestamp-serialization";
 import { Certificate, Participation, Project, Submission, Subtask } from "@/lib/types";
 import { isProjectExpired } from "@/lib/utils";
 
@@ -55,6 +52,35 @@ interface LoadedProjectWithDetails extends Participation {
   submission?: Submission;
   nextSubtask?: Subtask;
 }
+
+interface StudentMyProjectsResponse {
+  projects: Array<
+    Omit<LoadedProjectWithDetails, "joinedAt" | "createdAt" | "updatedAt" | "completedAt" | "project" | "submission"> & {
+      joinedAt: string;
+      createdAt: string;
+      updatedAt: string;
+      completedAt?: string | null;
+      project: Omit<Project, "createdAt" | "updatedAt" | "deadline"> & {
+        createdAt: string;
+        updatedAt: string;
+        deadline?: string | null;
+      };
+      submission?: (Omit<Submission, "submittedAt" | "reviewedAt"> & {
+        submittedAt: string;
+        reviewedAt?: string | null;
+      }) | null;
+    }
+  >;
+  certificates: Array<
+    Omit<Certificate, "issuedAt" | "completionDate"> & {
+      issuedAt: string;
+      completionDate: string;
+    }
+  >;
+}
+
+type SerializedProjectRecord = StudentMyProjectsResponse["projects"][number];
+type SerializedCertificateRecord = StudentMyProjectsResponse["certificates"][number];
 
 interface StudentProjectActionItem extends LoadedProjectWithDetails {
   certificate?: Certificate | null;
@@ -122,6 +148,69 @@ const SUMMARY_META: Array<{
   },
 ];
 
+function deserializeSubmission(
+  submission: SerializedProjectRecord["submission"],
+): Submission | undefined {
+  if (!submission) {
+    return undefined;
+  }
+
+  const {
+    submittedAt,
+    reviewedAt,
+    ...submissionFields
+  } = submission;
+
+  return {
+    ...submissionFields,
+    submittedAt: fromIsoTimestamp(submittedAt)!,
+    ...(reviewedAt ? { reviewedAt: fromIsoTimestamp(reviewedAt)! } : {}),
+  };
+}
+
+function deserializeProjectRecord(projectRecord: SerializedProjectRecord): LoadedProjectWithDetails {
+  const {
+    joinedAt,
+    createdAt,
+    updatedAt,
+    completedAt,
+    project,
+    submission,
+    ...participationFields
+  } = projectRecord;
+  const {
+    createdAt: projectCreatedAt,
+    updatedAt: projectUpdatedAt,
+    deadline,
+    ...projectFields
+  } = project;
+
+  return {
+    ...participationFields,
+    joinedAt: fromIsoTimestamp(joinedAt)!,
+    createdAt: fromIsoTimestamp(createdAt)!,
+    updatedAt: fromIsoTimestamp(updatedAt)!,
+    ...(completedAt ? { completedAt: fromIsoTimestamp(completedAt)! } : {}),
+    project: {
+      ...projectFields,
+      createdAt: fromIsoTimestamp(projectCreatedAt)!,
+      updatedAt: fromIsoTimestamp(projectUpdatedAt)!,
+      deadline: fromIsoTimestamp(deadline ?? projectUpdatedAt)!,
+    },
+    submission: deserializeSubmission(submission),
+  };
+}
+
+function deserializeCertificateRecord(
+  certificate: SerializedCertificateRecord,
+): Certificate {
+  return {
+    ...certificate,
+    issuedAt: fromIsoTimestamp(certificate.issuedAt)!,
+    completionDate: fromIsoTimestamp(certificate.completionDate)!,
+  };
+}
+
 function StudentMyProjectsPageContent() {
   const { data: session } = useSession();
   const router = useRouter();
@@ -147,55 +236,26 @@ function StudentMyProjectsPageContent() {
 
   useEffect(() => {
     if (session?.user?.id) {
-      void loadMyProjects(session.user.id);
+      void loadMyProjects();
     }
   }, [session?.user?.id]);
 
-  const loadMyProjects = async (studentId: string) => {
+  const loadMyProjects = async () => {
     setIsLoading(true);
 
     try {
-      const participations = await getParticipations({ studentId });
-      const [loadedProjects, studentCertificates] = await Promise.all([
-        Promise.all<LoadedProjectWithDetails | null>(
-          participations.map(async (participation): Promise<LoadedProjectWithDetails | null> => {
-            const [project, submissions] = await Promise.all([
-              getProject(participation.projectId),
-              getSubmissions({
-                participationId: participation.id,
-                studentId,
-              }),
-            ]);
+      const data = await fetch("/api/student/my-projects", {
+        cache: "no-store",
+      });
 
-            if (!project) {
-              return null;
-            }
+      if (!data.ok) {
+        throw new Error(`Failed to load my projects: ${data.status}`);
+      }
 
-            const sortedSubtasks = [...project.subtasks].sort((left, right) => left.order - right.order);
-            const nextSubtask =
-              participation.status === "active"
-                ? sortedSubtasks.find(
-                    (subtask) => !participation.completedSubtasks?.includes(subtask.id)
-                  )
-                : undefined;
+      const payload = (await data.json()) as StudentMyProjectsResponse;
 
-            return {
-              ...participation,
-              project,
-              submission: submissions[0],
-              nextSubtask,
-            };
-          })
-        ),
-        getCertificates({ studentId }),
-      ]);
-
-      const validProjects = loadedProjects.filter(
-        (project): project is LoadedProjectWithDetails => project !== null
-      );
-
-      setProjectsWithDetails(validProjects);
-      setCertificates(studentCertificates);
+      setProjectsWithDetails(payload.projects.map(deserializeProjectRecord));
+      setCertificates(payload.certificates.map(deserializeCertificateRecord));
     } catch (error) {
       console.error("Error loading my projects:", error);
       toast({
@@ -300,7 +360,7 @@ function StudentMyProjectsPageContent() {
       await deleteParticipation(participationId);
 
       if (session?.user?.id) {
-        await loadMyProjects(session.user.id);
+        await loadMyProjects();
       }
 
       toast({
@@ -332,7 +392,7 @@ function StudentMyProjectsPageContent() {
       await handleRejectedProject(participationId);
 
       if (session?.user?.id) {
-        await loadMyProjects(session.user.id);
+        await loadMyProjects();
       }
 
       toast({
@@ -463,7 +523,7 @@ function StudentMyProjectsPageContent() {
             });
 
             if (session?.user?.id) {
-              void loadMyProjects(session.user.id);
+              void loadMyProjects();
             }
           }}
         />
