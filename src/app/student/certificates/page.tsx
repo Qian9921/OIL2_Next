@@ -4,7 +4,7 @@ import { Suspense, useEffect, useMemo, useState } from "react";
 import { useSession } from "next-auth/react";
 import { useSearchParams } from "next/navigation";
 import { MainLayout } from "@/components/layout/main-layout";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { 
   Dialog, 
@@ -67,21 +67,12 @@ function StudentCertificatesPageContent() {
     setShowPreviewDialog(true);
     
     try {
-      // Generate preview using the same data structure as NGO
-      const certificateData = {
-        studentName: certificate.studentName,
-        ngoSignature: certificate.ngoSignature,
-        ngoName: certificate.ngoName,
-        contents: certificate.projectTitle,
-        date: certificate.completionDate.toDate().toISOString().split('T')[0]
-      };
-
       const response = await fetch('/api/certificates/render', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(certificateData)
+        body: JSON.stringify({ certificateId: certificate.id })
       });
 
       if (response.ok) {
@@ -107,20 +98,12 @@ function StudentCertificatesPageContent() {
     setDownloadingCertId(certificate.id);
     
     try {
-      const certificateData = {
-        studentName: certificate.studentName,
-        ngoSignature: certificate.ngoSignature,
-        ngoName: certificate.ngoName,
-        contents: certificate.projectTitle,
-        date: certificate.completionDate.toDate().toISOString().split('T')[0]
-      };
-
       const response = await fetch('/api/certificates/render', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(certificateData)
+        body: JSON.stringify({ certificateId: certificate.id })
       });
 
       if (!response.ok) {

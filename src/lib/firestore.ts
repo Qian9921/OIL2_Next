@@ -50,6 +50,7 @@ import {
   buildUserAccountCleanupOperations,
   UserCleanupOperation,
 } from "./account-cleanup-utils";
+import { buildCertificatePersistencePlan } from "./certificate-access-utils";
 
 // User operations
 export async function createUser(userData: Omit<User, 'id' | 'createdAt' | 'updatedAt'>) {
@@ -749,15 +750,54 @@ export async function getUsers(): Promise<User[]> {
 
 // Certificate operations
 export async function createCertificate(certificateData: Omit<Certificate, 'id' | 'issuedAt' | 'certificateNumber'>) {
-  const certificateNumber = generateCertificateNumber();
-  
-  const certificateDoc = await addDoc(collection(db, 'certificates'), {
-    ...certificateData,
-    certificateNumber,
-    issuedAt: Timestamp.now()
+  const existingCertificates = await getCertificates({ participationId: certificateData.participationId });
+  const latestExistingCertificate = existingCertificates[0] ?? null;
+  const plan = buildCertificatePersistencePlan({
+    participationId: certificateData.participationId,
+    generatedCertificateNumber: generateCertificateNumber(),
+    existingCertificate: latestExistingCertificate
+      ? {
+          id: latestExistingCertificate.id,
+          certificateNumber: latestExistingCertificate.certificateNumber,
+        }
+      : null,
   });
-  
-  return { id: certificateDoc.id, certificateNumber };
+
+  if (!plan.shouldCreate) {
+    return {
+      id: plan.documentId,
+      certificateNumber: plan.certificateNumber,
+    };
+  }
+
+  const certificateRef = doc(db, 'certificates', plan.documentId);
+  let persistedCertificateNumber = plan.certificateNumber;
+
+  await runTransaction(db, async (transaction) => {
+    const existingCertificateDoc = await transaction.get(certificateRef);
+
+    if (existingCertificateDoc.exists()) {
+      const existingCertificate = existingCertificateDoc.data() as Certificate;
+      persistedCertificateNumber = existingCertificate.certificateNumber;
+      return;
+    }
+
+    transaction.set(certificateRef, {
+      ...certificateData,
+      certificateNumber: persistedCertificateNumber,
+      issuedAt: Timestamp.now(),
+    });
+  });
+
+  return { id: plan.documentId, certificateNumber: persistedCertificateNumber };
+}
+
+export async function getCertificate(certificateId: string): Promise<Certificate | null> {
+  const certificateDoc = await getDoc(doc(db, 'certificates', certificateId));
+  if (certificateDoc.exists()) {
+    return { id: certificateDoc.id, ...certificateDoc.data() } as Certificate;
+  }
+  return null;
 }
 
 export async function getCertificates(filters?: {

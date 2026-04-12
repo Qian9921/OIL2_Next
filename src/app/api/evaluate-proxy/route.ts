@@ -2,6 +2,14 @@ import { getServerSession } from 'next-auth';
 import { NextRequest, NextResponse } from 'next/server';
 
 import { authOptions } from '@/lib/auth-options';
+import {
+  buildEvaluationProxyPayload,
+  createEvaluationAccessToken,
+  parseEvaluationProxyRequest,
+  verifyEvaluationAccessToken,
+} from '@/lib/evaluation-proxy-utils';
+import { getParticipation, getProject } from '@/lib/firestore';
+import { getEffectiveUserRole } from '@/lib/role-routing';
 
 const EVALUATION_API_URL =
   process.env.EVALUATION_API_URL ??
@@ -100,6 +108,15 @@ function normalizeUpstreamResponse(responseData: UpstreamEvaluationResponse): No
   };
 }
 
+function getEvaluationAccessSecret() {
+  return (
+    process.env.EVALUATION_PROXY_TOKEN_SECRET ??
+    process.env.NEXTAUTH_SECRET ??
+    process.env.AUTH_SECRET ??
+    null
+  );
+}
+
 async function fetchEvaluationStatus(evaluationId: string): Promise<UpstreamEvaluationResponse> {
   const response = await fetch(`${EVALUATION_STATUS_API_BASE}/${evaluationId}`, {
     method: 'GET',
@@ -141,14 +158,33 @@ export async function GET(request: NextRequest) {
   if (!session?.user?.id) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
+  if (getEffectiveUserRole(session.user.role) !== 'student') {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  }
 
   try {
     const evaluationId = request.nextUrl.searchParams.get('evaluationId');
+    const evaluationToken = request.nextUrl.searchParams.get('evaluationToken');
     const timeoutMs = Number(request.nextUrl.searchParams.get('timeoutMs') || '30000');
     const pollIntervalMs = Number(request.nextUrl.searchParams.get('pollIntervalMs') || '3000');
 
-    if (!evaluationId) {
-      return NextResponse.json({ error: 'evaluationId is required' }, { status: 400 });
+    if (!evaluationId || !evaluationToken) {
+      return NextResponse.json({ error: 'evaluationId and evaluationToken are required' }, { status: 400 });
+    }
+
+    const secret = getEvaluationAccessSecret();
+    if (!secret) {
+      return NextResponse.json({ error: 'Evaluation proxy token secret is not configured' }, { status: 500 });
+    }
+
+    const claims = verifyEvaluationAccessToken(evaluationToken, secret);
+    if (!claims || claims.evaluationId !== evaluationId || claims.userId !== session.user.id) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
+
+    const participation = await getParticipation(claims.participationId);
+    if (!participation || participation.studentId !== session.user.id) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
     const statusData = await waitForTerminalEvaluation(evaluationId, timeoutMs, pollIntervalMs);
@@ -183,19 +219,59 @@ export async function POST(request: Request) {
   if (!session?.user?.id) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
+  if (getEffectiveUserRole(session.user.role) !== 'student') {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  }
 
   try {
     const body = await request.json();
-    const shouldWaitForResult = body.waitForResult !== false;
-    const timeoutMs = typeof body.timeoutMs === 'number' ? body.timeoutMs : 20000;
-    const pollIntervalMs = typeof body.pollIntervalMs === 'number' ? body.pollIntervalMs : 3000;
+    const parsedRequest = parseEvaluationProxyRequest(body);
+    if (!parsedRequest) {
+      return NextResponse.json(
+        { error: 'projectId, participationId, and subtaskId are required' },
+        { status: 400 },
+      );
+    }
+
+    const secret = getEvaluationAccessSecret();
+    if (!secret) {
+      return NextResponse.json({ error: 'Evaluation proxy token secret is not configured' }, { status: 500 });
+    }
+
+    const participation = await getParticipation(parsedRequest.participationId);
+    if (
+      !participation ||
+      participation.studentId !== session.user.id ||
+      participation.projectId !== parsedRequest.projectId
+    ) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
+
+    const project = await getProject(parsedRequest.projectId);
+    if (!project) {
+      return NextResponse.json({ error: 'Project not found' }, { status: 404 });
+    }
+
+    const subtask = project.subtasks.find((task) => task.id === parsedRequest.subtaskId);
+    if (!subtask) {
+      return NextResponse.json({ error: 'Subtask not found' }, { status: 404 });
+    }
+
+    const shouldWaitForResult = parsedRequest.waitForResult;
+    const timeoutMs = parsedRequest.timeoutMs;
+    const pollIntervalMs = parsedRequest.pollIntervalMs;
+    const upstreamPayload = buildEvaluationProxyPayload({
+      project,
+      participation,
+      subtask,
+    });
 
     const response = await fetch(EVALUATION_API_URL, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify(body),
+      body: JSON.stringify(upstreamPayload),
       cache: 'no-store',
     });
 
@@ -211,8 +287,26 @@ export async function POST(request: Request) {
       );
     }
 
+    const evaluationToken = responseData.evaluationId
+      ? createEvaluationAccessToken(
+          {
+            evaluationId: responseData.evaluationId,
+            userId: session.user.id,
+            participationId: participation.id,
+            subtaskId: subtask.id,
+          },
+          secret,
+        )
+      : null;
+
     if (!shouldWaitForResult) {
-      return NextResponse.json(normalizeUpstreamResponse(responseData), { status: 202 });
+      return NextResponse.json(
+        {
+          ...normalizeUpstreamResponse(responseData),
+          ...(evaluationToken ? { evaluationToken } : {}),
+        },
+        { status: 202 },
+      );
     }
 
     if (responseData.evaluationId && !isTerminalStatus(responseData.status) && !responseData.result?.rawContent) {
@@ -228,15 +322,27 @@ export async function POST(request: Request) {
       });
 
       if (!isTerminalStatus(waitedResult.status) && !waitedResult.result?.rawContent) {
-        return NextResponse.json(normalized, { status: 202 });
+        return NextResponse.json(
+          {
+            ...normalized,
+            ...(evaluationToken ? { evaluationToken } : {}),
+          },
+          { status: 202 },
+        );
       }
 
-      return NextResponse.json(normalized, {
+      return NextResponse.json({
+        ...normalized,
+        ...(evaluationToken ? { evaluationToken } : {}),
+      }, {
         headers: { 'Cache-Control': 'no-store' },
       });
     }
 
-    return NextResponse.json(normalizeUpstreamResponse(responseData), {
+    return NextResponse.json({
+      ...normalizeUpstreamResponse(responseData),
+      ...(evaluationToken ? { evaluationToken } : {}),
+    }, {
       headers: { 'Cache-Control': 'no-store' },
     });
   } catch (error) {

@@ -31,7 +31,7 @@ import {
   ArrowLeft, Send, CheckCircle, BookOpen, AlertTriangle, Bot, 
   UserCircle2, Trash2, Paperclip, Lock, Loader2, Github, Info, 
   ChevronUp, ChevronDown, ChevronLeft, Circle, Clock, X as XIcon,
-  MessageCircleQuestion, XCircle, AlertCircle, MessageSquare, Copy, FileText, PlusCircle, Download, SendHorizonal
+  MessageCircleQuestion, AlertCircle, MessageSquare, Copy, FileText, PlusCircle, Download, SendHorizonal
 } from 'lucide-react';
 
 // Project-specific components
@@ -951,11 +951,11 @@ export default function ProjectTaskPage() {
     return project.subtasks.every(task => completedSubtasks.includes(task.id));
   };
 
-  const pollEvaluationUntilComplete = async (evaluationId: string) => {
+  const pollEvaluationUntilComplete = async (evaluationId: string, evaluationToken: string) => {
     const maxAttempts = 40;
 
     for (let attempt = 0; attempt < maxAttempts; attempt++) {
-      const response = await fetch(`/api/evaluate-proxy?evaluationId=${evaluationId}&timeoutMs=15000&pollIntervalMs=3000`, {
+      const response = await fetch(`/api/evaluate-proxy?evaluationId=${evaluationId}&evaluationToken=${encodeURIComponent(evaluationToken)}&timeoutMs=15000&pollIntervalMs=3000`, {
         method: 'GET',
         cache: 'no-store',
       });
@@ -1005,22 +1005,19 @@ export default function ProjectTaskPage() {
             evidence: subtask.description || "Task completion criteria",
           });
 
-          // Use a Next.js API route as a proxy to avoid CORS issues
-          const response = await fetch('/api/evaluate-proxy', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-              projectDetail: project.title,
-              tasks: project.subtasks.map(st => st.title),
-              currentTask: subtask.title,
-              githubRepoUrl: participation.studentGitHubRepo || "",
-              evidence: subtask.description || "Task completion criteria",
-              youtubeLink: null,
-              waitForResult: true
-            })
-          });
+	          // Use a Next.js API route as a proxy to avoid CORS issues
+	          const response = await fetch('/api/evaluate-proxy', {
+	            method: 'POST',
+	            headers: {
+	              'Content-Type': 'application/json',
+	            },
+	            body: JSON.stringify({
+	              projectId: project.id,
+	              participationId: participation.id,
+	              subtaskId: subtask.id,
+	              waitForResult: true
+	            })
+	          });
             
           if (!response.ok) {
             const errorText = await response.text();
@@ -1031,11 +1028,14 @@ export default function ProjectTaskPage() {
           let result = await response.json();
           console.log("Evaluation result (full response):", JSON.stringify(result, null, 2));
 
-          if (response.status === 202 && result.evaluationId) {
-            showFeedbackToast(toast, 'info', 'Evaluation in Progress', "We're still reviewing your work. Please wait a few more seconds…", 3000);
-            result = await pollEvaluationUntilComplete(result.evaluationId);
-            console.log("Evaluation result after polling:", JSON.stringify(result, null, 2));
-          }
+	          if (response.status === 202 && result.evaluationId) {
+	            if (!result.evaluationToken || typeof result.evaluationToken !== 'string') {
+	              throw new Error('Evaluation access token is missing');
+	            }
+	            showFeedbackToast(toast, 'info', 'Evaluation in Progress', "We're still reviewing your work. Please wait a few more seconds…", 3000);
+	            result = await pollEvaluationUntilComplete(result.evaluationId, result.evaluationToken);
+	            console.log("Evaluation result after polling:", JSON.stringify(result, null, 2));
+	          }
 
           setEvaluationFeedback(result);
 
@@ -1168,79 +1168,6 @@ export default function ProjectTaskPage() {
         )}
       </>
     );
-  };
-
-  // Handle admin direct task completion
-  const handleAdminCompleteTask = async () => {
-    if (!participation || !project || !subtask) return;
-    
-    try {
-      // Create mock evaluation result with 100% score
-      const mockEvaluationResult = {
-        score: 100,
-        feedback: "Task completed successfully by admin test account.",
-        success: true,
-        status: "completed",
-        result: {
-          rawContent: {
-            summary: "Task automatically approved for testing purposes.",
-            assessment: 100,
-            checkpoints: [
-              {
-                status: "passed",
-                details: "Automatically approved for testing.",
-                requirement: "Admin test approval"
-              }
-            ]
-          }
-        },
-        timestamp: Timestamp.now()
-      };
-        
-      // Save evaluation history
-      const historyUpdate = await updateEvaluationHistory(
-        participation.id, 
-        subtask.id, 
-        mockEvaluationResult, 
-        evaluationHistory
-      );
-        
-      if (!historyUpdate.success) {
-        throw new Error("Failed to prepare evaluation history update");
-      }
-        
-      // Update completed subtasks
-      const completedSubtasks = participation.completedSubtasks || [];
-      const newCompletedSubtasks = [...completedSubtasks, subtask.id];
-      const totalSubtasks = project.subtasks.length;
-      const newProgress = Math.round((newCompletedSubtasks.length / totalSubtasks) * 100);
-        
-      // Update Firebase
-      await updateParticipation(participation.id, {
-        completedSubtasks: newCompletedSubtasks,
-        progress: newProgress,
-        evaluationHistory: historyUpdate.evaluationHistoryUpdate
-      });
-        
-      // Update local state
-      setParticipation({
-        ...participation,
-        completedSubtasks: newCompletedSubtasks,
-        progress: newProgress,
-        evaluationHistory: historyUpdate.evaluationHistoryUpdate
-      });
-        
-      setIsSubtaskCompletedByStudent(true);
-    
-      // Show success toast
-      showSuccessToast(toast, "Admin Test Complete", { 
-        description: "Task automatically marked as complete with 100% score." 
-      });
-        
-    } catch (error) {
-      console.error('Error in admin complete:', error);
-      showErrorToast(toast, "Error", { description: "Failed to complete task using admin function." });
-    }
   };
 
   // Add a floating "View Prompts" button that's more visible
@@ -1564,19 +1491,6 @@ export default function ProjectTaskPage() {
                           <><CheckCircle className="w-5 h-5 mr-2" /> Mark Task as Complete</>
                       )}
                     </Button>
-                    
-                    {/* Test Admin Button - Only visible for openimpactlab@gmail.com */}
-                    {session?.user?.email === 'openimpactlab@gmail.com' && !isSubtaskCompletedByStudent && (
-                      <Button 
-                        onClick={handleAdminCompleteTask} 
-                        className="w-full bg-purple-600 hover:bg-purple-700 text-white"
-                        size="sm"
-                      >
-                        <XCircle className="w-4 h-4 mr-2" />
-                        Test Admin Complete (100%)
-                      </Button>
-                    )}
-                    
                     {/* Button to view evaluation history */}
                     <Button
                       onClick={handleViewEvaluationHistory}

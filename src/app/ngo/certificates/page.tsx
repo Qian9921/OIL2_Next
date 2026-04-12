@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
 import { MainLayout } from "@/components/layout/main-layout";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Avatar } from "@/components/ui/avatar";
 import { 
@@ -208,19 +208,8 @@ export default function NGOCertificatesPage() {
     setGeneratingCertificate(completedProject.participation.id);
     
     try {
-      // Format completion date
-      const completionDate = completedProject.participation.completedAt?.toDate 
-        ? completedProject.participation.completedAt.toDate() 
-        : new Date(completedProject.participation.completedAt);
-      
-      const formattedDate = completionDate.toISOString().split('T')[0];
-
       const certificateData = {
-        studentName: completedProject.student.name,
-        ngoSignature: ngoSignature,
-        ngoName: session!.user!.name || 'NGO',
-        contents: completedProject.project.title,
-        date: formattedDate
+        certificateId: completedProject.certificate.id
       };
 
       // Call the certificate generation API

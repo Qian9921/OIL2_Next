@@ -2,18 +2,17 @@ import { getServerSession } from 'next-auth';
 import { NextResponse } from 'next/server';
 
 import { authOptions } from '@/lib/auth-options';
+import {
+  buildStoredCertificateRenderPayload,
+  canAccessStoredCertificate,
+  parseCertificateRenderRequest,
+} from '@/lib/certificate-access-utils';
+import { getCertificate } from '@/lib/firestore';
+import { getEffectiveUserRole } from '@/lib/role-routing';
 
 const CERTIFICATE_RENDER_API_URL =
   process.env.CERTIFICATE_RENDER_API_URL ??
   'https://auto-cert-py-827682634474.us-central1.run.app/generate-certificate';
-
-interface CertificateRenderRequest {
-  studentName?: string;
-  ngoSignature?: string;
-  ngoName?: string;
-  contents?: string;
-  date?: string;
-}
 
 export async function POST(request: Request) {
   const session = await getServerSession(authOptions);
@@ -23,14 +22,39 @@ export async function POST(request: Request) {
   }
 
   try {
-    const body = (await request.json()) as CertificateRenderRequest;
-    const { studentName, ngoSignature, ngoName, contents, date } = body;
-
-    if (!studentName || !ngoSignature || !ngoName || !contents || !date) {
+    const renderRequest = parseCertificateRenderRequest(await request.json());
+    if (!renderRequest) {
       return NextResponse.json(
-        { error: 'Missing required certificate fields.' },
+        { error: 'Invalid certificate render request.' },
         { status: 400 },
       );
+    }
+
+    const payload =
+      renderRequest.mode === 'preview'
+        ? (() => {
+            if (getEffectiveUserRole(session.user.role) !== 'ngo') {
+              return null;
+            }
+            return renderRequest.payload;
+          })()
+        : await (async () => {
+            const certificate = await getCertificate(renderRequest.certificateId);
+            if (!certificate) {
+              return undefined;
+            }
+            if (!canAccessStoredCertificate(certificate, session.user)) {
+              return null;
+            }
+            return buildStoredCertificateRenderPayload(certificate);
+          })();
+
+    if (payload === null) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
+
+    if (payload === undefined) {
+      return NextResponse.json({ error: 'Certificate not found' }, { status: 404 });
     }
 
     const response = await fetch(CERTIFICATE_RENDER_API_URL, {
@@ -38,7 +62,7 @@ export async function POST(request: Request) {
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify(body),
+      body: JSON.stringify(payload),
       cache: 'no-store',
     });
 

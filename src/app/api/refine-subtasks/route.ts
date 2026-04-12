@@ -1,11 +1,13 @@
+import { getServerSession } from 'next-auth';
 import { NextRequest, NextResponse } from 'next/server';
 import {
   generateJsonContentForTask,
   sanitizeInput,
   sanitizeArrayInput,
-  validateAIResponse,
   parseJsonArrayResponse,
 } from '@/lib/vertex-ai-utils';
+import { authOptions } from '@/lib/auth-options';
+import { getEffectiveUserRole } from '@/lib/role-routing';
 
 // Helper to sanitize subtask data
 function sanitizeSubtaskData(subtask: SubtaskData): SubtaskData {
@@ -42,6 +44,14 @@ interface RefinedSubtask {
 
 export async function POST(req: NextRequest) {
   try {
+    const session = await getServerSession(authOptions);
+    if (!session?.user?.id) {
+      return NextResponse.json({ message: 'Unauthorized' }, { status: 401 });
+    }
+    if (getEffectiveUserRole(session.user.role) !== 'ngo') {
+      return NextResponse.json({ message: 'Forbidden' }, { status: 403 });
+    }
+
     const body: RefineSubtasksRequestData = await req.json();
 
     if (!body.projectTitle?.trim() || !body.projectDescription?.trim()) {

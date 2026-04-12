@@ -1,11 +1,13 @@
+import { getServerSession } from 'next-auth';
 import { NextRequest, NextResponse } from 'next/server';
 import {
   generateJsonContentForTask,
   sanitizeInput,
   sanitizeArrayInput,
-  validateAIResponse,
   parseJsonObjectResponse,
 } from '@/lib/vertex-ai-utils';
+import { authOptions } from '@/lib/auth-options';
+import { getEffectiveUserRole } from '@/lib/role-routing';
 
 interface RefineRequestData {
   title: string;
@@ -20,22 +22,16 @@ interface RefineRequestData {
   learningGoals: string[];
 }
 
-interface RefinedProjectDetails {
-  title?: string;
-  shortDescription?: string;
-  description?: string;
-  difficulty?: 'beginner' | 'intermediate' | 'advanced';
-  maxParticipants?: number;
-  deadline?: string;
-  estimatedHours?: number;
-  estimatedDays?: number;
-  tags?: string[];
-  requirements?: string[];
-  learningGoals?: string[];
-}
-
 export async function POST(req: NextRequest) {
   try {
+    const session = await getServerSession(authOptions);
+    if (!session?.user?.id) {
+      return NextResponse.json({ message: 'Unauthorized' }, { status: 401 });
+    }
+    if (getEffectiveUserRole(session.user.role) !== 'ngo') {
+      return NextResponse.json({ message: 'Forbidden' }, { status: 403 });
+    }
+
     const body: RefineRequestData = await req.json();
 
     if (!body.title?.trim() && !body.description?.trim()) {
