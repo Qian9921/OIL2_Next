@@ -22,13 +22,6 @@ interface EmailRequest {
 export async function POST(request: NextRequest) {
   const session = await getServerSession(authOptions);
 
-  if (process.env.ENABLE_LEGACY_TEACHER_EMAIL !== 'true') {
-    return NextResponse.json(
-      { error: 'Legacy organization email is currently disabled.' },
-      { status: 410 }
-    );
-  }
-
   if (!session?.user?.id || getEffectiveUserRole(session.user.role) !== 'ngo') {
     return NextResponse.json(
       { error: 'Unauthorized' },

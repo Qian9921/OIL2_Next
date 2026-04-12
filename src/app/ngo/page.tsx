@@ -5,6 +5,7 @@ import { useSession } from "next-auth/react";
 import { MainLayout } from "@/components/layout/main-layout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { EmailDialog } from "@/components/teacher/email-dialog";
 import { getNGODashboard } from "@/lib/firestore";
 import { NGODashboard } from "@/lib/types";
 import { 
@@ -16,6 +17,7 @@ import {
   TrendingUp,
   BarChart3,
   ClipboardCheck,
+  Mail,
 } from "lucide-react";
 import Link from "next/link";
 import { LoadingState } from "@/components/ui/loading-state";
@@ -74,6 +76,14 @@ export default function NGODashboardPage() {
                 Review Submissions
               </Button>
             </Link>
+            <EmailDialog
+              trigger={
+                <Button variant="secondary" className="bg-white/15 text-white hover:bg-white/25 border-white/20">
+                  <Mail className="w-4 h-4 mr-2" />
+                  Send Email
+                </Button>
+              }
+            />
           </div>
         </div>
 
